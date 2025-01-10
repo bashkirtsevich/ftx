@@ -459,7 +459,9 @@ def decode(mon: monitor_t, tm_slot_start):  # (const monitor_t* mon, struct tm* 
             #     tm_slot_start->tm_hour, tm_slot_start->tm_min, tm_slot_start->tm_sec,
             #     snr, time_sec, freq_hz, text)
             call_to_rx, call_de_rx, extra_rx = ftx_message_decode(message)
-            print("DECODE:", snr, time_sec, freq_hz, call_to_rx, call_de_rx, extra_rx)
+            # print("DECODE:", snr, time_sec, freq_hz, call_to_rx, call_de_rx, extra_rx)
+            print(f"{snr:+.2f}dB\t{time_sec:-}sec\t{freq_hz}Hz\t{' '.join([call_to_rx, call_de_rx or '', extra_rx or ''])}")
+            # print("%+05.1f %+4.2f %4.0f ~  %s"format(snr, time_sec, freq_hz, " ".join([call_to_rx, call_de_rx, extra_rx])))
 
     #
     # # LOG(LOG_INFO, "Decoded %d messages, callsign hashtable size %d\n", num_decoded, callsign_hashtable_size);

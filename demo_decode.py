@@ -72,7 +72,7 @@ def main():
         # LOG(LOG_DEBUG, "Waterfall accumulated %d symbols\n", mon.wf.num_blocks);
         print(f"Waterfall accumulated {mon.wf.num_blocks} symbols")
         # LOG(LOG_INFO, "Max magnitude: %.1f dB\n", mon.max_mag);
-        print(f"Max magnitude: {mon.max_mag} dB")
+        print(f"Max magnitude: {mon.max_mag:+.2f} dB")
 
         # Decode accumulated data (containing slightly less than a full time slot)
         decode(mon, tm_slot_start)
