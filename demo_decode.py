@@ -1,39 +1,15 @@
 import math
-import typing
 from time import clock_gettime, CLOCK_REALTIME, gmtime
-import numpy as np
-from consts import FT4_SLOT_TIME, FT8_SLOT_TIME, FT4_NN, FT8_NN, FT8_SYMBOL_PERIOD, FT4_SYMBOL_PERIOD, FTX_PROTOCOL_FT8
-from decode import decode
-from encode import ft8_encode, ft4_encode
-from gfsk import synth_gfsk, FT8_SYMBOL_BT, FT4_SYMBOL_BT
-from message import ftx_message_encode
-from monitor import monitor_process, monitor_init
 
+import numpy as np
 from scipy.io.wavfile import read
+
+from consts import FT4_SLOT_TIME, FT8_SLOT_TIME, FTX_PROTOCOL_FT8
+from decode import decode
+from monitor import monitor_process, monitor_init
 
 kFreq_osr = 2  # Frequency oversampling rate (bin subdivision)
 kTime_osr = 2  # Time oversampling rate (symbol subdivision)
-
-
-def gen_signal(is_ft4: bool) -> typing.List[float]:
-    payload = ftx_message_encode("R9FEU", "R1AAA", "R+20")
-
-    if is_ft4:
-        tones = ft4_encode(payload)
-    else:
-        tones = ft8_encode(payload)
-
-    frequency = 1000
-
-    symbol_period = FT4_SYMBOL_PERIOD if is_ft4 else FT8_SYMBOL_PERIOD
-    symbol_bt = FT4_SYMBOL_BT if is_ft4 else FT8_SYMBOL_BT
-
-    sample_rate = 12000
-    num_tones = FT4_NN if is_ft4 else FT8_NN
-
-    signal = synth_gfsk(tones, num_tones, frequency, symbol_bt, symbol_period, sample_rate)
-
-    return signal + [0.0] * 100000
 
 
 def main():
@@ -83,15 +59,15 @@ def main():
 
         # Process and accumulate audio data in a monitor/waterfall instance
         for frame_pos in range(0, num_samples - mon.block_size, mon.block_size):
-        # frame_pos = 0
-        # while frame_pos + mon.block_size <= num_samples:
-        #     frame_pos += mon.block_size
+            # frame_pos = 0
+            # while frame_pos + mon.block_size <= num_samples:
+            #     frame_pos += mon.block_size
             # if (dev_name != NULL) # Read audio from soundcard
             #     audio_read(signal + frame_pos, mon.block_size);
             # LOG(LOG_DEBUG, "Frame pos: %.3fs\n", (float)(frame_pos + mon.block_size) / sample_rate);
             # print("#")
             # Process the waveform data frame by frame - you could have a live loop here with data from an audio device
-            monitor_process(mon, signal[frame_pos:frame_pos+mon.block_size])
+            monitor_process(mon, signal[frame_pos:frame_pos + mon.block_size])
 
         # LOG(LOG_DEBUG, "Waterfall accumulated %d symbols\n", mon.wf.num_blocks);
         print(f"Waterfall accumulated {mon.wf.num_blocks} symbols")
