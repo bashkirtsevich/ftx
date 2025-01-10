@@ -275,10 +275,10 @@ def ftx_message_encode_nonstd(call_to: str, call_de: str, extra: str) -> typing.
 def ftx_message_decode_telemetry(payload: typing.ByteString) -> typing.ByteString:
     # Shift bits in payload right by 1 bit to right-align the data
     carry = 0
-    telemetry = bytearray(b"\x00" * 9)
-    for i in range(9):
-        telemetry[i] = byte((carry << 7) | (payload[i] >> 1))
-        carry = byte(payload[i] & 0x01)
+    telemetry = bytearray(b"\x00" * len(payload))
+    for i, b in enumerate(payload):
+        telemetry[i] = byte((carry << 7) | (b >> 1))
+        carry = byte(b & 0x01)
 
     return telemetry
 
