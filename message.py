@@ -106,9 +106,9 @@ def ftx_message_encode_std(call_to: str, call_de: str, extra: str) -> typing.Byt
         raise FTXErrorCallSign2
 
     i3 = 1  # No suffix or /R
-    if call_to.endswith("/P") or call_de.endswith("/P"):  # FIXME: Use "any(...)"
+    if any(call.endswith("/P") for call in (call_to, call_de)):
         i3 = 2  # Suffix /P for EU VHF contest
-        if call_to.endswith("/R") or call_de.endswith("/R"):  # FIXME: Use "any(...)"
+        if any(call.endswith("/R") for call in (call_to, call_de)):
             raise FTXErrorSuffix
 
     igrid4 = packgrid(extra)
