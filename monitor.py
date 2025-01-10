@@ -49,7 +49,7 @@ def monitor_init(f_min, f_max, sample_rate, time_osr, freq_osr, protocol) -> mon
     me.max_bin = int(f_max * symbol_period + 1)
     num_bins = me.max_bin - me.min_bin
 
-    me.wf = waterfall_init(max_blocks, num_bins, time_osr, freq_osr);
+    me.wf = waterfall_init(max_blocks, num_bins, time_osr, freq_osr)
     me.wf.protocol = protocol
 
     me.symbol_period = symbol_period
