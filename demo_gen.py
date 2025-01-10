@@ -43,7 +43,7 @@ def main():
 
     amplitude = np.iinfo(np.int16).max
     data = amplitude * np.array(signal)
-    write("signal.wav", sample_rate, data.astype(np.int16))
+    write("examples/signal.wav", sample_rate, data.astype(np.int16))
 
 
 if __name__ == '__main__':

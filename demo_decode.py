@@ -45,8 +45,8 @@ def main():
     is_live = False
 
     # signal = gen_signal(is_ft4)
-    # sample_rate, data = read("example.wav")
-    sample_rate, data = read("210703_133430.wav")
+    sample_rate, data = read("examples/ft8.wav")
+    # sample_rate, data = read("210703_133430.wav")
 
     num_samples = int(slot_period * sample_rate)
 
