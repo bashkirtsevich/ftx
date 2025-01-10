@@ -142,20 +142,20 @@ def ftx_message_encode_std(call_to: str, call_de: str, extra: str) -> typing.Byt
 
 def ftx_message_decode_std(payload: typing.ByteString) -> typing.Tuple[str, str, str]:
     # Extract packed fields
-    n29a = (payload[0] << 21)
-    n29a |= (payload[1] << 13)
-    n29a |= (payload[2] << 5)
-    n29a |= (payload[3] >> 3)
-    n29b = ((payload[3] & 0x07) << 26)
-    n29b |= (payload[4] << 18)
-    n29b |= (payload[5] << 10)
-    n29b |= (payload[6] << 2)
-    n29b |= (payload[7] >> 6)
+    n29a = payload[0] << 21
+    n29a |= payload[1] << 13
+    n29a |= payload[2] << 5
+    n29a |= payload[3] >> 3
+    n29b = (payload[3] & 0x07) << 26
+    n29b |= payload[4] << 18
+    n29b |= payload[5] << 10
+    n29b |= payload[6] << 2
+    n29b |= payload[7] >> 6
 
-    ir = ((payload[7] & 0x20) >> 5)
-    igrid4 = ((payload[7] & 0x1F) << 10)
-    igrid4 |= (payload[8] << 2)
-    igrid4 |= (payload[9] >> 6)
+    ir = (payload[7] & 0x20) >> 5
+    igrid4 = (payload[7] & 0x1F) << 10
+    igrid4 |= payload[8] << 2
+    igrid4 |= payload[9] >> 6
 
     # Extract i3 (bits 74..76)
     i3 = (payload[9] >> 3) & 0x07
