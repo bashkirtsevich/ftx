@@ -1,22 +1,21 @@
-# FIXME: Optimize; use string.digits
+import string
+
+FT8_CHAR_TABLE_NUMERIC = string.digits
+FT8_CHAR_TABLE_LETTERS = string.ascii_uppercase
+FT8_CHAR_TABLE_ALPHANUM = f"{FT8_CHAR_TABLE_NUMERIC}{FT8_CHAR_TABLE_LETTERS}"
+FT8_CHAR_TABLE_LETTERS_SPACE = f" {FT8_CHAR_TABLE_LETTERS}"
+FT8_CHAR_TABLE_ALPHANUM_SPACE = f" {FT8_CHAR_TABLE_ALPHANUM}"
+FT8_CHAR_TABLE_ALPHANUM_SPACE_SLASH = f"{FT8_CHAR_TABLE_ALPHANUM_SPACE}/"
+FT8_CHAR_TABLE_FULL = f"{FT8_CHAR_TABLE_ALPHANUM_SPACE}+-./?"
 
 
-FT8_CHAR_TABLE_FULL = " 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ+-./?"
-FT8_CHAR_TABLE_ALPHANUM_SPACE_SLASH = " 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ/"
-FT8_CHAR_TABLE_ALPHANUM_SPACE = " 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-FT8_CHAR_TABLE_LETTERS_SPACE = " ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-FT8_CHAR_TABLE_ALPHANUM = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-FT8_CHAR_TABLE_NUMERIC = "0123456789"
-FT8_CHAR_TABLE_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
-
-# Convert integer index to ASCII character according to one of character tables
 def charn(c: int, table: str) -> str:
+    # Convert integer index to ASCII character according to one of character tables
     return table[c]
 
 
-# Look up the index of an ASCII character in one of character tables
 def nchar(c: str, table: str) -> int:
+    # Look up the index of an ASCII character in one of character tables
     return table.find(c)
 
 
