@@ -272,15 +272,12 @@ def ftx_message_encode_nonstd(call_to: str, call_de: str, extra: str) -> typing.
     return payload
 
 
-def ftx_message_decode_telemetry(payload: typing.ByteString) -> typing.ByteString:
+def ftx_message_decode_telemetry(payload: typing.ByteString) -> typing.Generator[int, None, None]:
     # Shift bits in payload right by 1 bit to right-align the data
     carry = 0
-    telemetry = bytearray(b"\x00" * len(payload))
-    for i, b in enumerate(payload):
-        telemetry[i] = byte((carry << 7) | (b >> 1))
-        carry = byte(b & 0x01)
-
-    return telemetry
+    for p_byte in payload:
+        yield byte((carry << 7) | (p_byte >> 1))
+        carry = byte(p_byte & 0x01)
 
 
 def ftx_message_decode_telemetry_hex(payload: typing.ByteString) -> str:
@@ -289,7 +286,7 @@ def ftx_message_decode_telemetry_hex(payload: typing.ByteString) -> str:
 
 
 def ftx_message_decode_free(payload: typing.ByteString) -> str:
-    b71 = ftx_message_decode_telemetry(payload)
+    b71 = bytearray(ftx_message_decode_telemetry(payload))
     c14 = ""
     for idx in range(12):
         # Divide the long integer in b71 by 42
