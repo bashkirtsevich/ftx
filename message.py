@@ -141,7 +141,7 @@ def ftx_message_encode_std(call_to: str, call_de: str, extra: str) -> typing.Byt
 
 
 def ftx_message_decode_std(payload: typing.ByteString) -> typing.Tuple[str, str, str]:
-    #  Extract packed fields
+    # Extract packed fields
     n29a = (payload[0] << 21)
     n29a |= (payload[1] << 13)
     n29a |= (payload[2] << 5)
@@ -173,9 +173,7 @@ def ftx_message_decode_std(payload: typing.ByteString) -> typing.Tuple[str, str,
 
 
 def ftx_message_decode_nonstd(payload: typing.ByteString) -> typing.Tuple[str, str, str]:
-    """
-    non-standard messages, code originally by KD8CEC
-    """
+    # non-standard messages, code originally by KD8CEC
     n12 = payload[0] << 4  # 11 ~ 4 : 8
     n12 |= payload[1] >> 4  # 3 ~ 0  : 12
 
