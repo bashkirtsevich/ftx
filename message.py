@@ -1,6 +1,8 @@
 import typing
 
 from consts import FTX_CALLSIGN_HASH_12_BITS
+from consts import FTX_EXTRAS_CODE
+from consts import FTX_EXTRAS_STR
 from consts import FTX_MESSAGE_TYPE_ARRL_FD
 from consts import FTX_MESSAGE_TYPE_ARRL_RTTY
 from consts import FTX_MESSAGE_TYPE_DXPEDITION
@@ -157,7 +159,6 @@ def ftx_message_decode_std(payload: typing.ByteString) -> typing.Tuple[str, str,
 
     # Extract i3 (bits 74..76)
     i3 = (payload[9] >> 3) & 0x07
-    # LOG(LOG_DEBUG, "decode_std() n28a=%d ipa=%d n28b=%d ipb=%d ir=%d igrid4=%d i3=%d\n", n29a >> 1, n29a & 1u, n29b >> 1, n29b & 1u, ir, igrid4, i3);
 
     if (call_to := unpack28(n29a >> 1, n29a & 1, i3)) is None:
         raise FTXErrorCallSign1
@@ -171,8 +172,10 @@ def ftx_message_decode_std(payload: typing.ByteString) -> typing.Tuple[str, str,
     return call_to, call_de, extra
 
 
-# non-standard messages, code originally by KD8CEC
 def ftx_message_decode_nonstd(payload: typing.ByteString) -> typing.Tuple[str, str, str]:
+    """
+    non-standard messages, code originally by KD8CEC
+    """
     n12 = payload[0] << 4  # 11 ~ 4 : 8
     n12 |= payload[1] >> 4  # 3 ~ 0  : 12
 
@@ -206,13 +209,7 @@ def ftx_message_decode_nonstd(payload: typing.ByteString) -> typing.Tuple[str, s
     if not icq:
         call_to = call_1
 
-        extra_dict = {
-            1: "RRR",
-            2: "RR73",
-            3: "73"
-        }
-
-        extra = extra_dict.get(nrpt, "")
+        extra = FTX_EXTRAS_STR.get(nrpt, "")
     else:
         call_to = "CQ"
         extra = ""
@@ -257,12 +254,7 @@ def ftx_message_encode_nonstd(call_to: str, call_de: str, extra: str) -> typing.
     if icq:
         nrpt = 0
     else:
-        extra_dict = {
-            "RRR": 1,
-            "RR73": 2,
-            "73": 3
-        }
-        nrpt = extra_dict.get(extra, 0)
+        nrpt = FTX_EXTRAS_CODE.get(extra, 0)
 
     # Pack into 12 + 58 + 1 + 2 + 1 + 3 == 77 bits
     # write(c77,1010) n12,n58,iflip,nrpt,icq,i3
