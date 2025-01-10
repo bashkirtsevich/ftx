@@ -281,11 +281,10 @@ def ftx_message_encode_nonstd(call_to: str, call_de: str, extra: str) -> bytes:
     return payload
 
 
-# void ftx_message_decode_telemetry(const ftx_message_t* msg, uint8_t* telemetry)
-def ftx_message_decode_telemetry(payload: bytes) -> bytes:
+def ftx_message_decode_telemetry(payload: typing.ByteString) -> typing.ByteString:
     # Shift bits in payload right by 1 bit to right-align the data
     carry = 0
-    telemetry = b"\x00" * 9
+    telemetry = bytearray(b"\x00" * 9)
     for i in range(9):
         telemetry[i] = byte((carry << 7) | (payload[i] >> 1))
         carry = byte(payload[i] & 0x01)
@@ -293,12 +292,12 @@ def ftx_message_decode_telemetry(payload: bytes) -> bytes:
     return telemetry
 
 
-def ftx_message_decode_telemetry_hex(payload: bytes) -> str:
+def ftx_message_decode_telemetry_hex(payload: typing.ByteString) -> str:
     b71 = ftx_message_decode_telemetry(payload)
     return "".join(f"{b:x}" for b in b71)
 
 
-def ftx_message_decode_free(payload: bytes) -> str:
+def ftx_message_decode_free(payload: typing.ByteString) -> str:
     b71 = ftx_message_decode_telemetry(payload)
     c14 = ""
     for idx in range(12):
