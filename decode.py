@@ -327,7 +327,7 @@ def ft8_extract_symbol(wf: ftx_waterfall_t, mag_idx: int) -> typing.Tuple[float,
     return logl_0, logl_1, logl_2
 
 
-def ftx_normalize_logl(log174: typing.List[float]) -> typing.List[float]:
+def ftx_normalize_logl(log174: typing.List[float]) -> typing.Generator[float, None, None]:
     # FIXME: Optimize
     # Compute the variance of log174
     sum = 0
@@ -341,7 +341,9 @@ def ftx_normalize_logl(log174: typing.List[float]) -> typing.List[float]:
 
     # Normalize log174 distribution and scale it with experimentally found coefficient
     norm_factor = math.sqrt(24.0 / variance)
-    return [it * norm_factor for it in log174]
+
+    for it in log174:
+        yield it * norm_factor
 
 
 def ftx_decode_candidate(
@@ -352,7 +354,7 @@ def ftx_decode_candidate(
     else:
         log174 = ft8_extract_likelihood(wf, cand)
 
-    log174 = ftx_normalize_logl(log174)
+    log174 = list(ftx_normalize_logl(log174))
 
     status = ftx_decode_status_t()
     status.ldpc_errors, plain174 = bp_decode(log174, max_iterations)
