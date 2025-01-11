@@ -373,9 +373,6 @@ def ftx_decode_candidate(
     if status.crc_extracted != status.crc_calculated:
         return status, None
 
-    # Reuse CRC value as a hash for the message (TODO: 14 bits only, should perhaps use full 16 or 32 bits?)
-    # message.hash = status.crc_calculated
-
     if wf.protocol == FTX_PROTOCOL_FT4:
         # '[..] for FT4 only, in order to avoid transmitting a long string of zeros when sending CQ messages,
         # the assembled 77-bit message is bitwise exclusive-OR’ed with [a] pseudorandom sequence before computing the CRC and FEC parity bits'
@@ -391,27 +388,15 @@ def ftx_decode_candidate(
 def decode(mon: monitor_t, tm_slot_start):  # (const monitor_t* mon, struct tm* tm_slot_start)
     wf = mon.wf
     # Find top candidates by Costas sync score and localize them in time and frequency
-    # candidate_list[kMax_candidates]
     candidate_list = ftx_find_candidates(wf, kMax_candidates, kMin_score)
 
-    # Hash table for decoded messages (to check for duplicates)
-    num_decoded = 0
-    # decoded[kMax_decoded_messages]
-    # decoded_hashtable[kMax_decoded_messages]
-
-    # Initialize hash table pointers
-    # for i in range(kMax_decoded_messages):
-    #     decoded_hashtable[i] = NULL
+    hashes = set()
 
     # Go over candidates and attempt to decode messages
-    # for idx in range(num_candidates):
-    #     cand = &candidate_list[idx]
     for cand in candidate_list:
         freq_hz = (mon.min_bin + cand.freq_offset + cand.freq_sub / wf.freq_osr) / mon.symbol_period
         time_sec = (cand.time_offset + cand.time_sub / wf.time_osr) * mon.symbol_period
 
-        # ftx_message_t message;
-        # ftx_decode_status_t status;
         status, message = ftx_decode_candidate(wf, cand, kLDPC_iterations)
         if not message:
             # if status.ldpc_errors > 0:
@@ -420,49 +405,13 @@ def decode(mon: monitor_t, tm_slot_start):  # (const monitor_t* mon, struct tm* 
             #     print("CRC mismatch!")
             continue
 
-        # LOG(LOG_DEBUG, "Checking hash table for %4.1fs / %4.1fHz [%d]...\n", time_sec, freq_hz, cand->score);
-        # print(f"Checking hash table for {time_sec} / {freq_hz}Hz [{cand.score}]")
-        # idx_hash = message.hash % kMax_decoded_messages
-        # found_empty_slot = False
-        # found_duplicate = False
+        if (crc := status.crc_calculated) in hashes:
+            continue
 
-        #     while True:
-        #         if not decoded_hashtable[idx_hash]:
-        #             # LOG(LOG_DEBUG, "Found an empty slot\n")
-        #             found_empty_slot = True
-        #         elif ((decoded_hashtable[idx_hash].hash == message.hash) and (0 == memcmp(decoded_hashtable[idx_hash]->payload, message.payload, sizeof(message.payload)))):
-        #             # LOG(LOG_DEBUG, "Found a duplicate!\n")
-        #             found_duplicate = True
-        #         else:
-        #             # LOG(LOG_DEBUG, "Hash table clash!\n");
-        #             # Move on to check the next entry in hash table
-        #             idx_hash = (idx_hash + 1) % kMax_decoded_messages
-        #
-        #         if found_empty_slot or found_duplicate:
-        #             break
-        #
-        #
-        if True:  # found_empty_slot:
-            #         # Fill the empty hashtable slot
-            #         memcpy(&decoded[idx_hash], &message, sizeof(message))
-            #         decoded_hashtable[idx_hash] = decoded[idx_hash]
-            #         num_decoded += 1
-            #
-            #         # text[FTX_MAX_MESSAGE_LENGTH]
-            #         unpack_status = ftx_message_decode(&message, &hash_if, text)
-            #         if (unpack_status != FTX_MESSAGE_RC_OK)
-            #             snprintf(text, sizeof(text), "Error [%d] while unpacking!", (int)unpack_status);
-            #
-            #         # Fake WSJT-X-like output for now
-            snr = cand.score * 0.5  # TODO: compute better approximation of SNR
-            # print("%02d%02d%02d %+05.1f %+4.2f %4.0f ~  %s\n",
-            #     tm_slot_start->tm_hour, tm_slot_start->tm_min, tm_slot_start->tm_sec,
-            #     snr, time_sec, freq_hz, text)
-            call_to_rx, call_de_rx, extra_rx = ftx_message_decode(message)
-            # print("DECODE:", snr, time_sec, freq_hz, call_to_rx, call_de_rx, extra_rx)
-            print(f"{snr:+.2f}dB\t{time_sec:-}sec\t{freq_hz}Hz\t{' '.join([call_to_rx, call_de_rx or '', extra_rx or ''])}")
-            # print("%+05.1f %+4.2f %4.0f ~  %s"format(snr, time_sec, freq_hz, " ".join([call_to_rx, call_de_rx, extra_rx])))
+        hashes.add(crc)
 
-    #
-    # # LOG(LOG_INFO, "Decoded %d messages, callsign hashtable size %d\n", num_decoded, callsign_hashtable_size);
-    # # hashtable_cleanup(10)
+        snr = cand.score * 0.5  # TODO: compute better approximation of SNR
+        call_to_rx, call_de_rx, extra_rx = ftx_message_decode(message)
+
+        # Fake WSJT-X-like output for now
+        print(f"{snr:+.2f}dB\t{time_sec:-}sec\t{freq_hz}Hz\t{' '.join([call_to_rx, call_de_rx or '', extra_rx or ''])}")
