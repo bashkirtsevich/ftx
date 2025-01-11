@@ -94,9 +94,9 @@ class monitor_t:
     # #endif
 
 
-# Packs a string of bits each represented as a zero/non-zero byte in plain[],
-# as a string of packed bits starting from the MSB of the first byte of packed[]
-def pack_bits(bit_array: bytes, num_bits: int) -> bytes:  # (const uint8_t bit_array[], int num_bits, uint8_t packed[])
+def pack_bits(bit_array: bytes, num_bits: int) -> bytes:
+    # Packs a string of bits each represented as a zero/non-zero byte in plain[],
+    # as a string of packed bits starting from the MSB of the first byte of packed[]
     num_bytes = (num_bits + 7) // 8
     packed = bytearray(b"\x00" * num_bytes)
 
@@ -213,7 +213,6 @@ def ft4_sync_score(wf: ftx_waterfall_t, candidate: ftx_candidate_t) -> int:
     return score
 
 
-# (const ftx_waterfall_t* wf, int num_candidates, ftx_candidate_t heap[], int min_score)
 def ftx_find_candidates(wf: ftx_waterfall_t, num_candidates: int, min_score: int) -> list:
     if wf.protocol == FTX_PROTOCOL_FT4:
         sync_fun = ft4_sync_score
@@ -304,8 +303,8 @@ def ft8_extract_likelihood(wf: ftx_waterfall_t, cand: ftx_candidate_t) -> typing
     return log174
 
 
-# Compute unnormalized log likelihood log(p(1) / p(0)) of 2 message bits (1 FSK symbol)
 def ft4_extract_symbol(wf: ftx_waterfall_t, mag_idx: int) -> typing.Tuple[float, float]:
+    # Compute unnormalized log likelihood log(p(1) / p(0)) of 2 message bits (1 FSK symbol)
     # Cleaned up code for the simple case of n_syms==1
     s2 = [wf.mag[mag_idx + kFT4_Gray_map[j]] for j in range(4)]
 
@@ -315,8 +314,8 @@ def ft4_extract_symbol(wf: ftx_waterfall_t, mag_idx: int) -> typing.Tuple[float,
     return logl_0, logl_1
 
 
-# Compute unnormalized log likelihood log(p(1) / p(0)) of 3 message bits (1 FSK symbol)
 def ft8_extract_symbol(wf: ftx_waterfall_t, mag_idx: int) -> typing.Tuple[float, float, float]:
+    # Compute unnormalized log likelihood log(p(1) / p(0)) of 3 message bits (1 FSK symbol)
     # Cleaned up code for the simple case of n_syms==1
     s2 = [wf.mag[mag_idx + kFT8_Gray_map[j]] for j in range(8)]
 
@@ -387,7 +386,7 @@ def ftx_decode_candidate(
     return status, payload
 
 
-def decode(mon: monitor_t, tm_slot_start):  # (const monitor_t* mon, struct tm* tm_slot_start)
+def decode(mon: monitor_t, tm_slot_start):
     wf = mon.wf
     # Find top candidates by Costas sync score and localize them in time and frequency
     candidate_list = ftx_find_candidates(wf, kMax_candidates, kMin_score)
