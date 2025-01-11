@@ -5,8 +5,7 @@ import numpy as np
 from scipy.io.wavfile import read
 
 from consts import FT4_SLOT_TIME, FT8_SLOT_TIME, FTX_PROTOCOL_FT8
-from decode import decode
-from monitor import monitor_process, monitor_init
+from decode import Monitor
 
 kFreq_osr = 2  # Frequency oversampling rate (bin subdivision)
 kTime_osr = 2  # Time oversampling rate (symbol subdivision)
@@ -31,7 +30,7 @@ def main():
 
     protocol = FTX_PROTOCOL_FT8
 
-    mon = monitor_init(
+    mon = Monitor(
         f_min=200,
         f_max=3000,
         sample_rate=sample_rate,
@@ -67,7 +66,7 @@ def main():
             # LOG(LOG_DEBUG, "Frame pos: %.3fs\n", (float)(frame_pos + mon.block_size) / sample_rate);
             # print("#")
             # Process the waveform data frame by frame - you could have a live loop here with data from an audio device
-            monitor_process(mon, signal[frame_pos:frame_pos + mon.block_size])
+            mon.monitor_process(signal[frame_pos:frame_pos + mon.block_size])
 
         # LOG(LOG_DEBUG, "Waterfall accumulated %d symbols\n", mon.wf.num_blocks);
         print(f"Waterfall accumulated {mon.wf.num_blocks} symbols")
@@ -75,7 +74,7 @@ def main():
         print(f"Max magnitude: {mon.max_mag:+.2f} dB")
 
         # Decode accumulated data (containing slightly less than a full time slot)
-        decode(mon, tm_slot_start)
+        mon.decode(tm_slot_start)
 
         # Reset internal variables for the next time slot
         # mon = monitor_reset(mon)

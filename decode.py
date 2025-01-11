@@ -1,10 +1,30 @@
 import math
 import typing
 
-from consts import kFT4_XOR_sequence, FT4_ND, FTX_LDPC_N, FT8_ND, kFT4_Gray_map, kFT8_Gray_map, FTX_LDPC_K, \
-    kFT8_Costas_pattern, FT8_LENGTH_SYNC, FT8_NUM_SYNC, FT8_SYNC_OFFSET, FT4_NUM_SYNC, kFT4_Costas_pattern, \
-    FT4_LENGTH_SYNC, FT4_SYNC_OFFSET, FTX_PROTOCOL_FT4
+import numpy as np
+
+from consts import FT4_LENGTH_SYNC
+from consts import FT4_ND
+from consts import FT4_NUM_SYNC
+from consts import FT4_SLOT_TIME
+from consts import FT4_SYMBOL_PERIOD
+from consts import FT4_SYNC_OFFSET
+from consts import FT8_LENGTH_SYNC
+from consts import FT8_ND
+from consts import FT8_NUM_SYNC
+from consts import FT8_SLOT_TIME
+from consts import FT8_SYMBOL_PERIOD
+from consts import FT8_SYNC_OFFSET
+from consts import FTX_LDPC_K
+from consts import FTX_LDPC_N
+from consts import FTX_PROTOCOL_FT4
+from consts import kFT4_Costas_pattern
+from consts import kFT4_Gray_map
+from consts import kFT4_XOR_sequence
+from consts import kFT8_Costas_pattern
+from consts import kFT8_Gray_map
 from crc import ftx_extract_crc, ftx_compute_crc
+from gfsk import M_PI
 from ldpc import bp_decode
 from message import ftx_message_decode
 
@@ -18,27 +38,37 @@ kFreq_osr = 2  # Frequency oversampling rate (bin subdivision)
 kTime_osr = 2  # Time oversampling rate (symbol subdivision)
 
 
-# Input structure to ftx_find_sync() function. This structure describes stored waterfall data over the whole message slot.
-# Fields time_osr and freq_osr specify additional oversampling rate for time and frequency resolution.
-# If time_osr=1, FFT magnitude data is collected once for every symbol transmitted, i.e. every 1/6.25 = 0.16 seconds.
-# Values time_osr > 1 mean each symbol is further subdivided in time.
-# If freq_osr=1, each bin in the FFT magnitude data corresponds to 6.25 Hz, which is the tone spacing.
-# Values freq_osr > 1 mean the tone spacing is further subdivided by FFT analysis.
 class ftx_waterfall_t:
-    def __init__(self):
-        self.max_blocks: int = 0  # < number of blocks (symbols) allocated in the mag array
-        self.num_blocks: int = 0  # < number of blocks (symbols) stored in the mag array
-        self.num_bins: int = 0  # < number of FFT bins in terms of 6.25 Hz
-        self.time_osr: int = 0  # < number of time subdivisions
-        self.freq_osr: int = 0  # < number of frequency subdivisions
-        self.mag: typing.List[int] = []  # FFT magnitudes stored as uint8_t[blocks][time_osr][freq_osr][num_bins]
-        self.block_stride: int = 0  # < Helper value = time_osr * freq_osr * num_bins
-        self.protocol: int = 0  # < Indicate if using FT4 or FT8
+    # Input structure to ftx_find_sync() function. This structure describes stored waterfall data over the whole message slot.
+    # Fields time_osr and freq_osr specify additional oversampling rate for time and frequency resolution.
+    # If time_osr=1, FFT magnitude data is collected once for every symbol transmitted, i.e. every 1/6.25 = 0.16 seconds.
+    # Values time_osr > 1 mean each symbol is further subdivided in time.
+    # If freq_osr=1, each bin in the FFT magnitude data corresponds to 6.25 Hz, which is the tone spacing.
+    # Values freq_osr > 1 mean the tone spacing is further subdivided by FFT analysis.
+
+    def __init__(self, max_blocks: int, num_bins: int, time_osr: int, freq_osr: int, protocol):
+        # max_blocks;       ///< number of blocks (symbols) allocated in the mag array
+        # num_blocks;       ///< number of blocks (symbols) stored in the mag array
+        # num_bins;         ///< number of FFT bins in terms of 6.25 Hz
+        # time_osr;         ///< number of time subdivisions
+        # freq_osr;         ///< number of frequency subdivisions
+        # WF_ELEM_T* mag;   ///< FFT magnitudes stored as uint8_t[blocks][time_osr][freq_osr][num_bins]
+        # block_stride;     ///< Helper value = time_osr * freq_osr * num_bins
+        # protocol;         ///< Indicate if using FT4 or FT8
+
+        self.max_blocks = max_blocks
+        self.num_blocks = 0
+        self.num_bins = num_bins
+        self.time_osr = time_osr
+        self.freq_osr = freq_osr
+        self.block_stride = (time_osr * freq_osr * num_bins)
+        self.mag = [0] * (max_blocks * time_osr * freq_osr * num_bins)
+        self.protocol = protocol
 
 
-# Output structure of ftx_find_sync() and input structure of ftx_decode().
-# Holds the position of potential start of a message in time and frequency.
 class ftx_candidate_t:
+    # Output structure of ftx_find_sync() and input structure of ftx_decode().
+    # Holds the position of potential start of a message in time and frequency.
     def __init__(self, time_offset, freq_offset, time_sub, freq_sub):
         self.score: int = 0  # < Candidate score (non-negative number; higher score means higher likelihood)
         self.time_offset: int = time_offset  # < Index of the time block
@@ -57,44 +87,17 @@ class ftx_candidate_t:
                 f"freq_sub: {self.freq_sub}]")
 
 
-# Structure that contains the status of various steps during decoding of a message
 class ftx_decode_status_t:
+    # Structure that contains the status of various steps during decoding of a message
     def __init__(self):
         self.freq: float = 0.0
         self.time: float = 0.0
         self.ldpc_errors: int = 0  # < Number of LDPC errors during decoding
         self.crc_extracted: int = 0  # < CRC value recovered from the message
         self.crc_calculated: int = 0  # < CRC value calculated over the payload
-        # int unpack_status;     #< Return value of the unpack routine
 
 
-# FT4/FT8 monitor object that manages DSP processing of incoming audio data
-# and prepares a waterfall object
-class monitor_t:
-    def __init__(self):
-        self.symbol_period: float = 0  # < FT4/FT8 symbol period in seconds
-        self.min_bin: int = 0  # < First FFT bin in the frequency range (begin)
-        self.max_bin: int = 0  # < First FFT bin outside the frequency range (end)
-        self.block_size: int = 0  # < Number of samples per symbol (block)
-        self.subblock_size: int = 0  # < Analysis shift size (number of samples)
-        self.nfft: int = 0  # < FFT size
-        self.fft_norm: float = 0  # < FFT normalization factor
-        self.window: typing.List[float] = []  # < Window function for STFT analysis (nfft samples)
-        self.last_frame: typing.List[float] = []  # < Current STFT analysis frame (nfft samples)
-        self.wf: ftx_waterfall_t = None  # < Waterfall object
-        self.max_mag: float = 0  # < Maximum detected magnitude (debug stats)
-
-        # KISS FFT housekeeping variables
-        # void* fft_work;        #< Work area required by Kiss FFT
-        # kiss_fftr_cfg fft_cfg; #< Kiss FFT housekeeping object
-    # #ifdef WATERFALL_USE_PHASE
-    #     int nifft;             #< iFFT size
-    #     void* ifft_work;       #< Work area required by inverse Kiss FFT
-    #     kiss_fft_cfg ifft_cfg; #< Inverse Kiss FFT housekeeping object
-    # #endif
-
-
-def pack_bits(bit_array: bytes, num_bits: int) -> bytes:
+def pack_bits(bit_array: typing.ByteString, num_bits: int) -> typing.ByteString:
     # Packs a string of bits each represented as a zero/non-zero byte in plain[],
     # as a string of packed bits starting from the MSB of the first byte of packed[]
     num_bytes = (num_bits + 7) // 8
@@ -112,6 +115,25 @@ def pack_bits(bit_array: bytes, num_bits: int) -> bytes:
             byte_idx += 1
 
     return packed
+
+
+def ftx_normalize_logl(log174: typing.List[float]) -> typing.Generator[float, None, None]:
+    # FIXME: Optimize
+    # Compute the variance of log174
+    sum = 0
+    sum2 = 0
+    for it in log174:
+        sum += it
+        sum2 += it ** 2
+
+    inv_n = 1.0 / FTX_LDPC_N
+    variance = (sum2 - (sum * sum * inv_n)) * inv_n
+
+    # Normalize log174 distribution and scale it with experimentally found coefficient
+    norm_factor = math.sqrt(24.0 / variance)
+
+    for it in log174:
+        yield it * norm_factor
 
 
 def ft8_sync_score(wf: ftx_waterfall_t, candidate: ftx_candidate_t) -> int:
@@ -326,25 +348,6 @@ def ft8_extract_symbol(wf: ftx_waterfall_t, mag_idx: int) -> typing.Tuple[float,
     return logl_0, logl_1, logl_2
 
 
-def ftx_normalize_logl(log174: typing.List[float]) -> typing.Generator[float, None, None]:
-    # FIXME: Optimize
-    # Compute the variance of log174
-    sum = 0
-    sum2 = 0
-    for it in log174:
-        sum += it
-        sum2 += it ** 2
-
-    inv_n = 1.0 / FTX_LDPC_N
-    variance = (sum2 - (sum * sum * inv_n)) * inv_n
-
-    # Normalize log174 distribution and scale it with experimentally found coefficient
-    norm_factor = math.sqrt(24.0 / variance)
-
-    for it in log174:
-        yield it * norm_factor
-
-
 def ftx_decode_candidate(
         wf: ftx_waterfall_t, cand: ftx_candidate_t,
         max_iterations: int) -> typing.Optional[typing.Tuple[ftx_decode_status_t, typing.Optional[bytes]]]:
@@ -359,7 +362,7 @@ def ftx_decode_candidate(
     status.ldpc_errors, plain174 = bp_decode(log174, max_iterations)
 
     if status.ldpc_errors > 0:
-        return status, None
+        return None
 
     # Extract payload + CRC (first FTX_LDPC_K bits) packed into a byte array
     a91 = pack_bits(plain174, FTX_LDPC_K)
@@ -372,47 +375,132 @@ def ftx_decode_candidate(
     status.crc_calculated = ftx_compute_crc(a91, 96 - 14)
 
     if status.crc_extracted != status.crc_calculated:
-        return status, None
+        return None
 
     if wf.protocol == FTX_PROTOCOL_FT4:
         # '[..] for FT4 only, in order to avoid transmitting a long string of zeros when sending CQ messages,
         # the assembled 77-bit message is bitwise exclusive-OR’ed with [a] pseudorandom sequence before computing the CRC and FEC parity bits'
-        payload = bytearray(b"\x00" * 10)
-        for i in range(10):
-            payload[i] = a91[i] ^ kFT4_XOR_sequence[i]
+        payload = bytearray(a ^ kFT4_XOR_sequence[i] for i, a in enumerate(a91))
     else:
         payload = a91
 
     return status, payload
 
 
-def decode(mon: monitor_t, tm_slot_start):
-    wf = mon.wf
-    # Find top candidates by Costas sync score and localize them in time and frequency
-    candidate_list = ftx_find_candidates(wf, kMax_candidates, kMin_score)
+class Monitor:
+    # FT4/FT8 monitor object that manages DSP processing of incoming audio data and prepares a waterfall object
+    @staticmethod
+    def hann_i(i: int, N: int) -> float:
+        x = math.sin(M_PI * i / N)
+        return x ** 2
 
-    hashes = set()
+    def __init__(self, f_min: int, f_max: int, sample_rate: int, time_osr: int, freq_osr: int, protocol):
+        # symbol_period;    ///< FT4/FT8 symbol period in seconds
+        # min_bin;          ///< First FFT bin in the frequency range (begin)
+        # max_bin;          ///< First FFT bin outside the frequency range (end)
+        # block_size;       ///< Number of samples per symbol (block)
+        # subblock_size;    ///< Analysis shift size (number of samples)
+        # nfft;             ///< FFT size
+        # fft_norm;         ///< FFT normalization factor
+        # window;           ///< Window function for STFT analysis (nfft samples)
+        # last_frame;       ///< Current STFT analysis frame (nfft samples)
+        # wf;               ///< Waterfall object
+        # max_mag;          ///< Maximum detected magnitude (debug stats)
 
-    # Go over candidates and attempt to decode messages
-    for cand in candidate_list:
-        freq_hz = (mon.min_bin + cand.freq_offset + cand.freq_sub / wf.freq_osr) / mon.symbol_period
-        time_sec = (cand.time_offset + cand.time_sub / wf.time_osr) * mon.symbol_period
+        slot_time = FT4_SLOT_TIME if protocol == FTX_PROTOCOL_FT4 else FT8_SLOT_TIME
+        symbol_period = FT4_SYMBOL_PERIOD if protocol == FTX_PROTOCOL_FT4 else FT8_SYMBOL_PERIOD
 
-        status, message = ftx_decode_candidate(wf, cand, kLDPC_iterations)
-        if not message:
-            # if status.ldpc_errors > 0:
-            #     print(f"LDPC decode: {status.ldpc_errors} errors")
-            # elif status.crc_calculated != status.crc_extracted:
-            #     print("CRC mismatch!")
-            continue
+        # Compute DSP parameters that depend on the sample rate
+        self.block_size = int(sample_rate * symbol_period)  # samples corresponding to one FSK symbol
+        self.subblock_size = int(self.block_size / time_osr)
+        self.nfft = self.block_size * freq_osr
+        self.fft_norm = 2.0 / self.nfft
+        # const int len_window = 1.8f * me->block_size; // hand-picked and optimized
 
-        if (crc := status.crc_calculated) in hashes:
-            continue
+        self.window = [self.fft_norm * self.hann_i(i, self.nfft) for i in range(self.nfft)]
+        self.last_frame = [0.0] * self.nfft
 
-        hashes.add(crc)
+        # Allocate enough blocks to fit the entire FT8/FT4 slot in memory
+        max_blocks = int(slot_time / symbol_period)
 
-        snr = cand.score * 0.5  # TODO: compute better approximation of SNR
-        call_to_rx, call_de_rx, extra_rx = ftx_message_decode(message)
+        # Keep only FFT bins in the specified frequency range (f_min/f_max)
+        self.min_bin = int(f_min * symbol_period)
+        self.max_bin = int(f_max * symbol_period + 1)
+        num_bins = self.max_bin - self.min_bin
 
-        # Fake WSJT-X-like output for now
-        print(f"{snr:+.2f}dB\t{time_sec:-}sec\t{freq_hz}Hz\t{' '.join([call_to_rx, call_de_rx or '', extra_rx or ''])}")
+        self.wf = ftx_waterfall_t(max_blocks, num_bins, time_osr, freq_osr, protocol)
+
+        self.symbol_period = symbol_period
+
+        self.max_mag = -120.0
+
+    def monitor_process(self, frame: typing.List[float]):
+        # Check if we can still store more waterfall data
+        if self.wf.num_blocks >= self.wf.max_blocks:
+            return
+
+        offset = self.wf.num_blocks * self.wf.block_stride
+        frame_pos = 0
+
+        # Loop over block subdivisions
+        for time_sub in range(self.wf.time_osr):
+            # Shift the new data into analysis frame
+            for pos in range(self.nfft - self.subblock_size):
+                self.last_frame[pos] = self.last_frame[pos + self.subblock_size]
+
+            for pos in range(self.nfft - self.subblock_size, self.nfft):
+                self.last_frame[pos] = frame[frame_pos]
+                frame_pos += 1
+
+            # Do DFT of windowed analysis frame
+            timedata = [self.window[pos] * self.last_frame[pos] for pos in range(self.nfft)]
+            freqdata = np.fft.fft(timedata)[:self.nfft // 2 + 1]
+
+            # Loop over possible frequency OSR offsets
+            for freq_sub in range(self.wf.freq_osr):
+                for bin in range(self.min_bin, self.max_bin):
+                    src_bin = (bin * self.wf.freq_osr) + freq_sub
+                    mag2 = freqdata[src_bin].imag ** 2 + freqdata[src_bin].real ** 2
+                    db = 10.0 * math.log10(1E-12 + mag2)
+
+                    # Scale decibels to unsigned 8-bit range and clamp the value
+                    # Range 0-240 covers -120..0 dB in 0.5 dB steps
+                    scaled = int(2 * db + 240)
+                    self.wf.mag[offset] = 0 if scaled < 0 else 255 if scaled > 255 else scaled
+                    offset += 1
+
+                    if db > self.max_mag:
+                        self.max_mag = db
+
+        self.wf.num_blocks += 1
+
+    def decode(self, tm_slot_start):
+        hashes = set()
+
+        # Find top candidates by Costas sync score and localize them in time and frequency
+        wf = self.wf
+        candidate_list = ftx_find_candidates(wf, kMax_candidates, kMin_score)
+        # Go over candidates and attempt to decode messages
+        for cand in candidate_list:
+            freq_hz = (self.min_bin + cand.freq_offset + cand.freq_sub / wf.freq_osr) / self.symbol_period
+            time_sec = (cand.time_offset + cand.time_sub / wf.time_osr) * self.symbol_period
+
+            if not (x := ftx_decode_candidate(wf, cand, kLDPC_iterations)):
+                continue
+
+            status, message = x
+
+            if (crc := status.crc_calculated) in hashes:
+                continue
+
+            hashes.add(crc)
+
+            snr = cand.score * 0.5  # TODO: compute better approximation of SNR
+            call_to_rx, call_de_rx, extra_rx = ftx_message_decode(message)
+
+            # Fake WSJT-X-like output for now
+            print(f"{snr:+.2f}dB\t"
+                  f"{time_sec:-}sec\t"
+                  f"{freq_hz}Hz\t"
+                  f"{' '.join([call_to_rx, call_de_rx or '', extra_rx or ''])}"
+                  )
