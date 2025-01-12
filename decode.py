@@ -476,7 +476,7 @@ class Monitor:
 
         return True
 
-    def decode(self, tm_slot_start):
+    def decode(self, tm_slot_start) -> typing.Generator[typing.Tuple[float, float, float, str], None, None]:
         hashes = set()
 
         # Find top candidates by Costas sync score and localize them in time and frequency
@@ -500,9 +500,4 @@ class Monitor:
             snr = cand.score * 0.5  # TODO: compute better approximation of SNR
             call_to_rx, call_de_rx, extra_rx = ftx_message_decode(message)
 
-            # Fake WSJT-X-like output for now
-            print(f"{snr:+.2f}dB\t"
-                  f"{time_sec:-}sec\t"
-                  f"{freq_hz}Hz\t"
-                  f"{' '.join([call_to_rx, call_de_rx or '', extra_rx or ''])}"
-                  )
+            yield snr, time_sec, freq_hz, " ".join([call_to_rx, call_de_rx or "", extra_rx or ""])
