@@ -41,9 +41,7 @@ def ftx_message_encode(call_to: str, call_de: str, extra: str = "") -> typing.By
         return message
 
 
-def ftx_message_decode(
-        payload: typing.ByteString
-) -> typing.Tuple[typing.Optional[str], typing.Optional[str], typing.Optional[str]]:
+def ftx_message_decode(payload: typing.ByteString) -> typing.Tuple[str, typing.Optional[str], typing.Optional[str]]:
     msg_type = ftx_message_get_type(payload)
     if msg_type == FTX_MESSAGE_TYPE_STANDARD:
         field1, field2, field3 = ftx_message_decode_std(payload)
