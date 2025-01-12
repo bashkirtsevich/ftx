@@ -16,13 +16,13 @@ def main():
     sample_rate, data = read("examples/ft8.wav")
     # sample_rate, data = read("210703_133430.wav")
 
-    amplitude = np.iinfo(np.int16).max
+    amplitude = np.iinfo(data.dtype).max
     signal = data / amplitude
 
     protocol = FTX_PROTOCOL_FT4 if is_ft4 else FTX_PROTOCOL_FT8
 
     mon = Monitor(
-        f_min=200,
+        f_min=100,
         f_max=3000,
         sample_rate=sample_rate,
         time_osr=kTime_osr,
