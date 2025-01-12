@@ -38,7 +38,7 @@ kFreq_osr = 2  # Frequency oversampling rate (bin subdivision)
 kTime_osr = 2  # Time oversampling rate (symbol subdivision)
 
 
-class ftx_waterfall_t:
+class Waterfall:
     # Input structure to ftx_find_sync() function. This structure describes stored waterfall data over the whole message slot.
     # Fields time_osr and freq_osr specify additional oversampling rate for time and frequency resolution.
     # If time_osr=1, FFT magnitude data is collected once for every symbol transmitted, i.e. every 1/6.25 = 0.16 seconds.
@@ -66,7 +66,7 @@ class ftx_waterfall_t:
         self.protocol = protocol
 
 
-class ftx_candidate_t:
+class Candidate:
     # Output structure of ftx_find_sync() and input structure of ftx_decode().
     # Holds the position of potential start of a message in time and frequency.
     def __init__(self, time_offset, freq_offset, time_sub, freq_sub):
@@ -87,7 +87,7 @@ class ftx_candidate_t:
                 f"freq_sub: {self.freq_sub}]")
 
 
-class ftx_decode_status_t:
+class DecodeStatus:
     # Structure that contains the status of various steps during decoding of a message
     def __init__(self):
         self.freq: float = 0.0
@@ -136,7 +136,7 @@ def ftx_normalize_logl(log174: typing.List[float]) -> typing.Generator[float, No
         yield it * norm_factor
 
 
-def ft8_sync_score(wf: ftx_waterfall_t, candidate: ftx_candidate_t) -> int:
+def ft8_sync_score(wf: Waterfall, candidate: Candidate) -> int:
     score = 0
     num_average = 0
 
@@ -169,7 +169,7 @@ def ft8_sync_score(wf: ftx_waterfall_t, candidate: ftx_candidate_t) -> int:
             if k > 0 and block_abs > 0:  # look one symbol back in time
                 score += wf.mag[p8 + sm] - wf.mag[p8 + sm - wf.block_stride]
                 num_average += 1
-            if ((k + 1) < FT8_LENGTH_SYNC) and ((block_abs + 1) < wf.num_blocks):  # look one symbol forward in time
+            if (k + 1) < FT8_LENGTH_SYNC and (block_abs + 1) < wf.num_blocks:  # look one symbol forward in time
                 score += wf.mag[p8 + sm] - wf.mag[p8 + sm + wf.block_stride]
                 num_average += 1
 
@@ -181,7 +181,7 @@ def ft8_sync_score(wf: ftx_waterfall_t, candidate: ftx_candidate_t) -> int:
     return score
 
 
-def ft4_sync_score(wf: ftx_waterfall_t, candidate: ftx_candidate_t) -> int:
+def ft4_sync_score(wf: Waterfall, candidate: Candidate) -> int:
     score = 0
     num_average = 0
 
@@ -235,7 +235,7 @@ def ft4_sync_score(wf: ftx_waterfall_t, candidate: ftx_candidate_t) -> int:
     return score
 
 
-def ftx_find_candidates(wf: ftx_waterfall_t, num_candidates: int, min_score: int) -> list:
+def ftx_find_candidates(wf: Waterfall, num_candidates: int, min_score: int) -> list:
     if wf.protocol == FTX_PROTOCOL_FT4:
         sync_fun = ft4_sync_score
     else:
@@ -253,8 +253,8 @@ def ftx_find_candidates(wf: ftx_waterfall_t, num_candidates: int, min_score: int
             for time_offset in range(-10, 20):
                 for freq_offset in range(
                         wf.num_bins - num_tones):  # (candidate.freq_offset + num_tones - 1) < wf->num_bin
-                    candidate = ftx_candidate_t(time_sub=time_sub, freq_sub=freq_sub, time_offset=time_offset,
-                                                freq_offset=freq_offset)
+                    candidate = Candidate(time_sub=time_sub, freq_sub=freq_sub, time_offset=time_offset,
+                                          freq_offset=freq_offset)
 
                     if (score := sync_fun(wf, candidate)) >= min_score:
                         candidate.score = score
@@ -264,7 +264,7 @@ def ftx_find_candidates(wf: ftx_waterfall_t, num_candidates: int, min_score: int
     return heap[:num_candidates]
 
 
-def get_cand_mag_idx(wf: ftx_waterfall_t, candidate: ftx_candidate_t) -> int:
+def get_cand_mag_idx(wf: Waterfall, candidate: Candidate) -> int:
     offset = candidate.time_offset
     offset = (offset * wf.time_osr) + candidate.time_sub
     offset = (offset * wf.freq_osr) + candidate.freq_sub
@@ -273,7 +273,7 @@ def get_cand_mag_idx(wf: ftx_waterfall_t, candidate: ftx_candidate_t) -> int:
     return offset
 
 
-def ft4_extract_likelihood(wf: ftx_waterfall_t, cand: ftx_candidate_t) -> typing.List[float]:
+def ft4_extract_likelihood(wf: Waterfall, cand: Candidate) -> typing.List[float]:
     log174 = [0.0] * FTX_LDPC_N
 
     mag = get_cand_mag_idx(wf, cand)  # Pointer to 4 magnitude bins of the first symbol
@@ -298,7 +298,7 @@ def ft4_extract_likelihood(wf: ftx_waterfall_t, cand: ftx_candidate_t) -> typing
     return log174
 
 
-def ft8_extract_likelihood(wf: ftx_waterfall_t, cand: ftx_candidate_t) -> typing.List[float]:
+def ft8_extract_likelihood(wf: Waterfall, cand: Candidate) -> typing.List[float]:
     log174 = [0.0] * FTX_LDPC_N
     mag = get_cand_mag_idx(wf, cand)  # Pointer to 8 magnitude bins of the first symbol
 
@@ -325,7 +325,7 @@ def ft8_extract_likelihood(wf: ftx_waterfall_t, cand: ftx_candidate_t) -> typing
     return log174
 
 
-def ft4_extract_symbol(wf: ftx_waterfall_t, mag_idx: int) -> typing.Tuple[float, float]:
+def ft4_extract_symbol(wf: Waterfall, mag_idx: int) -> typing.Tuple[float, float]:
     # Compute unnormalized log likelihood log(p(1) / p(0)) of 2 message bits (1 FSK symbol)
     # Cleaned up code for the simple case of n_syms==1
     s2 = [wf.mag[mag_idx + kFT4_Gray_map[j]] for j in range(4)]
@@ -336,7 +336,7 @@ def ft4_extract_symbol(wf: ftx_waterfall_t, mag_idx: int) -> typing.Tuple[float,
     return logl_0, logl_1
 
 
-def ft8_extract_symbol(wf: ftx_waterfall_t, mag_idx: int) -> typing.Tuple[float, float, float]:
+def ft8_extract_symbol(wf: Waterfall, mag_idx: int) -> typing.Tuple[float, float, float]:
     # Compute unnormalized log likelihood log(p(1) / p(0)) of 3 message bits (1 FSK symbol)
     # Cleaned up code for the simple case of n_syms==1
     s2 = [wf.mag[mag_idx + kFT8_Gray_map[j]] for j in range(8)]
@@ -349,8 +349,8 @@ def ft8_extract_symbol(wf: ftx_waterfall_t, mag_idx: int) -> typing.Tuple[float,
 
 
 def ftx_decode_candidate(
-        wf: ftx_waterfall_t, cand: ftx_candidate_t,
-        max_iterations: int) -> typing.Optional[typing.Tuple[ftx_decode_status_t, typing.Optional[bytes]]]:
+        wf: Waterfall, cand: Candidate,
+        max_iterations: int) -> typing.Optional[typing.Tuple[DecodeStatus, typing.Optional[bytes]]]:
     if wf.protocol == FTX_PROTOCOL_FT4:
         log174 = ft4_extract_likelihood(wf, cand)
     else:
@@ -358,7 +358,7 @@ def ftx_decode_candidate(
 
     log174 = list(ftx_normalize_logl(log174))
 
-    status = ftx_decode_status_t()
+    status = DecodeStatus()
     status.ldpc_errors, plain174 = bp_decode(log174, max_iterations)
 
     if status.ldpc_errors > 0:
@@ -428,7 +428,7 @@ class Monitor:
         self.max_bin = int(f_max * symbol_period + 1)
         num_bins = self.max_bin - self.min_bin
 
-        self.wf = ftx_waterfall_t(max_blocks, num_bins, time_osr, freq_osr, protocol)
+        self.wf = Waterfall(max_blocks, num_bins, time_osr, freq_osr, protocol)
 
         self.symbol_period = symbol_period
 
@@ -437,7 +437,7 @@ class Monitor:
     def monitor_process(self, frame: typing.List[float]):
         # Check if we can still store more waterfall data
         if self.wf.num_blocks >= self.wf.max_blocks:
-            return
+            return False
 
         offset = self.wf.num_blocks * self.wf.block_stride
         frame_pos = 0
@@ -473,6 +473,8 @@ class Monitor:
                         self.max_mag = db
 
         self.wf.num_blocks += 1
+
+        return True
 
     def decode(self, tm_slot_start):
         hashes = set()
