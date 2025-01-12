@@ -97,302 +97,51 @@ class DecodeStatus:
         self.crc_calculated: int = 0  # < CRC value calculated over the payload
 
 
-def pack_bits(bit_array: typing.ByteString, num_bits: int) -> typing.ByteString:
-    # Packs a string of bits each represented as a zero/non-zero byte in plain[],
-    # as a string of packed bits starting from the MSB of the first byte of packed[]
-    num_bytes = (num_bits + 7) // 8
-    packed = bytearray(b"\x00" * num_bytes)
-
-    mask = 0x80
-    byte_idx = 0
-    for i in range(num_bits):
-        if bit_array[i]:
-            packed[byte_idx] |= mask
-
-        mask >>= 1
-        if not mask:
-            mask = 0x80
-            byte_idx += 1
-
-    return packed
-
-
-def ftx_normalize_logl(log174: typing.List[float]) -> typing.Generator[float, None, None]:
-    # FIXME: Optimize
-    # Compute the variance of log174
-    sum = 0
-    sum2 = 0
-    for it in log174:
-        sum += it
-        sum2 += it ** 2
-
-    inv_n = 1.0 / FTX_LDPC_N
-    variance = (sum2 - (sum * sum * inv_n)) * inv_n
-
-    # Normalize log174 distribution and scale it with experimentally found coefficient
-    norm_factor = math.sqrt(24.0 / variance)
-
-    for it in log174:
-        yield it * norm_factor
-
-
-def ft8_sync_score(wf: Waterfall, candidate: Candidate) -> int:
-    score = 0
-    num_average = 0
-
-    # Get the pointer to symbol 0 of the candidate
-    mag_cand = get_cand_mag_idx(wf, candidate)
-
-    # Compute average score over sync symbols (m+k = 0-7, 36-43, 72-79)
-    for m in range(FT8_NUM_SYNC):
-        for k in range(FT8_LENGTH_SYNC):
-            block = (FT8_SYNC_OFFSET * m) + k  # relative to the message
-            block_abs = candidate.time_offset + block  # relative to the captured signal
-
-            if block_abs < 0:  # Check for time boundaries
-                continue
-
-            if block_abs >= wf.num_blocks:
-                break
-
-            # Get the pointer to symbol 'block' of the candidate
-            p8 = mag_cand + (block * wf.block_stride)
-
-            # Check only the neighbors of the expected symbol frequency- and time-wise
-            sm = kFT8_Costas_pattern[k]  # Index of the expected bin
-            if sm > 0:  # look at one frequency bin lower
-                score += wf.mag[p8 + sm] - wf.mag[p8 + sm - 1]
-                num_average += 1
-            if sm < 7:  # look at one frequency bin higher
-                score += wf.mag[p8 + sm] - wf.mag[p8 + sm + 1]
-                num_average += 1
-            if k > 0 and block_abs > 0:  # look one symbol back in time
-                score += wf.mag[p8 + sm] - wf.mag[p8 + sm - wf.block_stride]
-                num_average += 1
-            if (k + 1) < FT8_LENGTH_SYNC and (block_abs + 1) < wf.num_blocks:  # look one symbol forward in time
-                score += wf.mag[p8 + sm] - wf.mag[p8 + sm + wf.block_stride]
-                num_average += 1
-
-    if num_average > 0:
-        score = int(score / num_average)
-
-    # if score != 0:
-    #     print(f"ft8_sync_score score={score}")
-    return score
-
-
-def ft4_sync_score(wf: Waterfall, candidate: Candidate) -> int:
-    score = 0
-    num_average = 0
-
-    # Get the pointer to symbol 0 of the candidate
-    mag_cand = get_cand_mag_idx(wf, candidate)
-
-    # Compute average score over sync symbols (block = 1-4, 34-37, 67-70, 100-103)
-    for m in range(FT4_NUM_SYNC):
-        for k in range(FT4_LENGTH_SYNC):
-            block = 1 + (FT4_SYNC_OFFSET * m) + k
-            block_abs = candidate.time_offset + block
-            # Check for time boundaries
-            if block_abs < 0:
-                continue
-            if block_abs >= wf.num_blocks:
-                break
-
-            # Get the pointer to symbol 'block' of the candidate
-            p4 = mag_cand + (block * wf.block_stride)
-
-            sm = kFT4_Costas_pattern[m][k]  # Index of the expected bin
-
-            # score += (4 * p4[sm]) - p4[0] - p4[1] - p4[2] - p4[3];
-            # num_average += 4;
-
-            # Check only the neighbors of the expected symbol frequency- and time-wise
-            if sm > 0:
-                # look at one frequency bin lower
-                # score += WF_ELEM_MAG_INT(p4[sm]) - WF_ELEM_MAG_INT(p4[sm - 1]);
-                score += int(p4[sm]) - int(p4[sm - 1])
-                num_average += 1
-            if sm < 3:
-                # look at one frequency bin higher
-                # score += WF_ELEM_MAG_INT(p4[sm]) - WF_ELEM_MAG_INT(p4[sm + 1]);
-                score += int(p4[sm]) - int(p4[sm + 1])
-                num_average += 1
-            if k > 0 and block_abs > 0:
-                # look one symbol back in time
-                # score += WF_ELEM_MAG_INT(p4[sm]) - WF_ELEM_MAG_INT(p4[sm - wf->block_stride]);
-                score += int(p4[sm]) - int(p4[sm - wf.block_stride])
-                num_average += 1
-            if (k + 1) < FT4_LENGTH_SYNC and (block_abs + 1) < wf.num_blocks:
-                # look one symbol forward in time
-                # score += WF_ELEM_MAG_INT(p4[sm]) - WF_ELEM_MAG_INT(p4[sm + wf->block_stride]);
-                score += int(p4[sm]) - int(p4[sm + wf.block_stride])
-                num_average += 1
-
-    if num_average > 0:
-        score = int(score / num_average)
-
-    return score
-
-
-def ftx_find_candidates(wf: Waterfall, num_candidates: int, min_score: int) -> list:
-    if wf.protocol == FTX_PROTOCOL_FT4:
-        sync_fun = ft4_sync_score
-    else:
-        sync_fun = ft8_sync_score
-
-    num_tones = 4 if wf.protocol == FTX_PROTOCOL_FT4 else 8
-
-    heap = []
-
-    # Here we allow time offsets that exceed signal boundaries, as long as we still have all data bits.
-    # I.e. we can afford to skip the first 7 or the last 7 Costas symbols, as long as we track how many
-    # sync symbols we included in the score, so the score is averaged.
-    for time_sub in range(wf.time_osr):
-        for freq_sub in range(wf.freq_osr):
-            for time_offset in range(-10, 20):
-                for freq_offset in range(
-                        wf.num_bins - num_tones):  # (candidate.freq_offset + num_tones - 1) < wf->num_bin
-                    candidate = Candidate(time_sub=time_sub, freq_sub=freq_sub, time_offset=time_offset,
-                                          freq_offset=freq_offset)
-
-                    if (score := sync_fun(wf, candidate)) >= min_score:
-                        candidate.score = score
-                        heap.insert(0, candidate)
-
-    heap.sort(key=lambda x: x.score, reverse=True)
-    return heap[:num_candidates]
-
-
-def get_cand_mag_idx(wf: Waterfall, candidate: Candidate) -> int:
-    offset = candidate.time_offset
-    offset = (offset * wf.time_osr) + candidate.time_sub
-    offset = (offset * wf.freq_osr) + candidate.freq_sub
-    offset = (offset * wf.num_bins) + candidate.freq_offset
-
-    return offset
-
-
-def ft4_extract_likelihood(wf: Waterfall, cand: Candidate) -> typing.List[float]:
-    log174 = [0.0] * FTX_LDPC_N
-
-    mag = get_cand_mag_idx(wf, cand)  # Pointer to 4 magnitude bins of the first symbol
-
-    # Go over FSK tones and skip Costas sync symbols
-    for k in range(FT4_ND):
-        # Skip either 5, 9 or 13 sync symbols
-        # TODO: replace magic numbers with constants
-        sym_idx = k + (5 if k < 29 else 9 if k < 58 else 13)
-        bit_idx = 2 * k
-
-        # Check for time boundaries
-        block = cand.time_offset + sym_idx
-        if block < 0 or block >= wf.num_blocks:
-            log174[bit_idx + 0] = 0
-            log174[bit_idx + 1] = 0
-        else:
-            logl_0, logl_1 = ft4_extract_symbol(wf, mag + sym_idx * wf.block_stride)
-            log174[bit_idx + 0] = logl_0
-            log174[bit_idx + 1] = logl_1
-
-    return log174
-
-
-def ft8_extract_likelihood(wf: Waterfall, cand: Candidate) -> typing.List[float]:
-    log174 = [0.0] * FTX_LDPC_N
-    mag = get_cand_mag_idx(wf, cand)  # Pointer to 8 magnitude bins of the first symbol
-
-    # Go over FSK tones and skip Costas sync symbols
-    for k in range(FT8_ND):
-        # Skip either 7 or 14 sync symbols
-        # TODO: replace magic numbers with constants
-        sym_idx = k + (7 if k < 29 else 14)
-        bit_idx = 3 * k
-
-        # Check for time boundaries
-        block = cand.time_offset + sym_idx
-
-        if block < 0 or block >= wf.num_blocks:
-            log174[bit_idx + 0] = 0
-            log174[bit_idx + 1] = 0
-            log174[bit_idx + 2] = 0
-        else:
-            logl_0, logl_1, logl_2 = ft8_extract_symbol(wf, mag + sym_idx * wf.block_stride)
-            log174[bit_idx + 0] = logl_0
-            log174[bit_idx + 1] = logl_1
-            log174[bit_idx + 2] = logl_2
-
-    return log174
-
-
-def ft4_extract_symbol(wf: Waterfall, mag_idx: int) -> typing.Tuple[float, float]:
-    # Compute unnormalized log likelihood log(p(1) / p(0)) of 2 message bits (1 FSK symbol)
-    # Cleaned up code for the simple case of n_syms==1
-    s2 = [wf.mag[mag_idx + kFT4_Gray_map[j]] for j in range(4)]
-
-    logl_0 = max(s2[2], s2[3]) - max(s2[0], s2[1])
-    logl_1 = max(s2[1], s2[3]) - max(s2[0], s2[2])
-
-    return logl_0, logl_1
-
-
-def ft8_extract_symbol(wf: Waterfall, mag_idx: int) -> typing.Tuple[float, float, float]:
-    # Compute unnormalized log likelihood log(p(1) / p(0)) of 3 message bits (1 FSK symbol)
-    # Cleaned up code for the simple case of n_syms==1
-    s2 = [wf.mag[mag_idx + kFT8_Gray_map[j]] for j in range(8)]
-
-    logl_0 = max(s2[4], s2[5], s2[6], s2[7]) - max(s2[0], s2[1], s2[2], s2[3])
-    logl_1 = max(s2[2], s2[3], s2[6], s2[7]) - max(s2[0], s2[1], s2[4], s2[5])
-    logl_2 = max(s2[1], s2[3], s2[5], s2[7]) - max(s2[0], s2[2], s2[4], s2[6])
-
-    return logl_0, logl_1, logl_2
-
-
-def ftx_decode_candidate(
-        wf: Waterfall, cand: Candidate,
-        max_iterations: int) -> typing.Optional[typing.Tuple[DecodeStatus, typing.Optional[bytes]]]:
-    if wf.protocol == FTX_PROTOCOL_FT4:
-        log174 = ft4_extract_likelihood(wf, cand)
-    else:
-        log174 = ft8_extract_likelihood(wf, cand)
-
-    log174 = list(ftx_normalize_logl(log174))
-
-    status = DecodeStatus()
-    status.ldpc_errors, plain174 = bp_decode(log174, max_iterations)
-
-    if status.ldpc_errors > 0:
-        return None
-
-    # Extract payload + CRC (first FTX_LDPC_K bits) packed into a byte array
-    a91 = pack_bits(plain174, FTX_LDPC_K)
-
-    # Extract CRC and check it
-    status.crc_extracted = ftx_extract_crc(a91)
-    # [1]: 'The CRC is calculated on the source-encoded message, zero-extended from 77 to 82 bits.'
-    a91[9] &= 0xF8
-    a91[10] &= 0x00
-    status.crc_calculated = ftx_compute_crc(a91, 96 - 14)
-
-    if status.crc_extracted != status.crc_calculated:
-        return None
-
-    if wf.protocol == FTX_PROTOCOL_FT4:
-        # '[..] for FT4 only, in order to avoid transmitting a long string of zeros when sending CQ messages,
-        # the assembled 77-bit message is bitwise exclusive-OR’ed with [a] pseudorandom sequence before computing the CRC and FEC parity bits'
-        payload = bytearray(a ^ kFT4_XOR_sequence[i] for i, a in enumerate(a91))
-    else:
-        payload = a91
-
-    return status, payload
-
-
 class Monitor:
     # FT4/FT8 monitor object that manages DSP processing of incoming audio data and prepares a waterfall object
     @staticmethod
     def hann_i(i: int, N: int) -> float:
         x = math.sin(M_PI * i / N)
         return x ** 2
+
+    @staticmethod
+    def pack_bits(bit_array: typing.ByteString, num_bits: int) -> typing.ByteString:
+        # Packs a string of bits each represented as a zero/non-zero byte in plain[],
+        # as a string of packed bits starting from the MSB of the first byte of packed[]
+        num_bytes = (num_bits + 7) // 8
+        packed = bytearray(b"\x00" * num_bytes)
+
+        mask = 0x80
+        byte_idx = 0
+        for i in range(num_bits):
+            if bit_array[i]:
+                packed[byte_idx] |= mask
+
+            mask >>= 1
+            if not mask:
+                mask = 0x80
+                byte_idx += 1
+
+        return packed
+
+    @staticmethod
+    def ftx_normalize_logl(log174: typing.List[float]) -> typing.Generator[float, None, None]:
+        # FIXME: Optimize
+        # Compute the variance of log174
+        sum = 0
+        sum2 = 0
+        for it in log174:
+            sum += it
+            sum2 += it ** 2
+
+        inv_n = 1.0 / FTX_LDPC_N
+        variance = (sum2 - (sum * sum * inv_n)) * inv_n
+
+        # Normalize log174 distribution and scale it with experimentally found coefficient
+        norm_factor = math.sqrt(24.0 / variance)
+
+        for it in log174:
+            yield it * norm_factor
 
     def __init__(self, f_min: int, f_max: int, sample_rate: int, time_osr: int, freq_osr: int, protocol):
         # symbol_period;    ///< FT4/FT8 symbol period in seconds
@@ -476,18 +225,270 @@ class Monitor:
 
         return True
 
+    def ft8_sync_score(self, candidate: Candidate) -> int:
+        wf = self.wf
+
+        score = 0
+        num_average = 0
+
+        # Get the pointer to symbol 0 of the candidate
+        mag_cand = self.get_cand_mag_idx(candidate)
+
+        # Compute average score over sync symbols (m+k = 0-7, 36-43, 72-79)
+        for m in range(FT8_NUM_SYNC):
+            for k in range(FT8_LENGTH_SYNC):
+                block = (FT8_SYNC_OFFSET * m) + k  # relative to the message
+                block_abs = candidate.time_offset + block  # relative to the captured signal
+
+                if block_abs < 0:  # Check for time boundaries
+                    continue
+
+                if block_abs >= wf.num_blocks:
+                    break
+
+                # Get the pointer to symbol 'block' of the candidate
+                p8 = mag_cand + (block * wf.block_stride)
+
+                # Check only the neighbors of the expected symbol frequency- and time-wise
+                sm = kFT8_Costas_pattern[k]  # Index of the expected bin
+                if sm > 0:  # look at one frequency bin lower
+                    score += wf.mag[p8 + sm] - wf.mag[p8 + sm - 1]
+                    num_average += 1
+                if sm < 7:  # look at one frequency bin higher
+                    score += wf.mag[p8 + sm] - wf.mag[p8 + sm + 1]
+                    num_average += 1
+                if k > 0 and block_abs > 0:  # look one symbol back in time
+                    score += wf.mag[p8 + sm] - wf.mag[p8 + sm - wf.block_stride]
+                    num_average += 1
+                if k + 1 < FT8_LENGTH_SYNC and block_abs + 1 < wf.num_blocks:  # look one symbol forward in time
+                    score += wf.mag[p8 + sm] - wf.mag[p8 + sm + wf.block_stride]
+                    num_average += 1
+
+        if num_average > 0:
+            score = int(score / num_average)
+
+        # if score != 0:
+        #     print(f"ft8_sync_score score={score}")
+        return score
+
+    def ft4_sync_score(self, candidate: Candidate) -> int:
+        wf = self.wf
+        score = 0
+        num_average = 0
+
+        # Get the pointer to symbol 0 of the candidate
+        mag_cand = self.get_cand_mag_idx(candidate)
+
+        # Compute average score over sync symbols (block = 1-4, 34-37, 67-70, 100-103)
+        for m in range(FT4_NUM_SYNC):
+            for k in range(FT4_LENGTH_SYNC):
+                block = 1 + (FT4_SYNC_OFFSET * m) + k
+                block_abs = candidate.time_offset + block
+                # Check for time boundaries
+                if block_abs < 0:
+                    continue
+                if block_abs >= wf.num_blocks:
+                    break
+
+                # Get the pointer to symbol 'block' of the candidate
+                p4 = mag_cand + (block * wf.block_stride)
+
+                sm = kFT4_Costas_pattern[m][k]  # Index of the expected bin
+
+                # score += (4 * p4[sm]) - p4[0] - p4[1] - p4[2] - p4[3];
+                # num_average += 4;
+
+                # Check only the neighbors of the expected symbol frequency- and time-wise
+                if sm > 0:
+                    # look at one frequency bin lower
+                    # score += WF_ELEM_MAG_INT(p4[sm]) - WF_ELEM_MAG_INT(p4[sm - 1]);
+                    score += int(p4[sm]) - int(p4[sm - 1])
+                    num_average += 1
+                if sm < 3:
+                    # look at one frequency bin higher
+                    # score += WF_ELEM_MAG_INT(p4[sm]) - WF_ELEM_MAG_INT(p4[sm + 1]);
+                    score += int(p4[sm]) - int(p4[sm + 1])
+                    num_average += 1
+                if k > 0 and block_abs > 0:
+                    # look one symbol back in time
+                    # score += WF_ELEM_MAG_INT(p4[sm]) - WF_ELEM_MAG_INT(p4[sm - wf->block_stride]);
+                    score += int(p4[sm]) - int(p4[sm - wf.block_stride])
+                    num_average += 1
+                if k + 1 < FT4_LENGTH_SYNC and block_abs + 1 < wf.num_blocks:
+                    # look one symbol forward in time
+                    # score += WF_ELEM_MAG_INT(p4[sm]) - WF_ELEM_MAG_INT(p4[sm + wf->block_stride]);
+                    score += int(p4[sm]) - int(p4[sm + wf.block_stride])
+                    num_average += 1
+
+        if num_average > 0:
+            score = int(score / num_average)
+
+        return score
+
+    def ftx_find_candidates(self, num_candidates: int, min_score: int) -> list:
+        wf = self.wf
+
+        if wf.protocol == FTX_PROTOCOL_FT4:
+            sync_fun = self.ft4_sync_score
+        else:
+            sync_fun = self.ft8_sync_score
+
+        num_tones = 4 if wf.protocol == FTX_PROTOCOL_FT4 else 8
+
+        heap = []
+
+        # Here we allow time offsets that exceed signal boundaries, as long as we still have all data bits.
+        # I.e. we can afford to skip the first 7 or the last 7 Costas symbols, as long as we track how many
+        # sync symbols we included in the score, so the score is averaged.
+        for time_sub in range(wf.time_osr):
+            for freq_sub in range(wf.freq_osr):
+                for time_offset in range(-10, 20):
+                    for freq_offset in range(
+                            wf.num_bins - num_tones):  # (candidate.freq_offset + num_tones - 1) < wf->num_bin
+                        candidate = Candidate(time_sub=time_sub, freq_sub=freq_sub, time_offset=time_offset,
+                                              freq_offset=freq_offset)
+
+                        if (score := sync_fun(candidate)) >= min_score:
+                            candidate.score = score
+                            heap.insert(0, candidate)
+
+        heap.sort(key=lambda x: x.score, reverse=True)
+        return heap[:num_candidates]
+
+    def get_cand_mag_idx(self, candidate: Candidate) -> int:
+        wf = self.wf
+
+        offset = candidate.time_offset
+        offset = (offset * wf.time_osr) + candidate.time_sub
+        offset = (offset * wf.freq_osr) + candidate.freq_sub
+        offset = (offset * wf.num_bins) + candidate.freq_offset
+
+        return offset
+
+    def ft4_extract_likelihood(self, cand: Candidate) -> typing.List[float]:
+        log174 = [0.0] * FTX_LDPC_N
+
+        mag = self.get_cand_mag_idx(cand)  # Pointer to 4 magnitude bins of the first symbol
+
+        # Go over FSK tones and skip Costas sync symbols
+        for k in range(FT4_ND):
+            # Skip either 5, 9 or 13 sync symbols
+            # TODO: replace magic numbers with constants
+            sym_idx = k + (5 if k < 29 else 9 if k < 58 else 13)
+            bit_idx = 2 * k
+
+            # Check for time boundaries
+            block = cand.time_offset + sym_idx
+            if block < 0 or block >= self.wf.num_blocks:
+                log174[bit_idx + 0] = 0
+                log174[bit_idx + 1] = 0
+            else:
+                logl_0, logl_1 = self.ft4_extract_symbol(mag + sym_idx * self.wf.block_stride)
+                log174[bit_idx + 0] = logl_0
+                log174[bit_idx + 1] = logl_1
+
+        return log174
+
+    def ft8_extract_likelihood(self, cand: Candidate) -> typing.List[float]:
+        log174 = [0.0] * FTX_LDPC_N
+
+        mag = self.get_cand_mag_idx(cand)  # Pointer to 8 magnitude bins of the first symbol
+
+        # Go over FSK tones and skip Costas sync symbols
+        for k in range(FT8_ND):
+            # Skip either 7 or 14 sync symbols
+            # TODO: replace magic numbers with constants
+            sym_idx = k + (7 if k < 29 else 14)
+            bit_idx = 3 * k
+
+            # Check for time boundaries
+            block = cand.time_offset + sym_idx
+
+            if block < 0 or block >= self.wf.num_blocks:
+                log174[bit_idx + 0] = 0
+                log174[bit_idx + 1] = 0
+                log174[bit_idx + 2] = 0
+            else:
+                logl_0, logl_1, logl_2 = self.ft8_extract_symbol(mag + sym_idx * self.wf.block_stride)
+                log174[bit_idx + 0] = logl_0
+                log174[bit_idx + 1] = logl_1
+                log174[bit_idx + 2] = logl_2
+
+        return log174
+
+    def ft4_extract_symbol(self, mag_idx: int) -> typing.Tuple[float, float]:
+        # Compute unnormalized log likelihood log(p(1) / p(0)) of 2 message bits (1 FSK symbol)
+        # Cleaned up code for the simple case of n_syms==1
+        s2 = [self.wf.mag[mag_idx + kFT4_Gray_map[j]] for j in range(4)]
+
+        logl_0 = max(s2[2], s2[3]) - max(s2[0], s2[1])
+        logl_1 = max(s2[1], s2[3]) - max(s2[0], s2[2])
+
+        return logl_0, logl_1
+
+    def ft8_extract_symbol(self, mag_idx: int) -> typing.Tuple[float, float, float]:
+        # Compute unnormalized log likelihood log(p(1) / p(0)) of 3 message bits (1 FSK symbol)
+        # Cleaned up code for the simple case of n_syms==1
+        s2 = [self.wf.mag[mag_idx + kFT8_Gray_map[j]] for j in range(8)]
+
+        logl_0 = max(s2[4], s2[5], s2[6], s2[7]) - max(s2[0], s2[1], s2[2], s2[3])
+        logl_1 = max(s2[2], s2[3], s2[6], s2[7]) - max(s2[0], s2[1], s2[4], s2[5])
+        logl_2 = max(s2[1], s2[3], s2[5], s2[7]) - max(s2[0], s2[2], s2[4], s2[6])
+
+        return logl_0, logl_1, logl_2
+
+    def ftx_decode_candidate(
+            self, cand: Candidate,
+            max_iterations: int) -> typing.Optional[typing.Tuple[DecodeStatus, typing.Optional[bytes]]]:
+        wf = self.wf
+
+        if wf.protocol == FTX_PROTOCOL_FT4:
+            log174 = self.ft4_extract_likelihood(cand)
+        else:
+            log174 = self.ft8_extract_likelihood(cand)
+
+        log174 = list(self.ftx_normalize_logl(log174))
+
+        status = DecodeStatus()
+        status.ldpc_errors, plain174 = bp_decode(log174, max_iterations)
+
+        if status.ldpc_errors > 0:
+            return None
+
+        # Extract payload + CRC (first FTX_LDPC_K bits) packed into a byte array
+        a91 = self.pack_bits(plain174, FTX_LDPC_K)
+
+        # Extract CRC and check it
+        status.crc_extracted = ftx_extract_crc(a91)
+        # [1]: 'The CRC is calculated on the source-encoded message, zero-extended from 77 to 82 bits.'
+        a91[9] &= 0xF8
+        a91[10] &= 0x00
+        status.crc_calculated = ftx_compute_crc(a91, 96 - 14)
+
+        if status.crc_extracted != status.crc_calculated:
+            return None
+
+        if wf.protocol == FTX_PROTOCOL_FT4:
+            # '[..] for FT4 only, in order to avoid transmitting a long string of zeros when sending CQ messages,
+            # the assembled 77-bit message is bitwise exclusive-OR’ed with [a] pseudorandom sequence before computing the CRC and FEC parity bits'
+            payload = bytearray(a ^ kFT4_XOR_sequence[i] for i, a in enumerate(a91))
+        else:
+            payload = a91
+
+        return status, payload
+
     def decode(self, tm_slot_start) -> typing.Generator[typing.Tuple[float, float, float, str], None, None]:
         hashes = set()
 
         # Find top candidates by Costas sync score and localize them in time and frequency
         wf = self.wf
-        candidate_list = ftx_find_candidates(wf, kMax_candidates, kMin_score)
+        candidate_list = self.ftx_find_candidates(kMax_candidates, kMin_score)
         # Go over candidates and attempt to decode messages
         for cand in candidate_list:
             freq_hz = (self.min_bin + cand.freq_offset + cand.freq_sub / wf.freq_osr) / self.symbol_period
             time_sec = (cand.time_offset + cand.time_sub / wf.time_osr) * self.symbol_period
 
-            if not (x := ftx_decode_candidate(wf, cand, kLDPC_iterations)):
+            if not (x := self.ftx_decode_candidate(cand, kLDPC_iterations)):
                 continue
 
             status, message = x
