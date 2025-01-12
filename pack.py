@@ -240,7 +240,7 @@ def unpack28(n28: int, ip: int, i3: int) -> typing.Optional[str]:
             n = n28 - 1003
             aaaa = ""
             for i in range(3):
-                aaaa += charn(n % 27, FT8_CHAR_TABLE_LETTERS_SPACE)
+                aaaa = charn(n % 27, FT8_CHAR_TABLE_LETTERS_SPACE) + aaaa
                 n //= 27
             return f"CQ {aaaa.strip()}"
 
