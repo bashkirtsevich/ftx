@@ -24,6 +24,7 @@ from consts import kFT4_XOR_sequence
 from consts import kFT8_Costas_pattern
 from consts import kFT8_Gray_map
 from crc import ftx_extract_crc, ftx_compute_crc
+from encode import ft4_encode, ft8_encode
 from gfsk import M_PI
 from ldpc import bp_decode
 from message import ftx_message_decode
@@ -321,7 +322,7 @@ class Monitor:
 
         return score
 
-    def ftx_find_candidates(self, num_candidates: int, min_score: int) -> list:
+    def ftx_find_candidates(self, num_candidates: int, min_score: int) -> typing.List[Candidate]:
         wf = self.wf
 
         if wf.protocol == FTX_PROTOCOL_FT4:
@@ -473,6 +474,47 @@ class Monitor:
 
         return status, payload
 
+    def ftx_get_snr(self, candidate: Candidate, tones: typing.Iterable[int]) -> float:
+        n_items = 4 if self.wf.protocol == FTX_PROTOCOL_FT4 else 8
+
+        mag = self.get_cand_mag_idx(candidate)
+
+        signal = 0
+        noise = 0
+        num_average = 0
+        for i, tone in enumerate(tones):
+            block_abs = candidate.time_offset + i  # relative to the captured signal
+            # Check for time boundaries
+            if block_abs < 0:
+                continue
+
+            if block_abs >= self.wf.num_blocks:
+                break
+
+            min_val = 255
+            for s in range(n_items):
+                wf_el = self.wf.mag[mag + i * self.wf.block_stride + s]
+
+                if s == tone:
+                    signal += wf_el
+                else:
+                    min_val = min(min_val, wf_el)
+
+            noise += min_val
+            num_average += 1
+
+        return (signal - noise) / (2 * num_average) - 26
+
+    def get_message_snr(self, cand: Candidate, payload: typing.ByteString) -> float:
+        if self.wf.protocol == FTX_PROTOCOL_FT4:
+            encoder = ft4_encode
+        else:
+            encoder = ft8_encode
+
+        tones = encoder(payload)
+
+        return self.ftx_get_snr(cand, tones)
+
     def decode(self, tm_slot_start) -> typing.Generator[typing.Tuple[float, float, float, str], None, None]:
         hashes = set()
 
@@ -494,7 +536,7 @@ class Monitor:
 
             hashes.add(crc)
 
-            snr = cand.score * 0.5  # TODO: compute better approximation of SNR
+            snr = self.get_message_snr(cand, message)
             call_to_rx, call_de_rx, extra_rx = ftx_message_decode(message)
 
             yield snr, time_sec, freq_hz, " ".join([call_to_rx, call_de_rx or "", extra_rx or ""])
