@@ -301,23 +301,19 @@ class Monitor:
                 # Check only the neighbors of the expected symbol frequency- and time-wise
                 if sm > 0:
                     # look at one frequency bin lower
-                    # score += WF_ELEM_MAG_INT(p4[sm]) - WF_ELEM_MAG_INT(p4[sm - 1]);
-                    score += int(p4[sm]) - int(p4[sm - 1])
+                    score += wf.mag[p4 + sm] - wf.mag[p4 + sm - 1]
                     num_average += 1
                 if sm < 3:
                     # look at one frequency bin higher
-                    # score += WF_ELEM_MAG_INT(p4[sm]) - WF_ELEM_MAG_INT(p4[sm + 1]);
-                    score += int(p4[sm]) - int(p4[sm + 1])
+                    score += wf.mag[p4 + sm] - wf.mag[p4 + sm + 1]
                     num_average += 1
                 if k > 0 and block_abs > 0:
                     # look one symbol back in time
-                    # score += WF_ELEM_MAG_INT(p4[sm]) - WF_ELEM_MAG_INT(p4[sm - wf->block_stride]);
-                    score += int(p4[sm]) - int(p4[sm - wf.block_stride])
+                    score += wf.mag[p4 + sm] - wf.mag[p4 + sm - wf.block_stride]
                     num_average += 1
                 if k + 1 < FT4_LENGTH_SYNC and block_abs + 1 < wf.num_blocks:
                     # look one symbol forward in time
-                    # score += WF_ELEM_MAG_INT(p4[sm]) - WF_ELEM_MAG_INT(p4[sm + wf->block_stride]);
-                    score += int(p4[sm]) - int(p4[sm + wf.block_stride])
+                    score += wf.mag[p4 + sm] - wf.mag[p4 + sm + wf.block_stride]
                     num_average += 1
 
         if num_average > 0:
