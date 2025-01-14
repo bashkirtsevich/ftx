@@ -297,7 +297,7 @@ def ftx_message_encode_telemetry(telemetry: typing.ByteString) -> typing.ByteStr
     carry = 0
     data = bytearray(b"\x00" * len(telemetry))
     for i, t_byte in enumerate(reversed(telemetry)):
-        data[len(telemetry) - i - 1] = byte((carry >> 7) | (t_byte << 1))
+        data[-i - 1] = byte((carry >> 7) | (t_byte << 1))
         carry = byte(t_byte & 0x80)
 
     return data
