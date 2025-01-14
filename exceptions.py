@@ -10,6 +10,14 @@ class FTXErrorCallSign2(FTXException):
     pass
 
 
+class FTXErrorTooLong(FTXException):
+    pass
+
+
+class FTXErrorInvalidChar(FTXException):
+    pass
+
+
 class FTXErrorSuffix(FTXException):
     pass
 

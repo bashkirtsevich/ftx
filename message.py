@@ -13,13 +13,13 @@ from consts import FTX_MESSAGE_TYPE_STANDARD
 from consts import FTX_MESSAGE_TYPE_TELEMETRY
 from consts import FTX_MESSAGE_TYPE_UNKNOWN
 from consts import FTX_MESSAGE_TYPE_WWROF
-from exceptions import FTXErrorCallSign1
+from exceptions import FTXErrorCallSign1, FTXErrorTooLong, FTXErrorInvalidChar
 from exceptions import FTXErrorCallSign2
 from exceptions import FTXErrorGrid
 from exceptions import FTXErrorMsgType
 from exceptions import FTXErrorSuffix
 from pack import pack28, save_callsign, packgrid, pack58, unpack28, unpackgrid, lookup_callsign, unpack58
-from text import FT8_CHAR_TABLE_FULL, charn
+from text import FT8_CHAR_TABLE_FULL, charn, nchar
 from tools import byte, dword
 
 
@@ -270,6 +270,36 @@ def ftx_message_encode_nonstd(call_to: str, call_de: str, extra: str) -> typing.
     return payload
 
 
+def ftx_message_encode_free(text: str) -> typing.ByteString:
+    if len(text) > 12:
+        raise FTXErrorTooLong
+
+    b71 = bytearray(b"\x00" * 12)
+    text = (" " * (12 - len(text))) + text
+    for c in text:
+        if (cid := nchar(c, FT8_CHAR_TABLE_FULL)) == -1:
+            raise FTXErrorInvalidChar
+
+        rem = cid
+        for i in reversed(range(9)):
+            rem += b71[i] * 42
+            b71[i] = byte(rem)
+            rem >>= 8
+
+    return ftx_message_encode_telemetry(b71)
+
+
+def ftx_message_encode_telemetry(telemetry: typing.ByteString) -> typing.ByteString:
+    # Shift bits in payload right by 1 bit to right-align the data
+    carry = 0
+    data = bytearray(b"\x00" * len(telemetry))
+    for i, t_byte in enumerate(reversed(telemetry)):
+        data[len(telemetry) - i - 1] = byte((carry >> 7) | (t_byte << 1))
+        carry = byte(t_byte & 0x80)
+
+    return data
+
+
 def ftx_message_decode_telemetry(payload: typing.ByteString) -> typing.Generator[int, None, None]:
     # Shift bits in payload right by 1 bit to right-align the data
     carry = 0
@@ -285,13 +315,13 @@ def ftx_message_decode_telemetry_hex(payload: typing.ByteString) -> str:
 
 def ftx_message_decode_free(payload: typing.ByteString) -> str:
     b71 = bytearray(ftx_message_decode_telemetry(payload))
-    c14 = ""
-    for idx in range(12):
+    c14 = " "
+    for _ in range(12):
         # Divide the long integer in b71 by 42
         rem = 0
         for i in range(9):
             rem = (rem << 8) | b71[i]
-            b71[i] = rem // 42
+            b71[i] = byte(rem // 42)
             rem = rem % 42
 
         c14 = charn(rem, FT8_CHAR_TABLE_FULL) + c14
