@@ -1,4 +1,5 @@
 import typing
+from contextlib import suppress
 
 from consts import FTX_CALLSIGN_HASH_12_BITS
 from consts import FTX_EXTRAS_CODE
@@ -13,7 +14,7 @@ from consts import FTX_MESSAGE_TYPE_STANDARD
 from consts import FTX_MESSAGE_TYPE_TELEMETRY
 from consts import FTX_MESSAGE_TYPE_UNKNOWN
 from consts import FTX_MESSAGE_TYPE_WWROF
-from exceptions import FTXErrorCallSign1, FTXErrorTooLong, FTXErrorInvalidChar
+from exceptions import FTXErrorCallSign1, FTXErrorTooLong, FTXErrorInvalidChar, FTXException
 from exceptions import FTXErrorCallSign2
 from exceptions import FTXErrorGrid
 from exceptions import FTXErrorMsgType
@@ -33,12 +34,14 @@ def ftx_message_encode(call_to: str, call_de: str, extra: str = "") -> typing.By
     if len(extra) > 19:
         raise FTXErrorGrid
 
-    try:
-        message = ftx_message_encode_std(call_to, call_de, extra)
-        return message
-    except:
-        message = ftx_message_encode_nonstd(call_to, call_de, extra)
-        return message
+    with suppress(FTXException):
+        return ftx_message_encode_std(call_to, call_de, extra)
+
+    with suppress(FTXException):
+        return ftx_message_encode_nonstd(call_to, call_de, extra)
+
+    with suppress(FTXException):
+        return ftx_message_encode_free(call_to)
 
 
 def ftx_message_decode(payload: typing.ByteString) -> typing.Tuple[str, typing.Optional[str], typing.Optional[str]]:
