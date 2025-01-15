@@ -5,7 +5,6 @@ from consts import FTX_CALLSIGN_HASH_10_BITS
 from consts import FTX_CALLSIGN_HASH_12_BITS
 from consts import FTX_CALLSIGN_HASH_22_BITS
 from exceptions import FTXInvalidCallsign
-from exceptions import FTXNotImplemented
 from exceptions import FTXPack28Error
 from text import FT8_CHAR_TABLE_ALPHANUM
 from text import FT8_CHAR_TABLE_ALPHANUM_SPACE
@@ -158,12 +157,23 @@ def pack28(callsign: str) -> typing.Tuple[int, int]:
 
     length = len(callsign)
     if callsign.startswith("CQ_") and length < 8:
-        # nnum = 0
-        # nlet = 0
+        rest = callsign[3:]
+        rest_len = len(rest)
 
-        # TODO: decode CQ_nnn or CQ_abcd
-        # LOG(LOG_WARN, "CQ_nnn/CQ_abcd detected, not implemented\n");
-        raise FTXNotImplemented
+        if rest_len == 3 and rest.isdigit():
+            return ip, int(rest) + 3
+
+        if 1 <= rest_len <= 4:
+            nlet = 0
+            correct = True
+            for c in rest:
+                if (n := nchar(c, FT8_CHAR_TABLE_LETTERS_SPACE)) == -1:
+                    correct = False
+                    break
+                nlet = nlet * 27 + n
+
+            if correct:
+                return ip, nlet + 1003
 
     # Detect /R and /P suffix for basecall check
     length_base = length
@@ -233,16 +243,16 @@ def unpack28(n28: int, ip: int, i3: int) -> typing.Optional[str]:
 
         if n28 <= 1002:
             # CQ nnn with 3 digits
-            return f"CQ {n28 - 3:03}"
+            return f"CQ_{n28 - 3:03}"
 
         if n28 <= 532443:
             # CQ ABCD with 4 alphanumeric symbols
             n = n28 - 1003
             aaaa = ""
-            for i in range(3):
+            for i in range(4):
                 aaaa = charn(n % 27, FT8_CHAR_TABLE_LETTERS_SPACE) + aaaa
                 n //= 27
-            return f"CQ {aaaa.strip()}"
+            return f"CQ_{aaaa.strip()}"
 
         # unspecified
         return None

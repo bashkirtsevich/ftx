@@ -13,7 +13,7 @@ def test_std_msg(call_to_tx, call_de_tx, extra_tx):
 def main():
     callsigns = ["YL3JG", "W1A", "W1A/R", "W5AB", "W8ABC", "DE6ABC", "DE6ABC/R", "DE7AB", "DE9A", "3DA0X", "3DA0XYZ",
                  "3DA0XYZ/R", "3XZ0AB", "3XZ0A"]
-    tokens = ["CQ", "QRZ"]
+    tokens = ["CQ", "QRZ", "CQ_123", "CQ_000", "CQ_POTA", "CQ_SA", "CQ_O", "CQ_ASD"]
     grids = ["KO26", "RR99", "AA00", "RR09", "AA01", "RRR", "RR73", "73", "R+10", "R+05", "R-12", "R-02", "+10", "+05",
              "-02", "-02", ""]
 
