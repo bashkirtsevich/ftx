@@ -43,8 +43,8 @@ def main():
                 # Fake WSJT-X-like output for now
                 print(
                     f"{snr:+.2f}dB\t"
-                    f"{time_sec:-}sec\t"
-                    f"{freq_hz}Hz\t"
+                    f"{time_sec:-.2f}sec\t"
+                    f"{freq_hz:.2f}Hz\t"
                     f"{text}"
                 )
 
