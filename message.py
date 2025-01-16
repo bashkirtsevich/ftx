@@ -112,7 +112,7 @@ def ftx_message_encode_std(call_to: str, call_de: str, extra: str) -> typing.Byt
         if any(call.endswith("/R") for call in (call_to, call_de)):
             raise FTXErrorSuffix
 
-    if call_to == "CQ" and endswith_any(call_de, "/P", "/R")
+    if call_to == "CQ" and endswith_any(call_de, "/P", "/R"):
         raise FTXErrorCallSign2  # nonstandard call: need a type 4 message
 
     igrid4 = packgrid(extra)
