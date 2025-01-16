@@ -19,7 +19,7 @@ from exceptions import FTXErrorCallSign2
 from exceptions import FTXErrorGrid
 from exceptions import FTXErrorMsgType
 from exceptions import FTXErrorSuffix
-from pack import pack28, save_callsign, packgrid, pack58, unpack28, unpackgrid, lookup_callsign, unpack58
+from pack import pack28, save_callsign, packgrid, pack58, unpack28, unpackgrid, lookup_callsign, unpack58, pack_basecall
 from text import FT8_CHAR_TABLE_FULL, charn, nchar
 from tools import byte, dword
 
@@ -230,6 +230,10 @@ def ftx_message_encode_nonstd(call_to: str, call_de: str, extra: str) -> typing.
 
     if len_call_de < 3:
         raise FTXErrorCallSign2
+
+    if icq or pack_basecall(call_to) < 0:
+        # CQ with non-std call, should use free text (without hash)
+        raise FTXErrorCallSign1
 
     if not icq:
         # choose which of the callsigns to encode as plain-text (58 bits) or hash (12 bits)
