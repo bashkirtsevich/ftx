@@ -5,12 +5,14 @@ import numpy as np
 
 from consts import FT4_LENGTH_SYNC
 from consts import FT4_ND
+from consts import FT4_NN
 from consts import FT4_NUM_SYNC
 from consts import FT4_SLOT_TIME
 from consts import FT4_SYMBOL_PERIOD
 from consts import FT4_SYNC_OFFSET
 from consts import FT8_LENGTH_SYNC
 from consts import FT8_ND
+from consts import FT8_NN
 from consts import FT8_NUM_SYNC
 from consts import FT8_SLOT_TIME
 from consts import FT8_SYMBOL_PERIOD
@@ -326,11 +328,17 @@ class Monitor:
         wf = self.wf
 
         if wf.protocol == FTX_PROTOCOL_FT4:
+            num_tones = 4
+            time_offset_min = -FT4_LENGTH_SYNC
+            time_offset_max = int(FT4_SLOT_TIME / FT4_SYMBOL_PERIOD - FT4_NN + FT4_LENGTH_SYNC)
+
             sync_fun = self.ft4_sync_score
         else:
-            sync_fun = self.ft8_sync_score
+            num_tones = 8
+            time_offset_min = -FT8_LENGTH_SYNC
+            time_offset_max = int(FT8_SLOT_TIME / FT8_SYMBOL_PERIOD - FT8_NN + FT8_LENGTH_SYNC)
 
-        num_tones = 4 if wf.protocol == FTX_PROTOCOL_FT4 else 8
+            sync_fun = self.ft8_sync_score
 
         heap = []
 
@@ -339,7 +347,7 @@ class Monitor:
         # sync symbols we included in the score, so the score is averaged.
         for time_sub in range(wf.time_osr):
             for freq_sub in range(wf.freq_osr):
-                for time_offset in range(-10, 20):
+                for time_offset in range(time_offset_min, time_offset_max):
                     for freq_offset in range(
                             wf.num_bins - num_tones):  # (candidate.freq_offset + num_tones - 1) < wf->num_bin
                         candidate = Candidate(time_sub=time_sub, freq_sub=freq_sub, time_offset=time_offset,
