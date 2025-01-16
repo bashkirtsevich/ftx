@@ -20,7 +20,7 @@ from exceptions import FTXErrorGrid
 from exceptions import FTXErrorMsgType
 from exceptions import FTXErrorSuffix
 from pack import pack28, save_callsign, packgrid, pack58, unpack28, unpackgrid, lookup_callsign, unpack58, pack_basecall
-from text import FT8_CHAR_TABLE_FULL, charn, nchar
+from text import FT8_CHAR_TABLE_FULL, charn, nchar, endswith_any
 from tools import byte, dword
 
 
@@ -111,6 +111,9 @@ def ftx_message_encode_std(call_to: str, call_de: str, extra: str) -> typing.Byt
         i3 = 2  # Suffix /P for EU VHF contest
         if any(call.endswith("/R") for call in (call_to, call_de)):
             raise FTXErrorSuffix
+
+    if call_to == "CQ" and endswith_any(call_de, "/P", "/R")
+        raise FTXErrorCallSign2  # nonstandard call: need a type 4 message
 
     igrid4 = packgrid(extra)
 
