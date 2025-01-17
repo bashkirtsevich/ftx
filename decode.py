@@ -535,7 +535,7 @@ class Monitor:
         n_items = 4 if self.wf.protocol == FTX_PROTOCOL_FT4 else 8
 
         can = copy(candidate)
-        snr_all = 0
+        snr_all = 0.0
 
         for freq_sub in range(self.wf.freq_osr):
             can.freq_sub = freq_sub
@@ -597,8 +597,8 @@ class Monitor:
 
         tones = encoder(payload)
 
-        # return self.ftx_subtract(cand, list(tones)) / 2 - 22
-        return self.ftx_get_snr(cand, tones)
+        return self.ftx_subtract(cand, list(tones)) / 2 - 22
+        # return self.ftx_get_snr(cand, tones)
 
     def decode(self, tm_slot_start) -> typing.Generator[typing.Tuple[float, float, float, str], None, None]:
         hashes = set()
