@@ -13,7 +13,7 @@ def main():
 
     is_ft4 = False
 
-    sample_rate, data = read("examples/ft8.wav")
+    sample_rate, data = read("examples/signal.wav")
     # sample_rate, data = read("210703_133430.wav")
 
     amplitude = np.iinfo(data.dtype).max
