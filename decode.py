@@ -1,5 +1,6 @@
 import math
 import typing
+from copy import copy
 
 import numpy as np
 
@@ -515,6 +516,69 @@ class Monitor:
 
         return (signal - noise) / (2 * num_average) - 26
 
+    def ftx_subtract(self, candidate: Candidate, tones: typing.Iterable[int]) -> float:
+        # Subtract the estimated noise from the signal, given a candidate and a sequence of tones
+        # This function takes a candidate and a sequence of tones, and subtracts the estimated noise from the signal.
+        # The noise is estimated as the minimum signal power of all tones except the one of the candidate.
+        # The signal power is then subtracted from the signal.
+
+        n_items = 4 if self.wf.protocol == FTX_PROTOCOL_FT4 else 8
+
+        can = copy(candidate)
+        snr_all = 0
+
+        for freq_sub in range(self.wf.freq_osr):
+            can.freq_sub = freq_sub
+
+            mag_cand = self.get_cand_mag_idx(can)
+            noise = 0.0
+            signal = 0.0
+            num_average = 0
+
+            for i, tone in enumerate(tones):
+                block_abs = candidate.time_offset + i  # relative to the captured signal
+                # Check for time boundaries
+                if block_abs < 0:
+                    continue
+
+                if block_abs >= self.wf.num_blocks:
+                    break
+
+                # Get the pointer to symbol 'block' of the candidate
+                wf_el = mag_cand + i * self.wf.block_stride
+
+                noise_val = 100000.0
+                for s in range(n_items):
+                    if s == tone:
+                        continue
+
+                    noise_val = min(noise_val, self.wf.mag[wf_el + s])
+
+                noise += noise_val
+                signal += self.wf.mag[wf_el + tone]
+                num_average += 1
+
+            noise /= num_average
+            signal /= num_average
+            snr = signal - noise
+
+            # for i, tone in enumerate(tones):
+            #     block_abs = candidate.time_offset + i  # relative to the captured signal
+            #     # Check for time boundaries
+            #     if block_abs < 0:
+            #         continue
+            #
+            #     if block_abs >= self.wf.num_blocks:
+            #         break
+            #
+            #     # Get the pointer to symbol 'block' of the candidate
+            #     wf_el = mag_cand + i * self.wf.block_stride
+            #     self.wf.mag[wf_el + tone] -= snr * 2 + 240
+
+            snr_all += snr
+
+        return snr_all / self.wf.freq_osr
+
     def get_message_snr(self, cand: Candidate, payload: typing.ByteString) -> float:
         if self.wf.protocol == FTX_PROTOCOL_FT4:
             encoder = ft4_encode
@@ -523,6 +587,7 @@ class Monitor:
 
         tones = encoder(payload)
 
+        # return self.ftx_subtract(cand, tones)
         return self.ftx_get_snr(cand, tones)
 
     def decode(self, tm_slot_start) -> typing.Generator[typing.Tuple[float, float, float, str], None, None]:
