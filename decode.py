@@ -562,18 +562,18 @@ class Monitor:
             signal /= num_average
             snr = signal - noise
 
-            # for i, tone in enumerate(tones):
-            #     block_abs = candidate.time_offset + i  # relative to the captured signal
-            #     # Check for time boundaries
-            #     if block_abs < 0:
-            #         continue
-            #
-            #     if block_abs >= self.wf.num_blocks:
-            #         break
-            #
-            #     # Get the pointer to symbol 'block' of the candidate
-            #     wf_el = mag_cand + i * self.wf.block_stride
-            #     self.wf.mag[wf_el + tone] -= snr * 2 + 240
+            for i, tone in enumerate(tones):
+                block_abs = candidate.time_offset + i  # relative to the captured signal
+                # Check for time boundaries
+                if block_abs < 0:
+                    continue
+
+                if block_abs >= self.wf.num_blocks:
+                    break
+
+                # Get the pointer to symbol 'block' of the candidate
+                wf_el = mag_cand + i * self.wf.block_stride
+                self.wf.mag[wf_el + tone] -= snr * 2 + 240
 
             snr_all += snr
 
@@ -587,7 +587,7 @@ class Monitor:
 
         tones = encoder(payload)
 
-        # return self.ftx_subtract(cand, tones)
+        # return self.ftx_subtract(cand, list(tones))
         return self.ftx_get_snr(cand, tones)
 
     def decode(self, tm_slot_start) -> typing.Generator[typing.Tuple[float, float, float, str], None, None]:
