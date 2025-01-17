@@ -588,8 +588,8 @@ class Monitor:
 
         tones = encoder(payload)
 
-        # return self.ftx_subtract(cand, list(tones))
-        return self.ftx_get_snr(cand, tones)
+        return self.ftx_subtract(cand, list(tones)) / 2 - 22
+        # return self.ftx_get_snr(cand, tones)
 
     def decode(self, tm_slot_start) -> typing.Generator[typing.Tuple[float, float, float, str], None, None]:
         hashes = set()
