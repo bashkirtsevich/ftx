@@ -488,7 +488,7 @@ class Monitor:
     def ftx_get_snr(self, candidate: Candidate, tones: typing.Iterable[int]) -> float:
         n_items = 4 if self.wf.protocol == FTX_PROTOCOL_FT4 else 8
 
-        mag = self.get_cand_mag_idx(candidate)
+        mag_cand = self.get_cand_mag_idx(candidate)
 
         signal = 0
         noise = 0
@@ -504,12 +504,13 @@ class Monitor:
 
             min_val = 255
             for s in range(n_items):
-                wf_el = self.wf.mag[mag + i * self.wf.block_stride + s]
+                wf_el = mag_cand + i * self.wf.block_stride + s
+                wf_mag = self.wf.mag[wf_el]
 
                 if s == tone:
-                    signal += wf_el
+                    signal += wf_mag
                 else:
-                    min_val = min(min_val, wf_el)
+                    min_val = min(min_val, wf_mag)
 
             noise += min_val
             num_average += 1
