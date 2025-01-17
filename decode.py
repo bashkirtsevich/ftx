@@ -502,10 +502,11 @@ class Monitor:
             if block_abs >= self.wf.num_blocks:
                 break
 
+            wf_el = mag_cand + i * self.wf.block_stride
+
             min_val = 255
             for s in range(n_items):
-                wf_el = mag_cand + i * self.wf.block_stride + s
-                wf_mag = self.wf.mag[wf_el]
+                wf_mag = self.wf.mag[wf_el + s]
 
                 if s == tone:
                     signal += wf_mag
@@ -514,6 +515,14 @@ class Monitor:
 
             noise += min_val
             num_average += 1
+
+            # Mute
+            if tone == 0:
+                self.wf.mag[wf_el + 0] = self.wf.mag[wf_el + 1]
+            elif tone == 7:
+                self.wf.mag[wf_el + 7] = self.wf.mag[wf_el + 6]
+            else:
+                self.wf.mag[wf_el + tone] = int(self.wf.mag[wf_el + tone + 1] / 2 + self.wf.mag[wf_el + tone - 1] / 2)
 
         return (signal - noise) / (2 * num_average) - 26
 
@@ -588,8 +597,8 @@ class Monitor:
 
         tones = encoder(payload)
 
-        return self.ftx_subtract(cand, list(tones)) / 2 - 22
-        # return self.ftx_get_snr(cand, tones)
+        # return self.ftx_subtract(cand, list(tones)) / 2 - 22
+        return self.ftx_get_snr(cand, tones)
 
     def decode(self, tm_slot_start) -> typing.Generator[typing.Tuple[float, float, float, str], None, None]:
         hashes = set()
