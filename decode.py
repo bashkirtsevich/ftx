@@ -478,7 +478,7 @@ class Monitor:
         if wf.protocol == FTX_PROTOCOL_FT4:
             # '[..] for FT4 only, in order to avoid transmitting a long string of zeros when sending CQ messages,
             # the assembled 77-bit message is bitwise exclusive-OR’ed with [a] pseudorandom sequence before computing the CRC and FEC parity bits'
-            payload = bytearray(a ^ kFT4_XOR_sequence[i] for i, a in enumerate(a91))
+            payload = bytearray(a91[i] ^ xor for i, xor in enumerate(kFT4_XOR_sequence))
         else:
             payload = a91
 
