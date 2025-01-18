@@ -557,10 +557,7 @@ class Monitor:
                 wf_el = mag_cand + i * self.wf.block_stride
 
                 noise_val = 100000.0
-                for s in range(n_items):
-                    if s == tone:
-                        continue
-
+                for s in filter(lambda x: x != tone, range(n_items)):
                     noise_val = min(noise_val, self.wf.mag[wf_el + s] * 0.5 - 120.0)
 
                 noise += noise_val

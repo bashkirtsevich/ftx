@@ -13,7 +13,7 @@ def main():
 
     is_ft4 = False
 
-    sample_rate, data = read("examples/signal.wav")
+    sample_rate, data = read("examples/example1.wav")
     # sample_rate, data = read("210703_133430.wav")
 
     amplitude = np.iinfo(data.dtype).max
@@ -39,9 +39,10 @@ def main():
             print(f"Max magnitude: {mon.max_mag:+.2f} dB")
 
             tm_slot_start = 0
-            for snr, time_sec, freq_hz, text in mon.decode(tm_slot_start):
+            for i, (snr, time_sec, freq_hz, text) in enumerate(mon.decode(tm_slot_start)):
                 # Fake WSJT-X-like output for now
                 print(
+                    f"{i + 1:03}\t"
                     f"{snr:+06.2f}dB\t"
                     f"{time_sec:-.2f}sec\t"
                     f"{freq_hz:.2f}Hz\t"
