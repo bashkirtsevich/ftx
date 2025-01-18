@@ -4,28 +4,7 @@ from copy import copy
 
 import numpy as np
 
-from consts import FT4_LENGTH_SYNC
-from consts import FT4_ND
-from consts import FT4_NN
-from consts import FT4_NUM_SYNC
-from consts import FT4_SLOT_TIME
-from consts import FT4_SYMBOL_PERIOD
-from consts import FT4_SYNC_OFFSET
-from consts import FT8_LENGTH_SYNC
-from consts import FT8_ND
-from consts import FT8_NN
-from consts import FT8_NUM_SYNC
-from consts import FT8_SLOT_TIME
-from consts import FT8_SYMBOL_PERIOD
-from consts import FT8_SYNC_OFFSET
-from consts import FTX_LDPC_K
-from consts import FTX_LDPC_N
-from consts import FTX_PROTOCOL_FT4
-from consts import kFT4_Costas_pattern
-from consts import kFT4_Gray_map
-from consts import kFT4_XOR_sequence
-from consts import kFT8_Costas_pattern
-from consts import kFT8_Gray_map
+from consts import *
 from crc import ftx_extract_crc, ftx_compute_crc
 from encode import ft4_encode, ft8_encode
 from gfsk import M_PI
