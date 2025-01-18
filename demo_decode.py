@@ -5,7 +5,7 @@ from consts import FTX_PROTOCOL_FT8, FTX_PROTOCOL_FT4
 from decode import Monitor
 
 kFreq_osr = 2  # Frequency oversampling rate (bin subdivision)
-kTime_osr = 2  # Time oversampling rate (symbol subdivision)
+kTime_osr = 4  # Time oversampling rate (symbol subdivision)
 
 
 def main():
