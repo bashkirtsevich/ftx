@@ -608,7 +608,7 @@ class Monitor:
         # Go over candidates and attempt to decode messages
         for cand in candidate_list:
             freq_hz = (self.min_bin + cand.freq_offset + cand.freq_sub / wf.freq_osr) / self.symbol_period
-            time_sec = (cand.time_offset + cand.time_sub / wf.time_osr) * self.symbol_period  - 0.65
+            time_sec = (cand.time_offset + cand.time_sub / wf.time_osr) * self.symbol_period - 0.65
 
             if not (x := self.ftx_decode_candidate(cand, kLDPC_iterations)):
                 continue
