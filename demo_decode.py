@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 from scipy.io.wavfile import read
 
@@ -22,7 +24,7 @@ def main():
     protocol = FTX_PROTOCOL_FT4 if is_ft4 else FTX_PROTOCOL_FT8
 
     mon = Monitor(
-        f_min=100,
+        f_min=200,
         f_max=3000,
         sample_rate=sample_rate,
         time_osr=kTime_osr,
@@ -39,6 +41,7 @@ def main():
             print(f"Max magnitude: {mon.max_mag:+.2f} dB")
 
             tm_slot_start = 0
+            ts1 = time.monotonic()
             for i, (snr, time_sec, freq_hz, text) in enumerate(mon.decode(tm_slot_start)):
                 # Fake WSJT-X-like output for now
                 print(
@@ -52,7 +55,9 @@ def main():
             mon.wf.num_blocks = 0
             mon.max_mag = -120.0
 
-            print("-" * 20)
+            ts2 = time.monotonic()
+
+            print("-" * 20, "decoded @", (ts2 - ts1), "sec")
 
         if eof:
             break
