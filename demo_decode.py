@@ -42,7 +42,7 @@ def main():
             for snr, time_sec, freq_hz, text in mon.decode(tm_slot_start):
                 # Fake WSJT-X-like output for now
                 print(
-                    f"{snr:+.2f}dB\t"
+                    f"{snr:+06.2f}dB\t"
                     f"{time_sec:-.2f}sec\t"
                     f"{freq_hz:.2f}Hz\t"
                     f"{text}"

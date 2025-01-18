@@ -561,10 +561,10 @@ class Monitor:
                     if s == tone:
                         continue
 
-                    noise_val = min(noise_val, self.wf.mag[wf_el + s])
+                    noise_val = min(noise_val, self.wf.mag[wf_el + s] * 0.5 - 120.0)
 
                 noise += noise_val
-                signal += self.wf.mag[wf_el + tone]
+                signal += self.wf.mag[wf_el + tone] * 0.5 - 120.0
                 num_average += 1
 
             noise /= num_average
@@ -585,6 +585,9 @@ class Monitor:
                 self.wf.mag[wf_el + tone] -= snr * 2 + 240
 
             snr_all += snr
+            # print(
+            #     f"Freq: {candidate.freq_offset} Noise: {noise}, Signal: {signal}, SNR: {snr} score: {candidate.score}"
+            # )
 
         return snr_all / self.wf.freq_osr
 
@@ -608,7 +611,7 @@ class Monitor:
         # Go over candidates and attempt to decode messages
         for cand in candidate_list:
             freq_hz = (self.min_bin + cand.freq_offset + cand.freq_sub / wf.freq_osr) / self.symbol_period
-            time_sec = (cand.time_offset + cand.time_sub / wf.time_osr) * self.symbol_period - 0.65
+            time_sec = (cand.time_offset + cand.time_sub / wf.time_osr) * self.symbol_period  # - 0.65
 
             if not (x := self.ftx_decode_candidate(cand, kLDPC_iterations)):
                 continue
