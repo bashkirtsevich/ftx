@@ -342,15 +342,19 @@ class Monitor:
         # Here we allow time offsets that exceed signal boundaries, as long as we still have all data bits.
         # I.e. we can afford to skip the first 7 or the last 7 Costas symbols, as long as we track how many
         # sync symbols we included in the score, so the score is averaged.
+        can = Candidate(0, 0, 0, 0)
         for time_sub in range(wf.time_osr):
             for freq_sub in range(wf.freq_osr):
                 for time_offset in time_offset_range:
-                    for freq_offset in range(
-                            wf.num_bins - num_tones):  # (candidate.freq_offset + num_tones - 1) < wf->num_bin
-                        candidate = Candidate(time_sub=time_sub, freq_sub=freq_sub, time_offset=time_offset,
-                                              freq_offset=freq_offset)
+                    # (candidate.freq_offset + num_tones - 1) < wf->num_bin
+                    for freq_offset in range(wf.num_bins - num_tones):
+                        can.time_sub = time_sub
+                        can.freq_sub = freq_sub
+                        can.time_offset = time_offset
+                        can.freq_offset = freq_offset
 
-                        if (score := sync_fun(candidate)) >= min_score:
+                        if (score := sync_fun(can)) >= min_score:
+                            candidate = copy(can)
                             candidate.score = score
                             heap.insert(0, candidate)
 
