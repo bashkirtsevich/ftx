@@ -36,9 +36,6 @@ kMin_score = 5  # Minimum sync score threshold for candidates
 kMax_candidates = 256
 kLDPC_iterations = 25
 
-kFreq_osr = 2  # Frequency oversampling rate (bin subdivision)
-kTime_osr = 2  # Time oversampling rate (symbol subdivision)
-
 
 class Waterfall:
     # Input structure to ftx_find_sync() function. This structure describes stored waterfall data over the whole message slot.
