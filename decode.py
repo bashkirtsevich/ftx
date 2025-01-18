@@ -32,11 +32,9 @@ from gfsk import M_PI
 from ldpc import bp_decode
 from message import ftx_message_decode
 
-kMin_score = 10  # Minimum sync score threshold for candidates
-kMax_candidates = 140
+kMin_score = 5  # Minimum sync score threshold for candidates
+kMax_candidates = 256
 kLDPC_iterations = 25
-
-kMax_decoded_messages = 50
 
 kFreq_osr = 2  # Frequency oversampling rate (bin subdivision)
 kTime_osr = 2  # Time oversampling rate (symbol subdivision)
