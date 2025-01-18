@@ -219,11 +219,10 @@ class Monitor:
                     # Scale decibels to unsigned 8-bit range and clamp the value
                     # Range 0-240 covers -120..0 dB in 0.5 dB steps
                     scaled = int(2 * db + 240)
-                    self.wf.mag[offset] = 0 if scaled < 0 else 255 if scaled > 255 else scaled
+                    self.wf.mag[offset] = max(min(scaled, 255), 0)
                     offset += 1
 
-                    if db > self.max_mag:
-                        self.max_mag = db
+                    self.max_mag = max(self.max_mag, db)
 
         self.wf.num_blocks += 1
 
