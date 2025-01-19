@@ -1,4 +1,6 @@
-from consts import FTX_LDPC_K_BYTES
+import typing
+
+from consts import *
 
 FT8_CRC_POLYNOMIAL = 0x2757
 FT8_CRC_WIDTH = 14
@@ -46,3 +48,29 @@ def ftx_add_crc(payload: bytes) -> bytes:
     # print("checksum", checksum)
 
     return a91
+
+
+def ftx_crc(msg1: typing.ByteString, msglen: int) -> typing.ByteString:
+    div = [1, 1, 0, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1]
+
+    # FIXME: Use concat
+    msg = bytearray(b"\x00" * (FTX_LDPC_M + FT8_CRC_WIDTH))
+    for i in range(msglen + FT8_CRC_WIDTH):
+        if i < 77:
+            msg[i] = msg1[i]
+
+    for i in range(msglen):
+        if msg[i] != 0:
+            for j, d in enumerate(div):
+                msg[i + j] = msg[i + j] ^ d
+
+    return msg[msglen:msglen + FT8_CRC_WIDTH]
+
+
+def ftx_check_crc(a91: typing.ByteString) -> bool:
+    # [1]: 'The CRC is calculated on the source-encoded message, zero-extended from 77 to 82 bits.'
+    out1 = ftx_crc(a91, 82)
+    for i, b in enumerate(out1):
+        if b != a91[FTX_LDPC_K - FT8_CRC_WIDTH + i]:
+            return False
+    return True
