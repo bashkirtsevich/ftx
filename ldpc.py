@@ -9,8 +9,6 @@
 
 import typing
 
-import numpy as np
-
 from consts import FTX_LDPC_M
 from consts import FTX_LDPC_N
 from consts import kFTX_LDPC_Mn
@@ -51,8 +49,8 @@ def fast_atanh(x: float) -> float:
 def ldpc_decode(codeword: typing.List[float], max_iters: int) -> typing.Tuple[int, bytes]:
     min_errors = FTX_LDPC_M
 
-    m = np.zeros([FTX_LDPC_M, FTX_LDPC_N])
-    e = np.zeros([FTX_LDPC_M, FTX_LDPC_N])
+    m = [[0.0] * FTX_LDPC_N for _ in range(FTX_LDPC_M)]
+    e = [[0.0] * FTX_LDPC_N for _ in range(FTX_LDPC_M)]
 
     plain = bytearray(b"\x00" * FTX_LDPC_N)
 
@@ -123,8 +121,8 @@ def bp_decode(codeword: typing.List[float], max_iters: int) -> typing.Tuple[int,
     min_errors = FTX_LDPC_M
 
     # initialize message data
-    tov = np.zeros([FTX_LDPC_N, 3])
-    toc = np.zeros([FTX_LDPC_M, 7])
+    tov = [[0.0] * 3 for _ in range(FTX_LDPC_N)]
+    toc = [[0.0] * 7 for _ in range(FTX_LDPC_M)]
 
     plain = bytearray(b"\x00" * FTX_LDPC_N)
 
