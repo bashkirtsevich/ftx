@@ -11,8 +11,8 @@ from gfsk import M_PI
 from ldpc import bp_decode
 from message import ftx_message_decode
 
-kMin_score = 5  # Minimum sync score threshold for candidates
-kMax_candidates = 256
+kMin_score = 10  # Minimum sync score threshold for candidates
+kMax_candidates = 140
 kLDPC_iterations = 25
 
 
@@ -41,6 +41,7 @@ class Waterfall:
         self.freq_osr = freq_osr
         self.block_stride = (time_osr * freq_osr * num_bins)
         self.mag = [0] * (max_blocks * time_osr * freq_osr * num_bins)
+        # self.mag = np.zeros(max_blocks * time_osr * freq_osr * num_bins, dtype=np.int16)
         self.protocol = protocol
 
 
@@ -214,7 +215,7 @@ class Monitor:
         # Compute average score over sync symbols (m+k = 0-7, 36-43, 72-79)
         for m in range(FT8_NUM_SYNC):
             for k in range(FT8_LENGTH_SYNC):
-                block = (FT8_SYNC_OFFSET * m) + k  # relative to the message
+                block = FT8_SYNC_OFFSET * m + k  # relative to the message
                 block_abs = candidate.time_offset + block  # relative to the captured signal
 
                 if block_abs < 0:  # Check for time boundaries
@@ -224,21 +225,22 @@ class Monitor:
                     break
 
                 # Get the pointer to symbol 'block' of the candidate
-                p8 = mag_cand + (block * wf.block_stride)
+                p8 = mag_cand + block * wf.block_stride
 
                 # Check only the neighbors of the expected symbol frequency- and time-wise
                 sm = kFT8_Costas_pattern[k]  # Index of the expected bin
+                p8sm = p8 + sm
                 if sm > 0:  # look at one frequency bin lower
-                    score += wf.mag[p8 + sm] - wf.mag[p8 + sm - 1]
+                    score += wf.mag[p8sm] - wf.mag[p8sm - 1]
                     num_average += 1
                 if sm < 7:  # look at one frequency bin higher
-                    score += wf.mag[p8 + sm] - wf.mag[p8 + sm + 1]
+                    score += wf.mag[p8sm] - wf.mag[p8sm + 1]
                     num_average += 1
                 if k > 0 and block_abs > 0:  # look one symbol back in time
-                    score += wf.mag[p8 + sm] - wf.mag[p8 + sm - wf.block_stride]
+                    score += wf.mag[p8sm] - wf.mag[p8sm - wf.block_stride]
                     num_average += 1
                 if k + 1 < FT8_LENGTH_SYNC and block_abs + 1 < wf.num_blocks:  # look one symbol forward in time
-                    score += wf.mag[p8 + sm] - wf.mag[p8 + sm + wf.block_stride]
+                    score += wf.mag[p8sm] - wf.mag[p8sm + wf.block_stride]
                     num_average += 1
 
         if num_average > 0:
@@ -271,6 +273,7 @@ class Monitor:
                 p4 = mag_cand + (block * wf.block_stride)
 
                 sm = kFT4_Costas_pattern[m][k]  # Index of the expected bin
+                p4sm = p4 + sm
 
                 # score += (4 * p4[sm]) - p4[0] - p4[1] - p4[2] - p4[3];
                 # num_average += 4;
@@ -278,19 +281,19 @@ class Monitor:
                 # Check only the neighbors of the expected symbol frequency- and time-wise
                 if sm > 0:
                     # look at one frequency bin lower
-                    score += wf.mag[p4 + sm] - wf.mag[p4 + sm - 1]
+                    score += wf.mag[p4sm] - wf.mag[p4sm - 1]
                     num_average += 1
                 if sm < 3:
                     # look at one frequency bin higher
-                    score += wf.mag[p4 + sm] - wf.mag[p4 + sm + 1]
+                    score += wf.mag[p4sm] - wf.mag[p4sm + 1]
                     num_average += 1
                 if k > 0 and block_abs > 0:
                     # look one symbol back in time
-                    score += wf.mag[p4 + sm] - wf.mag[p4 + sm - wf.block_stride]
+                    score += wf.mag[p4sm] - wf.mag[p4sm - wf.block_stride]
                     num_average += 1
                 if k + 1 < FT4_LENGTH_SYNC and block_abs + 1 < wf.num_blocks:
                     # look one symbol forward in time
-                    score += wf.mag[p4 + sm] - wf.mag[p4 + sm + wf.block_stride]
+                    score += wf.mag[p4sm] - wf.mag[p4sm + wf.block_stride]
                     num_average += 1
 
         if num_average > 0:
@@ -316,11 +319,10 @@ class Monitor:
 
             sync_fun = self.ft8_sync_score
 
-        heap = []
-
         # Here we allow time offsets that exceed signal boundaries, as long as we still have all data bits.
         # I.e. we can afford to skip the first 7 or the last 7 Costas symbols, as long as we track how many
         # sync symbols we included in the score, so the score is averaged.
+        heap = []
         can = Candidate(0, 0, 0, 0)
         for time_sub in range(wf.time_osr):
             for freq_sub in range(wf.freq_osr):
@@ -332,10 +334,13 @@ class Monitor:
                         can.time_offset = time_offset
                         can.freq_offset = freq_offset
 
-                        if (score := sync_fun(can)) >= min_score:
-                            candidate = copy(can)
-                            candidate.score = score
-                            heap.insert(0, candidate)
+                        if (score := sync_fun(can)) < min_score:
+                            continue
+
+                        candidate = copy(can)
+                        candidate.score = score
+
+                        heap.insert(0, candidate)
 
         heap.sort(key=lambda x: x.score, reverse=True)
         return heap[:num_candidates]
@@ -344,9 +349,9 @@ class Monitor:
         wf = self.wf
 
         offset = candidate.time_offset
-        offset = (offset * wf.time_osr) + candidate.time_sub
-        offset = (offset * wf.freq_osr) + candidate.freq_sub
-        offset = (offset * wf.num_bins) + candidate.freq_offset
+        offset = offset * wf.time_osr + candidate.time_sub
+        offset = offset * wf.freq_osr + candidate.freq_sub
+        offset = offset * wf.num_bins + candidate.freq_offset
 
         return offset
 
@@ -439,6 +444,9 @@ class Monitor:
 
         if status.ldpc_errors > 0:
             return None
+
+        # if not ftx_check_crc(plain174):
+        #     return None
 
         # Extract payload + CRC (first FTX_LDPC_K bits) packed into a byte array
         a91 = self.pack_bits(plain174, FTX_LDPC_K)
@@ -582,9 +590,12 @@ class Monitor:
 
         # Find top candidates by Costas sync score and localize them in time and frequency
         wf = self.wf
+
         candidate_list = self.ftx_find_candidates(kMax_candidates, kMin_score)
         # Go over candidates and attempt to decode messages
-        for cand in candidate_list:
+        for i, cand in enumerate(candidate_list):
+            # print(f"{i}\t{cand.score}\t{cand.time_offset}\t{cand.freq_offset}\t{cand.time_sub}\t{cand.freq_sub}")
+            # continue
             freq_hz = (self.min_bin + cand.freq_offset + cand.freq_sub / wf.freq_osr) / self.symbol_period
             time_sec = (cand.time_offset + cand.time_sub / wf.time_osr) * self.symbol_period - 0.65
 

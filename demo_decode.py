@@ -57,7 +57,7 @@ def main():
 
             ts2 = time.monotonic()
 
-            print("-" * 20, "decoded @", (ts2 - ts1), "sec")
+            print("-" * 20, "decoded @", int(ts2 - ts1), "sec")
 
         if eof:
             break
