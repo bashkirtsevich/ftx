@@ -5,15 +5,17 @@ from copy import copy
 import numpy as np
 
 from consts import *
-from crc import ftx_extract_crc, ftx_compute_crc
+from crc import ftx_extract_crc, ftx_compute_crc, ftx_check_crc
 from encode import ft4_encode, ft8_encode
 from gfsk import M_PI
 from ldpc import bp_decode
 from message import ftx_message_decode
+from osd import osd_decode
 
-kMin_score = 10  # Minimum sync score threshold for candidates
+kMin_score = 5  # Minimum sync score threshold for candidates
 kMax_candidates = 140
 kLDPC_iterations = 25
+kMaxLDPCErrors = 32
 
 
 class Waterfall:
@@ -442,11 +444,17 @@ class Monitor:
         status = DecodeStatus()
         status.ldpc_errors, plain174 = bp_decode(log174, max_iterations)
 
-        if status.ldpc_errors > 0:
+        if status.ldpc_errors > kMaxLDPCErrors:
             return None
 
-        # if not ftx_check_crc(plain174):
-        #     return None
+        if status.ldpc_errors > 0:
+            if not (x := osd_decode(log174, 6)):
+                return None
+
+            plain174, got_depth = x
+
+        if not ftx_check_crc(plain174):
+            return None
 
         # Extract payload + CRC (first FTX_LDPC_K bits) packed into a byte array
         a91 = self.pack_bits(plain174, FTX_LDPC_K)

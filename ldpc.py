@@ -9,8 +9,10 @@
 
 import typing
 
+from consts import FTX_LDPC_K
 from consts import FTX_LDPC_M
 from consts import FTX_LDPC_N
+from consts import GEN_SYS
 from consts import kFTX_LDPC_Mn
 from consts import kFTX_LDPC_Nm
 from consts import kFTX_LDPC_Num_rows
@@ -117,7 +119,35 @@ def ldpc_check(codeword: bytes) -> int:
     return errors
 
 
-def bp_decode(codeword: typing.List[float], max_iters: int) -> typing.Tuple[int, bytes]:
+#   @brief Encodes a 91-bit message into a 174-bit LDPC codeword.
+#
+#   This function mimics the encoding process from WSJT-X's encode174_91.f90.
+#   It takes a 91-bit plain-text message and produces a 174-bit codeword
+#   by appending 83 bits of redundancy, computed using a systematic generator matrix.
+#
+#   @param[in] plain An array of 91 bits representing the plain-text message.
+#   @param[out] codeword An array of 174 bits representing the encoded LDPC codeword.
+def ldpc_encode(plain: typing.ByteString) -> typing.ByteString:
+    # plain is 91 bits of plain-text.
+    # returns a 174-bit codeword.
+    # mimics wsjt-x's encode174_91.f90.
+
+    # the systematic 91 bits.
+    codeword = bytearray(b"\x00" * FTX_LDPC_N)
+    for i in range(FTX_LDPC_K):
+        codeword[i] = plain[i]
+
+    # the 174-91 bits of redundancy.
+    for i in range(FTX_LDPC_M):
+        sum = 0
+        for j in range(FTX_LDPC_K):
+            sum += GEN_SYS[i][j] & plain[j]
+            codeword[i + FTX_LDPC_K] = sum % 2
+
+    return codeword
+
+
+def bp_decode(codeword: typing.List[float], max_iters: int) -> typing.Tuple[int, typing.ByteString]:
     min_errors = FTX_LDPC_M
 
     # initialize message data
