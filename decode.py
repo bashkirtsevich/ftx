@@ -12,6 +12,7 @@ from encode import ft4_encode, ft8_encode
 from gfsk import M_PI
 from ldpc import bp_decode
 from message import ftx_message_decode
+from osd import osd_decode
 
 kMin_score = 5  # Minimum sync score threshold for candidates
 kMax_candidates = 140
@@ -434,24 +435,24 @@ class Monitor:
             log174 = self.ft8_extract_likelihood(cand)
 
         log174 = list(self.ftx_normalize_logl(log174))
-
         ldpc_errors, plain174 = bp_decode(log174, max_iterations)
 
-        # if status.ldpc_errors > kMaxLDPCErrors:
-        #     return None
-        #
-        # if status.ldpc_errors > 0:
-        #     if not (x := osd_decode(log174, 6)):
-        #         return None
-        #
-        #     plain174, got_depth = x
+        # FIXME: Slow code
+        if ldpc_errors > kMaxLDPCErrors:
+            return None
+
+        if ldpc_errors > 0:
+            if not (x := osd_decode(log174, 6)):
+                return None
+
+            plain174, got_depth = x
+        # EOF Slow code block
 
         if not ftx_check_crc(plain174):
             return None
 
         # Extract payload + CRC (first FTX_LDPC_K bits) packed into a byte array
         a91 = self.pack_bits(plain174, FTX_LDPC_K)
-
         # Extract CRC and check it
         crc_extracted = ftx_extract_crc(a91)
 
