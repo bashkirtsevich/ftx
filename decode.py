@@ -1,16 +1,16 @@
 import math
 import typing
 from copy import copy
+from itertools import cycle
 
 import numpy as np
 
 from consts import *
-from crc import ftx_extract_crc, ftx_compute_crc, ftx_check_crc
+from crc import ftx_extract_crc, ftx_check_crc
 from encode import ft4_encode, ft8_encode
 from gfsk import M_PI
 from ldpc import bp_decode
 from message import ftx_message_decode
-from osd import osd_decode
 
 kMin_score = 5  # Minimum sync score threshold for candidates
 kMax_candidates = 140
@@ -50,8 +50,8 @@ class Waterfall:
 class Candidate:
     # Output structure of ftx_find_sync() and input structure of ftx_decode().
     # Holds the position of potential start of a message in time and frequency.
-    def __init__(self, time_offset, freq_offset, time_sub, freq_sub):
-        self.score: int = 0  # < Candidate score (non-negative number; higher score means higher likelihood)
+    def __init__(self, time_offset, freq_offset, time_sub, freq_sub, score=0):
+        self.score: int = score  # < Candidate score (non-negative number; higher score means higher likelihood)
         self.time_offset: int = time_offset  # < Index of the time block
         self.freq_offset: int = freq_offset  # < Index of the frequency bin
         self.time_sub: int = time_sub  # < Index of the time subdivision used
@@ -75,7 +75,7 @@ class DecodeStatus:
         self.time: float = 0.0
         self.ldpc_errors: int = 0  # < Number of LDPC errors during decoding
         self.crc_extracted: int = 0  # < CRC value recovered from the message
-        self.crc_calculated: int = 0  # < CRC value calculated over the payload
+        # self.crc_calculated: int = 0  # < CRC value calculated over the payload
 
 
 class Monitor:
@@ -431,7 +431,7 @@ class Monitor:
 
     def ftx_decode_candidate(
             self, cand: Candidate,
-            max_iterations: int) -> typing.Optional[typing.Tuple[DecodeStatus, typing.Optional[bytes]]]:
+            max_iterations: int) -> typing.Optional[typing.Tuple[DecodeStatus, typing.Optional[bytes], float]]:
         wf = self.wf
 
         if wf.protocol == FTX_PROTOCOL_FT4:
@@ -444,14 +444,14 @@ class Monitor:
         status = DecodeStatus()
         status.ldpc_errors, plain174 = bp_decode(log174, max_iterations)
 
-        if status.ldpc_errors > kMaxLDPCErrors:
-            return None
-
-        if status.ldpc_errors > 0:
-            if not (x := osd_decode(log174, 6)):
-                return None
-
-            plain174, got_depth = x
+        # if status.ldpc_errors > kMaxLDPCErrors:
+        #     return None
+        #
+        # if status.ldpc_errors > 0:
+        #     if not (x := osd_decode(log174, 6)):
+        #         return None
+        #
+        #     plain174, got_depth = x
 
         if not ftx_check_crc(plain174):
             return None
@@ -461,22 +461,19 @@ class Monitor:
 
         # Extract CRC and check it
         status.crc_extracted = ftx_extract_crc(a91)
-        # [1]: 'The CRC is calculated on the source-encoded message, zero-extended from 77 to 82 bits.'
-        a91[9] &= 0xF8
-        a91[10] &= 0x00
-        status.crc_calculated = ftx_compute_crc(a91, 96 - 14)
-
-        if status.crc_extracted != status.crc_calculated:
-            return None
 
         if wf.protocol == FTX_PROTOCOL_FT4:
             # '[..] for FT4 only, in order to avoid transmitting a long string of zeros when sending CQ messages,
             # the assembled 77-bit message is bitwise exclusive-OR’ed with [a] pseudorandom sequence before computing the CRC and FEC parity bits'
             payload = bytearray(a91[i] ^ xor for i, xor in enumerate(kFT4_XOR_sequence))
+            tones = ft4_encode(payload)
         else:
             payload = a91
+            tones = ft8_encode(payload)
 
-        return status, payload
+        snr = self.ftx_subtract(cand, tones)
+        # snr = self.ftx_get_snr(cand, tones)
+        return status, payload, snr
 
     def ftx_get_snr(self, candidate: Candidate, tones: typing.Iterable[int]) -> float:
         n_items = 4 if self.wf.protocol == FTX_PROTOCOL_FT4 else 8
@@ -486,6 +483,8 @@ class Monitor:
         signal = 0
         noise = 0
         num_average = 0
+
+        tones = cycle(tones)
         for i, tone in enumerate(tones):
             block_abs = candidate.time_offset + i  # relative to the captured signal
             # Check for time boundaries
@@ -530,6 +529,7 @@ class Monitor:
         can = copy(candidate)
         snr_all = 0.0
 
+        tones = cycle(tones)
         for freq_sub in range(self.wf.freq_osr):
             can.freq_sub = freq_sub
 
@@ -582,17 +582,6 @@ class Monitor:
 
         return snr_all / self.wf.freq_osr
 
-    def get_message_snr(self, cand: Candidate, payload: typing.ByteString) -> float:
-        if self.wf.protocol == FTX_PROTOCOL_FT4:
-            encoder = ft4_encode
-        else:
-            encoder = ft8_encode
-
-        tones = encoder(payload)
-
-        return self.ftx_subtract(cand, list(tones)) / 2 - 22
-        # return self.ftx_get_snr(cand, tones)
-
     def decode(self, tm_slot_start) -> typing.Generator[typing.Tuple[float, float, float, str], None, None]:
         hashes = set()
 
@@ -610,14 +599,13 @@ class Monitor:
             if not (x := self.ftx_decode_candidate(cand, kLDPC_iterations)):
                 continue
 
-            status, message = x
+            status, message, snr = x
 
-            if (crc := status.crc_calculated) in hashes:
+            if (crc := status.crc_extracted) in hashes:
                 continue
 
             hashes.add(crc)
 
-            snr = self.get_message_snr(cand, message)
             call_to_rx, call_de_rx, extra_rx = ftx_message_decode(message)
 
             yield snr, time_sec, freq_hz, " ".join([call_to_rx, call_de_rx or "", extra_rx or ""])
