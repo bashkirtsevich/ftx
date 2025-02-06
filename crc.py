@@ -7,7 +7,7 @@ FT8_CRC_WIDTH = 14
 TOPBIT = 1 << (FT8_CRC_WIDTH - 1)
 
 
-def ftx_compute_crc(message: bytes, num_bits: int) -> int:
+def ftx_compute_crc(message: typing.ByteString, num_bits: int) -> int:
     remainder = 0
     idx_byte = 0
 
@@ -24,11 +24,11 @@ def ftx_compute_crc(message: bytes, num_bits: int) -> int:
     return remainder & ((TOPBIT << 1) - 1)
 
 
-def ftx_extract_crc(a91: bytes) -> int:
+def ftx_extract_crc(a91: typing.ByteString) -> int:
     return ((a91[9] & 0x07) << 11) | (a91[10] << 3) | (a91[11] >> 5)
 
 
-def ftx_add_crc(payload: bytes) -> bytes:
+def ftx_add_crc(payload: typing.ByteString) -> typing.ByteString:
     # Copy 77 bits of payload data
     a91 = payload + (b"\x00" * (FTX_LDPC_K_BYTES - len(payload)))
 
