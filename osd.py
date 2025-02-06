@@ -148,9 +148,10 @@ def osd_cmp(a, b, c) -> int:
     # Reverse order (descending)
     if fabs_a > fabs_b:
         return -1
-    if fabs_a < fabs_b:
+    elif fabs_a < fabs_b:
         return 1
-    return 0
+    else:
+        return 0
 
 
 #  @brief Ordered statistics decoder for LDPC and new FT8.
