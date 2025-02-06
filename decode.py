@@ -1,5 +1,6 @@
 import math
 import typing
+from collections import namedtuple
 from copy import copy
 from itertools import cycle
 
@@ -68,14 +69,7 @@ class Candidate:
                 f"freq_sub: {self.freq_sub}]")
 
 
-class DecodeStatus:
-    # Structure that contains the status of various steps during decoding of a message
-    def __init__(self):
-        self.freq: float = 0.0
-        self.time: float = 0.0
-        self.ldpc_errors: int = 0  # < Number of LDPC errors during decoding
-        self.crc_extracted: int = 0  # < CRC value recovered from the message
-        # self.crc_calculated: int = 0  # < CRC value calculated over the payload
+DecodeStatus = namedtuple("DecodeStatus", ["ldpc_errors", "crc_extracted"])
 
 
 class Monitor:
@@ -441,8 +435,7 @@ class Monitor:
 
         log174 = list(self.ftx_normalize_logl(log174))
 
-        status = DecodeStatus()
-        status.ldpc_errors, plain174 = bp_decode(log174, max_iterations)
+        ldpc_errors, plain174 = bp_decode(log174, max_iterations)
 
         # if status.ldpc_errors > kMaxLDPCErrors:
         #     return None
@@ -460,7 +453,7 @@ class Monitor:
         a91 = self.pack_bits(plain174, FTX_LDPC_K)
 
         # Extract CRC and check it
-        status.crc_extracted = ftx_extract_crc(a91)
+        crc_extracted = ftx_extract_crc(a91)
 
         if wf.protocol == FTX_PROTOCOL_FT4:
             # '[..] for FT4 only, in order to avoid transmitting a long string of zeros when sending CQ messages,
@@ -471,9 +464,9 @@ class Monitor:
             payload = a91
             tones = ft8_encode(payload)
 
-        snr = self.ftx_subtract(cand, tones)
-        # snr = self.ftx_get_snr(cand, tones)
-        return status, payload, snr
+        # snr = self.ftx_subtract(cand, tones)
+        snr = self.ftx_get_snr(cand, tones)
+        return DecodeStatus(ldpc_errors, crc_extracted), payload, snr
 
     def ftx_get_snr(self, candidate: Candidate, tones: typing.Iterable[int]) -> float:
         n_items = 4 if self.wf.protocol == FTX_PROTOCOL_FT4 else 8
