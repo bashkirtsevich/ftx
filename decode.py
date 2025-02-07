@@ -465,8 +465,8 @@ class Monitor:
             payload = a91
             tones = ft8_encode(payload)
 
-        # snr = self.ftx_subtract(cand, tones)
-        snr = self.ftx_get_snr(cand, tones)
+        snr = self.ftx_subtract(cand, tones)
+        # snr = self.ftx_get_snr(cand, tones)
         return DecodeStatus(ldpc_errors, crc_extracted), payload, snr
 
     def ftx_get_snr(self, candidate: Candidate, tones: typing.Iterable[int]) -> float:
@@ -570,11 +570,11 @@ class Monitor:
                 self.wf.mag[wf_el + tone] -= snr * 2 + 240
 
             snr_all += snr
-            # print(
-            #     f"Freq: {candidate.freq_offset} Noise: {noise}, Signal: {signal}, SNR: {snr} score: {candidate.score}"
-            # )
+            print(
+                f"Freq: {candidate.freq_offset} Noise: {noise:.2f}, Signal: {signal:.2f}, SNR: {snr:.2f} score: {candidate.score}"
+            )
 
-        return snr_all / self.wf.freq_osr
+        return snr_all / self.wf.freq_osr / 2 - 22
 
     def decode(self, tm_slot_start) -> typing.Generator[typing.Tuple[float, float, float, str], None, None]:
         hashes = set()
