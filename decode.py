@@ -570,9 +570,9 @@ class Monitor:
                 self.wf.mag[wf_el + tone] -= snr * 2 + 240
 
             snr_all += snr
-            print(
-                f"Freq: {candidate.freq_offset} Noise: {noise:.2f}, Signal: {signal:.2f}, SNR: {snr:.2f} score: {candidate.score}"
-            )
+            # print(
+            #     f"Freq: {candidate.freq_offset} Noise: {noise:.2f}, Signal: {signal:.2f}, SNR: {snr:.2f} score: {candidate.score}"
+            # )
 
         return snr_all / self.wf.freq_osr / 2 - 22
 
