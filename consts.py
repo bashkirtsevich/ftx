@@ -1,6 +1,11 @@
 FTX_PROTOCOL_FT4 = 1
 FTX_PROTOCOL_FT8 = 2
 
+FTX_TONES_COUNT = {
+    FTX_PROTOCOL_FT4: 4,
+    FTX_PROTOCOL_FT8: 8,
+}
+
 FTX_CALLSIGN_HASH_10_BITS = 0
 FTX_CALLSIGN_HASH_12_BITS = 1
 FTX_CALLSIGN_HASH_22_BITS = 2
@@ -26,6 +31,16 @@ FT8_SLOT_TIME = 15.0  # < FT8 slot period
 
 FT4_SYMBOL_PERIOD = 0.048  # < FT4 symbol duration, defines tone deviation in Hz and symbol rate
 FT4_SLOT_TIME = 7.5  # < FT4 slot period
+
+FTX_SLOT_TIMES = {
+    FTX_PROTOCOL_FT4: FT4_SLOT_TIME,
+    FTX_PROTOCOL_FT8: FT8_SLOT_TIME,
+}
+
+FTX_SYMBOL_PERIODS = {
+    FTX_PROTOCOL_FT4: FT4_SYMBOL_PERIOD,
+    FTX_PROTOCOL_FT8: FT8_SYMBOL_PERIOD,
+}
 
 # S  - sync block (7 symbols of Costas pattern)
 # D1 - first data block (29 symbols each encoding 3 bits)

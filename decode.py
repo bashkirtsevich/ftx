@@ -132,8 +132,8 @@ class Monitor:
         # wf;               ///< Waterfall object
         # max_mag;          ///< Maximum detected magnitude (debug stats)
 
-        slot_time = FT4_SLOT_TIME if protocol == FTX_PROTOCOL_FT4 else FT8_SLOT_TIME
-        symbol_period = FT4_SYMBOL_PERIOD if protocol == FTX_PROTOCOL_FT4 else FT8_SYMBOL_PERIOD
+        slot_time = FTX_SLOT_TIMES[protocol]
+        symbol_period = FTX_SYMBOL_PERIODS[protocol]
 
         # Compute DSP parameters that depend on the sample rate
         self.block_size = int(sample_rate * symbol_period)  # samples corresponding to one FSK symbol
@@ -301,15 +301,15 @@ class Monitor:
     def ftx_find_candidates(self, num_candidates: int, min_score: int) -> typing.List[Candidate]:
         wf = self.wf
 
+        num_tones = FTX_TONES_COUNT[wf.protocol]
+
         if wf.protocol == FTX_PROTOCOL_FT4:
-            num_tones = 4
             time_offset_range = range(
                 -FT4_LENGTH_SYNC, int(FT4_SLOT_TIME / FT4_SYMBOL_PERIOD - FT4_NN + FT4_LENGTH_SYNC)
             )
 
             sync_fun = self.ft4_sync_score
         else:
-            num_tones = 8
             time_offset_range = range(
                 -FT8_LENGTH_SYNC, int(FT8_SLOT_TIME / FT8_SYMBOL_PERIOD - FT8_NN + FT8_LENGTH_SYNC)
             )
@@ -470,7 +470,7 @@ class Monitor:
         return DecodeStatus(ldpc_errors, crc_extracted), payload, snr
 
     def ftx_get_snr(self, candidate: Candidate, tones: typing.Iterable[int]) -> float:
-        n_items = 4 if self.wf.protocol == FTX_PROTOCOL_FT4 else 8
+        num_tones = FTX_TONES_COUNT[self.wf.protocol]
 
         mag_cand = self.get_cand_mag_idx(candidate)
 
@@ -491,7 +491,7 @@ class Monitor:
             wf_el = mag_cand + i * self.wf.block_stride
 
             min_val = 255
-            for s in range(n_items):
+            for s in range(num_tones):
                 wf_mag = self.wf.mag[wf_el + s]
 
                 if s == tone:
@@ -518,7 +518,7 @@ class Monitor:
         # The noise is estimated as the minimum signal power of all tones except the one of the candidate.
         # The signal power is then subtracted from the signal.
 
-        n_items = 4 if self.wf.protocol == FTX_PROTOCOL_FT4 else 8
+        num_tones = FTX_TONES_COUNT[self.wf.protocol]
 
         can = copy(candidate)
         snr_all = 0.0
@@ -545,7 +545,7 @@ class Monitor:
                 wf_el = mag_cand + i * self.wf.block_stride
 
                 noise_val = 100000.0
-                for s in filter(lambda x: x != tone, range(n_items)):
+                for s in filter(lambda x: x != tone, range(num_tones)):
                     noise_val = min(noise_val, self.wf.mag[wf_el + s] * 0.5 - 120.0)
 
                 noise += noise_val
