@@ -6,12 +6,12 @@ from consts import FTX_CALLSIGN_HASH_12_BITS
 from consts import FTX_CALLSIGN_HASH_22_BITS
 from exceptions import FTXInvalidCallsign
 from exceptions import FTXPack28Error
-from text import FT8_CHAR_TABLE_ALPHANUM
-from text import FT8_CHAR_TABLE_ALPHANUM_SPACE
-from text import FT8_CHAR_TABLE_ALPHANUM_SPACE_SLASH
-from text import FT8_CHAR_TABLE_LETTERS
-from text import FT8_CHAR_TABLE_LETTERS_SPACE
-from text import FT8_CHAR_TABLE_NUMERIC
+from text import FTX_CHAR_TABLE_ALPHANUM
+from text import FTX_CHAR_TABLE_ALPHANUM_SPACE
+from text import FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH
+from text import FTX_CHAR_TABLE_LETTERS
+from text import FTX_CHAR_TABLE_LETTERS_SPACE
+from text import FTX_CHAR_TABLE_NUMERIC
 from text import charn
 from text import endswith_any
 from text import in_range
@@ -27,7 +27,7 @@ def save_callsign(callsign: str) -> typing.Optional[typing.Tuple[int, int, int]]
     n58 = 0
     i = 0
     for c in callsign:
-        j = nchar(c, FT8_CHAR_TABLE_ALPHANUM_SPACE_SLASH)
+        j = nchar(c, FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH)
         if j < 0:
             return None  # hash error (wrong character set)
         n58 = 38 * n58 + j
@@ -88,12 +88,12 @@ def pack_basecall(callsign: str) -> int:
 
         # Check for standard callsign
         # FIXME: Optimize
-        i0 = nchar(c6[0], FT8_CHAR_TABLE_ALPHANUM_SPACE)
-        i1 = nchar(c6[1], FT8_CHAR_TABLE_ALPHANUM)
-        i2 = nchar(c6[2], FT8_CHAR_TABLE_NUMERIC)
-        i3 = nchar(c6[3], FT8_CHAR_TABLE_LETTERS_SPACE)
-        i4 = nchar(c6[4], FT8_CHAR_TABLE_LETTERS_SPACE)
-        i5 = nchar(c6[5], FT8_CHAR_TABLE_LETTERS_SPACE)
+        i0 = nchar(c6[0], FTX_CHAR_TABLE_ALPHANUM_SPACE)
+        i1 = nchar(c6[1], FTX_CHAR_TABLE_ALPHANUM)
+        i2 = nchar(c6[2], FTX_CHAR_TABLE_NUMERIC)
+        i3 = nchar(c6[3], FTX_CHAR_TABLE_LETTERS_SPACE)
+        i4 = nchar(c6[4], FTX_CHAR_TABLE_LETTERS_SPACE)
+        i5 = nchar(c6[5], FTX_CHAR_TABLE_LETTERS_SPACE)
 
         if i0 >= 0 and i1 >= 0 and i2 >= 0 and i3 >= 0 and i4 >= 0 and i5 >= 0:
             # This is a standard callsign
@@ -125,10 +125,10 @@ def packgrid(grid4: str) -> int:
     # Check for standard 4 letter grid
     if all(in_range(grid4[i], "A", "R") for i in range(2)) and grid4[2:2 + 2].isdigit():
         # FIXME: Optimize
-        igrid4 = nchar(grid4[0], FT8_CHAR_TABLE_LETTERS)
-        igrid4 = igrid4 * 18 + nchar(grid4[1], FT8_CHAR_TABLE_LETTERS)
-        igrid4 = igrid4 * 10 + nchar(grid4[2], FT8_CHAR_TABLE_NUMERIC)
-        igrid4 = igrid4 * 10 + nchar(grid4[3], FT8_CHAR_TABLE_NUMERIC)
+        igrid4 = nchar(grid4[0], FTX_CHAR_TABLE_LETTERS)
+        igrid4 = igrid4 * 18 + nchar(grid4[1], FTX_CHAR_TABLE_LETTERS)
+        igrid4 = igrid4 * 10 + nchar(grid4[2], FTX_CHAR_TABLE_NUMERIC)
+        igrid4 = igrid4 * 10 + nchar(grid4[3], FTX_CHAR_TABLE_NUMERIC)
         return igrid4
 
     # Parse report: +dd / -dd / R+dd / R-dd
@@ -167,7 +167,7 @@ def pack28(callsign: str) -> typing.Tuple[int, int]:
             nlet = 0
             correct = True
             for c in rest:
-                if (n := nchar(c, FT8_CHAR_TABLE_LETTERS_SPACE)) == -1:
+                if (n := nchar(c, FTX_CHAR_TABLE_LETTERS_SPACE)) == -1:
                     correct = False
                     break
                 nlet = nlet * 27 + n
@@ -216,7 +216,7 @@ def pack58(callsign: str) -> typing.Optional[int]:
             break
 
         c11 += c
-        j = nchar(c, FT8_CHAR_TABLE_ALPHANUM_SPACE_SLASH)
+        j = nchar(c, FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH)
         if j < 0:
             return None
         result = qword((result * 38) + j)
@@ -250,7 +250,7 @@ def unpack28(n28: int, ip: int, i3: int) -> typing.Optional[str]:
             n = n28 - 1003
             aaaa = ""
             for i in range(4):
-                aaaa = charn(n % 27, FT8_CHAR_TABLE_LETTERS_SPACE) + aaaa
+                aaaa = charn(n % 27, FTX_CHAR_TABLE_LETTERS_SPACE) + aaaa
                 n //= 27
             return f"CQ_{aaaa.strip()}"
 
@@ -264,17 +264,17 @@ def unpack28(n28: int, ip: int, i3: int) -> typing.Optional[str]:
 
     # Standard callsign
     n = n28 - MAX22
-    callsign = charn(n % 27, FT8_CHAR_TABLE_LETTERS_SPACE)
+    callsign = charn(n % 27, FTX_CHAR_TABLE_LETTERS_SPACE)
     n //= 27
-    callsign = charn(n % 27, FT8_CHAR_TABLE_LETTERS_SPACE) + callsign
+    callsign = charn(n % 27, FTX_CHAR_TABLE_LETTERS_SPACE) + callsign
     n //= 27
-    callsign = charn(n % 27, FT8_CHAR_TABLE_LETTERS_SPACE) + callsign
+    callsign = charn(n % 27, FTX_CHAR_TABLE_LETTERS_SPACE) + callsign
     n //= 27
-    callsign = charn(n % 10, FT8_CHAR_TABLE_NUMERIC) + callsign
+    callsign = charn(n % 10, FTX_CHAR_TABLE_NUMERIC) + callsign
     n //= 10
-    callsign = charn(n % 36, FT8_CHAR_TABLE_ALPHANUM) + callsign
+    callsign = charn(n % 36, FTX_CHAR_TABLE_ALPHANUM) + callsign
     n //= 36
-    callsign = charn(n % 37, FT8_CHAR_TABLE_ALPHANUM_SPACE) + callsign
+    callsign = charn(n % 37, FTX_CHAR_TABLE_ALPHANUM_SPACE) + callsign
 
     callsign = callsign.strip()
 
@@ -315,13 +315,13 @@ def unpackgrid(igrid4: int, ir: int) -> typing.Optional[str]:
         n = igrid4
 
         # FIXME: Optimize
-        dst = charn(n % 10, FT8_CHAR_TABLE_NUMERIC)  # 0..9
+        dst = charn(n % 10, FTX_CHAR_TABLE_NUMERIC)  # 0..9
         n //= 10
-        dst = charn(n % 10, FT8_CHAR_TABLE_NUMERIC) + dst  # 0..9
+        dst = charn(n % 10, FTX_CHAR_TABLE_NUMERIC) + dst  # 0..9
         n //= 10
-        dst = charn(n % 18, FT8_CHAR_TABLE_LETTERS) + dst  # A..R
+        dst = charn(n % 18, FTX_CHAR_TABLE_LETTERS) + dst  # A..R
         n //= 18
-        dst = charn(n % 18, FT8_CHAR_TABLE_LETTERS) + dst  # A..R
+        dst = charn(n % 18, FTX_CHAR_TABLE_LETTERS) + dst  # A..R
 
         # In case of ir=1 add an "R " before grid
         return f"{'R ' if ir else ''}{dst}"
@@ -347,7 +347,7 @@ def unpack58(n58: int) -> str:
     #  Decode one of the calls from 58 bit encoded string
     c11 = ""
     for i in range(10):
-        c11 = charn(n58 % 38, FT8_CHAR_TABLE_ALPHANUM_SPACE_SLASH) + c11
+        c11 = charn(n58 % 38, FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH) + c11
         n58 //= 38
 
     # The decoded string will be right-aligned, so trim all whitespace (also from back just in case)

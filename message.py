@@ -20,7 +20,7 @@ from exceptions import FTXErrorGrid
 from exceptions import FTXErrorMsgType
 from exceptions import FTXErrorSuffix
 from pack import pack28, save_callsign, packgrid, pack58, unpack28, unpackgrid, lookup_callsign, unpack58, pack_basecall
-from text import FT8_CHAR_TABLE_FULL, charn, nchar, endswith_any
+from text import FTX_CHAR_TABLE_FULL, charn, nchar, endswith_any
 from tools import byte, dword
 
 
@@ -287,7 +287,7 @@ def ftx_message_encode_free(text: str) -> typing.ByteString:
     b71 = bytearray(b"\x00" * 12)
     text = (" " * (12 - len(text))) + text
     for c in text:
-        if (cid := nchar(c, FT8_CHAR_TABLE_FULL)) == -1:
+        if (cid := nchar(c, FTX_CHAR_TABLE_FULL)) == -1:
             raise FTXErrorInvalidChar
 
         rem = cid
@@ -334,6 +334,6 @@ def ftx_message_decode_free(payload: typing.ByteString) -> str:
             b71[i] = byte(rem // 42)
             rem = rem % 42
 
-        c14 = charn(rem, FT8_CHAR_TABLE_FULL) + c14
+        c14 = charn(rem, FTX_CHAR_TABLE_FULL) + c14
 
     return c14.strip()
