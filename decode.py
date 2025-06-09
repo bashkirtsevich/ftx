@@ -303,18 +303,22 @@ class Monitor:
 
         num_tones = FTX_TONES_COUNT[wf.protocol]
 
-        if wf.protocol == FTX_PROTOCOL_FT4:
-            time_offset_range = range(
+        ranges = {
+            FTX_PROTOCOL_FT4: range(
                 -FT4_LENGTH_SYNC, int(FT4_SLOT_TIME / FT4_SYMBOL_PERIOD - FT4_NN + FT4_LENGTH_SYNC)
-            )
-
-            sync_fun = self.ft4_sync_score
-        else:
-            time_offset_range = range(
+            ),
+            FTX_PROTOCOL_FT8: range(
                 -FT8_LENGTH_SYNC, int(FT8_SLOT_TIME / FT8_SYMBOL_PERIOD - FT8_NN + FT8_LENGTH_SYNC)
-            )
+            ),
+        }
 
-            sync_fun = self.ft8_sync_score
+        syncs = {
+            FTX_PROTOCOL_FT4: self.ft4_sync_score,
+            FTX_PROTOCOL_FT8: self.ft8_sync_score,
+        }
+
+        time_offset_range = ranges[wf.protocol]
+        sync_fun = syncs[wf.protocol]
 
         # Here we allow time offsets that exceed signal boundaries, as long as we still have all data bits.
         # I.e. we can afford to skip the first 7 or the last 7 Costas symbols, as long as we track how many
@@ -584,7 +588,7 @@ class Monitor:
 
         candidate_list = self.ftx_find_candidates(kMax_candidates, kMin_score)
         # Go over candidates and attempt to decode messages
-        for i, cand in enumerate(candidate_list):
+        for cand in candidate_list:
             # print(f"{i}\t{cand.score}\t{cand.time_offset}\t{cand.freq_offset}\t{cand.time_sub}\t{cand.freq_sub}")
             # continue
             freq_hz = (self.min_bin + cand.freq_offset + cand.freq_sub / wf.freq_osr) / self.symbol_period
