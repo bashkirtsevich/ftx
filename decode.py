@@ -313,17 +313,7 @@ class Monitor:
         wf = self.wf
 
         num_tones = FTX_TONES_COUNT[wf.protocol]
-
-        ranges = {
-            FTX_PROTOCOL_FT4: range(
-                -FT4_LENGTH_SYNC, int(FT4_SLOT_TIME / FT4_SYMBOL_PERIOD - FT4_NN + FT4_LENGTH_SYNC)
-            ),
-            FTX_PROTOCOL_FT8: range(
-                -FT8_LENGTH_SYNC, int(FT8_SLOT_TIME / FT8_SYMBOL_PERIOD - FT8_NN + FT8_LENGTH_SYNC)
-            ),
-        }
-
-        time_offset_range = ranges[wf.protocol]
+        time_offset_range = range(-FTX_LENGTH_SYNC[wf.protocol], int(FTX_TIME_RANGE[wf.protocol]))
 
         # Here we allow time offsets that exceed signal boundaries, as long as we still have all data bits.
         # I.e. we can afford to skip the first 7 or the last 7 Costas symbols, as long as we track how many

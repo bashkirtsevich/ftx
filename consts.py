@@ -50,6 +50,8 @@ FT8_LENGTH_SYNC = 7  # < Length of each sync group
 FT8_NUM_SYNC = 3  # < Number of sync groups
 FT8_SYNC_OFFSET = 36  # < Offset between sync groups
 
+FT8_TIME_RANGE = FT8_SLOT_TIME / FT8_SYMBOL_PERIOD - FT8_NN + FT8_LENGTH_SYNC
+
 # Define FT4 symbol counts
 # FT4 message structure:
 #     R Sa D1 Sb D2 Sc D3 Sd R
@@ -62,6 +64,18 @@ FT4_NN = 105  # < Total channel symbols (FT4_NS + FT4_ND + FT4_NR)
 FT4_LENGTH_SYNC = 4  # < Length of each sync group
 FT4_NUM_SYNC = 4  # < Number of sync groups
 FT4_SYNC_OFFSET = 33  # < Offset between sync groups
+
+FT4_TIME_RANGE = FT4_SLOT_TIME / FT4_SYMBOL_PERIOD - FT4_NN + FT4_LENGTH_SYNC
+
+FTX_LENGTH_SYNC = {
+    FTX_PROTOCOL_FT4: FT4_LENGTH_SYNC,
+    FTX_PROTOCOL_FT8: FT8_LENGTH_SYNC,
+}
+
+FTX_TIME_RANGE = {
+    FTX_PROTOCOL_FT4: FT4_TIME_RANGE,
+    FTX_PROTOCOL_FT8: FT8_TIME_RANGE,
+}
 
 # Define LDPC parameters
 FTX_LDPC_K = 91
