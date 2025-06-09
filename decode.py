@@ -298,6 +298,17 @@ class Monitor:
 
         return score
 
+    def ftx_sync_score(self, candidate: Candidate) -> int:
+        wf = self.wf
+
+        syncs = {
+            FTX_PROTOCOL_FT4: self.ft4_sync_score,
+            FTX_PROTOCOL_FT8: self.ft8_sync_score,
+        }
+
+        sync_fun = syncs[wf.protocol]
+        return sync_fun(candidate)
+
     def ftx_find_candidates(self, num_candidates: int, min_score: int) -> typing.List[Candidate]:
         wf = self.wf
 
@@ -312,13 +323,7 @@ class Monitor:
             ),
         }
 
-        syncs = {
-            FTX_PROTOCOL_FT4: self.ft4_sync_score,
-            FTX_PROTOCOL_FT8: self.ft8_sync_score,
-        }
-
         time_offset_range = ranges[wf.protocol]
-        sync_fun = syncs[wf.protocol]
 
         # Here we allow time offsets that exceed signal boundaries, as long as we still have all data bits.
         # I.e. we can afford to skip the first 7 or the last 7 Costas symbols, as long as we track how many
@@ -335,7 +340,7 @@ class Monitor:
                         can.time_offset = time_offset
                         can.freq_offset = freq_offset
 
-                        if (score := sync_fun(can)) < min_score:
+                        if (score := self.ftx_sync_score(can)) < min_score:
                             continue
 
                         candidate = copy(can)
