@@ -97,8 +97,8 @@ def ftx_message_get_type(payload: typing.ByteString) -> int:
 
 
 def ftx_message_encode_std(call_to: str, call_de: str, extra: str) -> typing.ByteString:
-    ipa, n28a = pack28(call_to)
-    ipb, n28b = pack28(call_de)
+    n28a, sh_a = pack28(call_to)
+    n28b, sh_b = pack28(call_de)
 
     if n28a < 0:
         raise FTXErrorCallSign1
@@ -117,15 +117,15 @@ def ftx_message_encode_std(call_to: str, call_de: str, extra: str) -> typing.Byt
 
     igrid4 = packgrid(extra)
 
-    # Shift in ipa and ipb bits into n28a and n28b
-    n29a = dword(n28a << 1 | ipa)
-    n29b = dword(n28b << 1 | ipb)
+    # Shift in sh_a and sh_b bits into n28a and n28b
+    n29a = dword(n28a << 1 | sh_a)
+    n29b = dword(n28b << 1 | sh_b)
 
     # TODO: check for suffixes
     if call_to.endswith("/R"):
-        n29a |= 1  # ipa = 1
+        n29a |= 1  # sh_a = 1
     elif call_to.endswith("/P"):
-        n29a |= 1  # ipa = 1
+        n29a |= 1  # sh_a = 1
         i3 = 2
 
     # Pack into (28 + 1) + (28 + 1) + (1 + 15) + 3 bits

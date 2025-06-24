@@ -146,10 +146,10 @@ def packgrid(grid4: str) -> int:
 
 
 def pack28(callsign: str) -> typing.Tuple[int, int]:
-    ip = 0
+    shift = 0
     # Check for special tokens first
     if token := FTX_TOKEN_CODE.get(callsign):
-        return ip, token
+        return token, shift
 
     length = len(callsign)
     if callsign.startswith("CQ_") and length < 8:
@@ -157,7 +157,7 @@ def pack28(callsign: str) -> typing.Tuple[int, int]:
         rest_len = len(rest)
 
         if rest_len == 3 and rest.isdigit():
-            return ip, int(rest) + 3
+            return int(rest) + 3, shift
 
         if 1 <= rest_len <= 4:
             nlet = 0
@@ -169,32 +169,30 @@ def pack28(callsign: str) -> typing.Tuple[int, int]:
                 nlet = nlet * 27 + n
 
             if correct:
-                return ip, nlet + 1003
+                return nlet + 1003, shift
 
     # Detect /R and /P suffix for basecall check
     length_base = length
     if endswith_any(callsign, "/P", "/R"):
         # LOG(LOG_DEBUG, "Suffix /P or /R detected\n");
-        ip = 1
+        shift = 1
         length_base = length - 2
 
-    n28 = pack_basecall(callsign[:length_base])
-    # print("pack_basecall n28", n28)
-    if n28 >= 0:
+    if (n28 := pack_basecall(callsign[:length_base])) >= 0:
         # Callsign can be encoded as a standard basecall with optional /P or /R suffix
         if save_callsign(callsign) is None:
             raise FTXInvalidCallsign  # Error (some problem with callsign contents)
-        return ip, dword(NTOKENS + MAX22 + n28)  # Standard callsign
+        return dword(NTOKENS + MAX22 + n28), shift  # Standard callsign
 
-    if length >= 3 and length <= 11:  # FIXME: 3 < length <= 11
+    if 3 < length <= 11:
         # Treat this as a nonstandard callsign: compute its 22-bit hash
         # LOG(LOG_DEBUG, "Encoding as non-standard callsign\n");
 
         if (x := save_callsign(callsign)) is None:
             raise FTXInvalidCallsign  # Error (some problem with callsign contents)
-        ip = 0
+        shift = 0
         n22, _, _ = x
-        return ip, dword(NTOKENS + n22)  # 22-bit hashed callsign
+        return dword(NTOKENS + n22), shift  # 22-bit hashed callsign
 
     raise FTXPack28Error
 
