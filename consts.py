@@ -475,6 +475,18 @@ kFTX_LDPC_Num_rows = [
     6, 6, 6
 ]
 
+FTX_TOKEN_CODE = {
+    "DE": 0,
+    "QRZ": 1,
+    "CQ": 2
+}
+
+FTX_TOKEN_STR = {
+    0: "DE",
+    1: "QRZ",
+    2: "CQ"
+}
+
 FTX_EXTRAS_CODE = {
     "RRR": 1,
     "RR73": 2,

@@ -1,6 +1,8 @@
 import typing
 
 from consts import CALLSIGN_HASHTABLE_SIZE
+from consts import FTX_TOKEN_CODE
+from consts import FTX_TOKEN_STR
 from consts import FTX_CALLSIGN_HASH_10_BITS
 from consts import FTX_CALLSIGN_HASH_12_BITS
 from consts import FTX_CALLSIGN_HASH_22_BITS
@@ -144,15 +146,9 @@ def packgrid(grid4: str) -> int:
 
 
 def pack28(callsign: str) -> typing.Tuple[int, int]:
-    special_tokens = {
-        "DE": 0,
-        "QRZ": 1,
-        "CQ": 2
-    }
-
     ip = 0
     # Check for special tokens first
-    if token := special_tokens.get(callsign):
+    if token := FTX_TOKEN_CODE.get(callsign):
         return ip, token
 
     length = len(callsign)
@@ -230,16 +226,11 @@ def pack58(callsign: str) -> typing.Optional[int]:
 
 
 def unpack28(n28: int, ip: int, i3: int) -> typing.Optional[str]:
-    special_tokens = {
-        0: "DE",
-        1: "QRZ",
-        2: "CQ"
-    }
     # LOG(LOG_DEBUG, "unpack28() n28=%d i3=%d\n", n28, i3);
     # Check for special tokens DE, QRZ, CQ, CQ_nnn, CQ_aaaa
     if n28 < NTOKENS:
         if n28 <= 2:
-            return special_tokens.get(n28)
+            return FTX_TOKEN_STR.get(n28)
 
         if n28 <= 1002:
             # CQ nnn with 3 digits
