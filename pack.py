@@ -10,6 +10,7 @@ from consts import FTX_CALLSIGN_HASH_22_BITS
 from exceptions import FTXInvalidCallsign
 from exceptions import FTXPack28Error
 from text import FTX_CHAR_TABLE_ALPHANUM
+from text import FTX_GRID_CHAR_MAP
 from text import FTX_BASECALL_CHAR_MAP
 from text import FTX_CHAR_TABLE_ALPHANUM_SPACE
 from text import FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH
@@ -116,12 +117,9 @@ def packgrid(grid4: str) -> int:
     #
     # Check for standard 4 letter grid
     if all(in_range(grid4[i], "A", "R") for i in range(2)) and grid4[2:2 + 2].isdigit():
-        # FIXME: Optimize
-        igrid4 = nchar(grid4[0], FTX_CHAR_TABLE_LETTERS)
-        igrid4 = igrid4 * 18 + nchar(grid4[1], FTX_CHAR_TABLE_LETTERS)
-        igrid4 = igrid4 * 10 + nchar(grid4[2], FTX_CHAR_TABLE_NUMERIC)
-        igrid4 = igrid4 * 10 + nchar(grid4[3], FTX_CHAR_TABLE_NUMERIC)
-        return igrid4
+        n_chars = list(map(nchar, grid4, FTX_GRID_CHAR_MAP))
+        n = reduce(lambda a, it: a * len(it[0]) + it[1], zip(FTX_GRID_CHAR_MAP, n_chars), 0)
+        return n  # Standard callsign
 
     # Parse report: +dd / -dd / R+dd / R-dd
     # TODO: check the range of dd
