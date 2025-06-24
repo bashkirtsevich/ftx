@@ -1,4 +1,5 @@
 import typing
+from functools import reduce
 
 from consts import CALLSIGN_HASHTABLE_SIZE
 from consts import FTX_TOKEN_CODE
@@ -72,41 +73,37 @@ def lookup_callsign(hash_type: int, hash: int) -> str:
 def pack_basecall(callsign: str) -> int:
     if (length := len(callsign)) > 2:
         # Work-around for Swaziland prefix: 3DA0XYZ -> 3D0XYZ
-        if callsign.startswith("3DA0") and length > 4 and length <= 7:
-            c6 = f"3D0{callsign[4:]}"
+        if callsign.startswith("3DA0") and 4 < length <= 7:
+            cs_6 = f"3D0{callsign[4:]}"
         # Work-around for Guinea prefixes: 3XA0XYZ -> QA0XYZ
         elif callsign.startswith("3X") and callsign[2].isalpha() and length <= 7:
-            c6 = f"Q{callsign[2:]}"
+            cs_6 = f"Q{callsign[2:]}"
         elif callsign[2].isdigit() and length <= 6:
-            c6 = callsign
-        # Check the position of callsign digit and make a right-aligned copy into c6
+            cs_6 = callsign
+        # Check the position of callsign digit and make a right-aligned copy into cs_6
         elif callsign[1].isdigit() and length <= 5:
             # A0XYZ -> " A0XYZ"
-            c6 = f" {callsign}"
+            cs_6 = f" {callsign}"
         else:
-            c6 = " " * 6
+            cs_6 = " " * 6
 
-        c6 = c6 + " " * (6 - len(c6))  # Normalize to 6 letters
+        cs_6 = cs_6 + " " * (6 - len(cs_6))  # Normalize to 6 letters
 
         # Check for standard callsign
-        # FIXME: Optimize
-        i0 = nchar(c6[0], FTX_CHAR_TABLE_ALPHANUM_SPACE)
-        i1 = nchar(c6[1], FTX_CHAR_TABLE_ALPHANUM)
-        i2 = nchar(c6[2], FTX_CHAR_TABLE_NUMERIC)
-        i3 = nchar(c6[3], FTX_CHAR_TABLE_LETTERS_SPACE)
-        i4 = nchar(c6[4], FTX_CHAR_TABLE_LETTERS_SPACE)
-        i5 = nchar(c6[5], FTX_CHAR_TABLE_LETTERS_SPACE)
+        ct_map = [
+            FTX_CHAR_TABLE_ALPHANUM_SPACE,
+            FTX_CHAR_TABLE_ALPHANUM,
+            FTX_CHAR_TABLE_NUMERIC,
+            FTX_CHAR_TABLE_LETTERS_SPACE,
+            FTX_CHAR_TABLE_LETTERS_SPACE,
+            FTX_CHAR_TABLE_LETTERS_SPACE
+        ]
+        n_chars = list(map(nchar, cs_6, ct_map))
 
-        if i0 >= 0 and i1 >= 0 and i2 >= 0 and i3 >= 0 and i4 >= 0 and i5 >= 0:
+        if all(nc >= 0 for nc in n_chars):
             # This is a standard callsign
-            # LOG(LOG_DEBUG, "Encoding basecall [%.6s]\n", c6);
-            n = i0
-            n = n * 36 + i1
-            n = n * 10 + i2
-            n = n * 27 + i3
-            n = n * 27 + i4
-            n = n * 27 + i5
-
+            # LOG(LOG_DEBUG, "Encoding basecall [%.6s]\n", cs_6);
+            n = reduce(lambda a, it: a * it[0] + it[1], zip([0, 36, 10, 27, 27, 27], n_chars), 0)
             return n  # Standard callsign
     return -1
 
