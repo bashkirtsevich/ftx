@@ -9,7 +9,7 @@ from consts import FTX_CALLSIGN_HASH_12_BITS
 from consts import FTX_CALLSIGN_HASH_22_BITS
 from exceptions import FTXInvalidCallsign
 from exceptions import FTXPack28Error
-from text import FTX_CHAR_TABLE_ALPHANUM
+from text import FTX_CHAR_TABLE_ALPHANUM, FTX_BASECALL_CHAR_MAP
 from text import FTX_CHAR_TABLE_ALPHANUM_SPACE
 from text import FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH
 from text import FTX_CHAR_TABLE_LETTERS
@@ -90,15 +90,7 @@ def pack_basecall(callsign: str) -> int:
         cs_6 = cs_6 + " " * (6 - len(cs_6))  # Normalize to 6 letters
 
         # Check for standard callsign
-        ct_map = [
-            FTX_CHAR_TABLE_ALPHANUM_SPACE,
-            FTX_CHAR_TABLE_ALPHANUM,
-            FTX_CHAR_TABLE_NUMERIC,
-            FTX_CHAR_TABLE_LETTERS_SPACE,
-            FTX_CHAR_TABLE_LETTERS_SPACE,
-            FTX_CHAR_TABLE_LETTERS_SPACE
-        ]
-        n_chars = list(map(nchar, cs_6, ct_map))
+        n_chars = list(map(nchar, cs_6, FTX_BASECALL_CHAR_MAP))
 
         if all(nc >= 0 for nc in n_chars):
             # This is a standard callsign
