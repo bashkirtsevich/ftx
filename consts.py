@@ -42,6 +42,8 @@ FTX_SYMBOL_PERIODS = {
     FTX_PROTOCOL_FT8: FT8_SYMBOL_PERIOD,
 }
 
+FTX_MAX_GRID_4 = 32400
+
 # S  - sync block (7 symbols of Costas pattern)
 # D1 - first data block (29 symbols each encoding 3 bits)
 FT8_ND = 58  # < Data symbols
@@ -482,9 +484,7 @@ FTX_TOKEN_CODE = {
 }
 
 FTX_TOKEN_STR = {
-    0: "DE",
-    1: "QRZ",
-    2: "CQ"
+    v: k for k, v in FTX_TOKEN_CODE.items()
 }
 
 FTX_EXTRAS_CODE = {
@@ -494,9 +494,18 @@ FTX_EXTRAS_CODE = {
 }
 
 FTX_EXTRAS_STR = {
-    1: "RRR",
-    2: "RR73",
-    3: "73",
+    v: k for k, v in FTX_EXTRAS_CODE.items()
+}
+
+FTX_GRID_EXTRAS_CODE = {
+    "": FTX_MAX_GRID_4 + 1,
+    "RRR": FTX_MAX_GRID_4 + 2,
+    "RR73": FTX_MAX_GRID_4 + 3,
+    "73": FTX_MAX_GRID_4 + 4,
+}
+
+FTX_GRID_EXTRAS_STR = {
+    v: k for k, v in FTX_GRID_EXTRAS_CODE.items()
 }
 
 GEN_SYS = [

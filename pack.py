@@ -1,13 +1,14 @@
+import re
 import typing
 from functools import reduce
 
-from consts import CALLSIGN_HASHTABLE_SIZE
+from consts import CALLSIGN_HASHTABLE_SIZE, FTX_GRID_EXTRAS_CODE, FTX_MAX_GRID_4, FTX_GRID_EXTRAS_STR
 from consts import FTX_TOKEN_CODE
 from consts import FTX_TOKEN_STR
 from consts import FTX_CALLSIGN_HASH_10_BITS
 from consts import FTX_CALLSIGN_HASH_12_BITS
 from consts import FTX_CALLSIGN_HASH_22_BITS
-from exceptions import FTXInvalidCallsign
+from exceptions import FTXInvalidCallsign, FTXErrorGrid
 from exceptions import FTXPack28Error
 from text import FTX_CHAR_TABLE_ALPHANUM
 from text import FTX_GRID_CHAR_MAP
@@ -25,7 +26,6 @@ from tools import dword, qword
 
 NTOKENS = 2063592
 MAX22 = 4194304
-MAXGRID4 = 32400
 
 
 def save_callsign(callsign: str) -> typing.Optional[typing.Tuple[int, int, int]]:
@@ -102,35 +102,30 @@ def pack_basecall(callsign: str) -> int:
     return -1
 
 
-def packgrid(grid4: str) -> int:
-    specials = {
-        "": MAXGRID4 + 1,
-        "RRR": MAXGRID4 + 2,
-        "RR73": MAXGRID4 + 3,
-        "73": MAXGRID4 + 4,
-    }
+def pack_grid(grid4: str) -> int:
+    n_chars = list(map(nchar, grid4, FTX_GRID_CHAR_MAP))
+    n = reduce(lambda a, it: a * len(it[0]) + it[1], zip(FTX_GRID_CHAR_MAP, n_chars), 0)
+    return n  # Standard callsign
 
-    if igrid4 := specials.get(grid4):
+
+def pack_extra(extra: str) -> int:
+    if igrid4 := FTX_GRID_EXTRAS_CODE.get(extra):
         return igrid4
 
-    # TODO: Check for "R " prefix before a 4 letter grid
-    #
     # Check for standard 4 letter grid
-    if all(in_range(grid4[i], "A", "R") for i in range(2)) and grid4[2:2 + 2].isdigit():
-        n_chars = list(map(nchar, grid4, FTX_GRID_CHAR_MAP))
-        n = reduce(lambda a, it: a * len(it[0]) + it[1], zip(FTX_GRID_CHAR_MAP, n_chars), 0)
-        return n  # Standard callsign
+    if re.match(r"^(([A-R]{2})([0-9]{2}))$", extra):
+        return pack_grid(extra)
 
     # Parse report: +dd / -dd / R+dd / R-dd
     # TODO: check the range of dd
-    if grid4[0] == "R":
-        dd = int(grid4[1:])
+    if extra[0] == "R":
+        dd = int(extra[1:])
         irpt = 35 + dd
-        return (MAXGRID4 + irpt) | 0x8000  # ir = 1
+        return (FTX_MAX_GRID_4 + irpt) | 0x8000  # ir = 1
     else:
-        dd = int(grid4)
+        dd = int(extra)
         irpt = 35 + dd
-        return MAXGRID4 + irpt  # ir = 0
+        return FTX_MAX_GRID_4 + irpt  # ir = 0
 
 
 def pack28(callsign: str) -> typing.Tuple[int, int]:
@@ -287,7 +282,7 @@ def unpack28(n28: int, ip: int, i3: int) -> typing.Optional[str]:
 
 
 def unpackgrid(igrid4: int, ir: int) -> typing.Optional[str]:
-    if igrid4 <= MAXGRID4:
+    if igrid4 <= FTX_MAX_GRID_4:
         # Extract 4 symbol grid locator
         n = igrid4
 
@@ -304,17 +299,19 @@ def unpackgrid(igrid4: int, ir: int) -> typing.Optional[str]:
         return f"{'R ' if ir else ''}{dst}"
     else:
         # Extract report
-        irpt = igrid4 - MAXGRID4
-
-        # Check special cases first (irpt > 0 always)
-        if irpt == 1:
-            return ""
-        elif irpt == 2:
-            return "RRR"
-        elif irpt == 3:
-            return "RR73"
-        elif irpt == 4:
-            return "73"
+        if irpt := FTX_GRID_EXTRAS_STR.get(igrid4):
+            return irpt
+        # irpt = igrid4 - FTX_MAX_GRID_4
+        #
+        # # Check special cases first (irpt > 0 always)
+        # if irpt == 1:
+        #     return ""
+        # elif irpt == 2:
+        #     return "RRR"
+        # elif irpt == 3:
+        #     return "RR73"
+        # elif irpt == 4:
+        #     return "73"
         else:
             # Extract signal report as a two digit number with a + or - sign
             return f"{'R' if ir else ''}{int(irpt - 35):+03}"

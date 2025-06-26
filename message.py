@@ -19,7 +19,8 @@ from exceptions import FTXErrorCallSign2
 from exceptions import FTXErrorGrid
 from exceptions import FTXErrorMsgType
 from exceptions import FTXErrorSuffix
-from pack import pack28, save_callsign, packgrid, pack58, unpack28, unpackgrid, lookup_callsign, unpack58, pack_basecall
+from pack import pack28, save_callsign, pack_extra, pack58, unpack28, unpackgrid, lookup_callsign, unpack58, \
+    pack_basecall
 from text import FTX_CHAR_TABLE_FULL, charn, nchar, endswith_any
 from tools import byte, dword
 
@@ -115,7 +116,7 @@ def ftx_message_encode_std(call_to: str, call_de: str, extra: str) -> typing.Byt
     if call_to == "CQ" and "/" in call_de and not endswith_any(call_de, "/P", "/R"):
         raise FTXErrorCallSign2  # nonstandard call: need a type 4 message
 
-    igrid4 = packgrid(extra)
+    igrid4 = pack_extra(extra)
 
     # Shift in sh_a and sh_b bits into n28a and n28b
     n29a = dword(n28a << 1 | sh_a)
