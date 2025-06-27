@@ -102,8 +102,8 @@ def pack_basecall(callsign: str) -> int:
     return -1
 
 
-def pack_grid(grid4: str) -> int:
-    n_chars = list(map(nchar, grid4, FTX_GRID_CHAR_MAP))
+def pack_grid(grid: str) -> int:
+    n_chars = list(map(nchar, grid, FTX_GRID_CHAR_MAP))
     n = reduce(lambda a, it: a * len(it[0]) + it[1], zip(FTX_GRID_CHAR_MAP, n_chars), 0)
     return n  # Standard callsign
 
