@@ -2,13 +2,13 @@ import re
 import typing
 from functools import reduce
 
-from consts import CALLSIGN_HASHTABLE_SIZE, FTX_GRID_EXTRAS_CODE, FTX_MAX_GRID_4, FTX_GRID_EXTRAS_STR
+from consts import CALLSIGN_HASHTABLE_SIZE, FTX_RESPONSE_EXTRAS_CODE, FTX_MAX_GRID_4, FTX_RESPONSE_EXTRAS_STR
 from consts import FTX_TOKEN_CODE
 from consts import FTX_TOKEN_STR
 from consts import FTX_CALLSIGN_HASH_10_BITS
 from consts import FTX_CALLSIGN_HASH_12_BITS
 from consts import FTX_CALLSIGN_HASH_22_BITS
-from exceptions import FTXInvalidCallsign, FTXErrorGrid
+from exceptions import FTXInvalidCallsign, FTXErrorGrid, FTXInvalidRST
 from exceptions import FTXPack28Error
 from text import FTX_CHAR_TABLE_ALPHANUM
 from text import FTX_GRID_CHAR_MAP
@@ -109,23 +109,20 @@ def pack_grid(grid4: str) -> int:
 
 
 def pack_extra(extra: str) -> int:
-    if igrid4 := FTX_GRID_EXTRAS_CODE.get(extra):
-        return igrid4
+    if id_resp := FTX_RESPONSE_EXTRAS_CODE.get(extra):
+        return id_resp
 
     # Check for standard 4 letter grid
     if re.match(r"^(([A-R]{2})([0-9]{2}))$", extra):
         return pack_grid(extra)
 
     # Parse report: +dd / -dd / R+dd / R-dd
-    # TODO: check the range of dd
-    if extra[0] == "R":
-        dd = int(extra[1:])
-        irpt = 35 + dd
-        return (FTX_MAX_GRID_4 + irpt) | 0x8000  # ir = 1
-    else:
-        dd = int(extra)
-        irpt = 35 + dd
-        return FTX_MAX_GRID_4 + irpt  # ir = 0
+    if not (report := re.match(r"^(R){0,1}([\+\-]{0,1}[0-9]+)$", extra)):
+        raise FTXInvalidRST
+
+    r_sign, r_val = report.groups()
+    i_report = int(r_val) + 35
+    return (FTX_MAX_GRID_4 + i_report) | (0x8000 if r_sign is not None else 0)
 
 
 def pack28(callsign: str) -> typing.Tuple[int, int]:
@@ -299,7 +296,7 @@ def unpackgrid(igrid4: int, ir: int) -> typing.Optional[str]:
         return f"{'R ' if ir else ''}{dst}"
     else:
         # Extract report
-        if irpt := FTX_GRID_EXTRAS_STR.get(igrid4):
+        if irpt := FTX_RESPONSE_EXTRAS_STR.get(igrid4):
             return irpt
         # irpt = igrid4 - FTX_MAX_GRID_4
         #

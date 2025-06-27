@@ -34,6 +34,10 @@ class FTXInvalidCallsign(FTXException):
     pass
 
 
+class FTXInvalidRST(FTXException):
+    pass
+
+
 class FTXPack28Error(FTXException):
     pass
 

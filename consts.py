@@ -497,15 +497,15 @@ FTX_EXTRAS_STR = {
     v: k for k, v in FTX_EXTRAS_CODE.items()
 }
 
-FTX_GRID_EXTRAS_CODE = {
+FTX_RESPONSE_EXTRAS_CODE = {
     "": FTX_MAX_GRID_4 + 1,
     "RRR": FTX_MAX_GRID_4 + 2,
     "RR73": FTX_MAX_GRID_4 + 3,
     "73": FTX_MAX_GRID_4 + 4,
 }
 
-FTX_GRID_EXTRAS_STR = {
-    v: k for k, v in FTX_GRID_EXTRAS_CODE.items()
+FTX_RESPONSE_EXTRAS_STR = {
+    v: k for k, v in FTX_RESPONSE_EXTRAS_CODE.items()
 }
 
 GEN_SYS = [
