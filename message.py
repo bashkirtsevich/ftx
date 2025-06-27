@@ -99,17 +99,16 @@ def ftx_message_get_type(payload: typing.ByteString) -> int:
 
 def ftx_message_encode_std(call_to: str, call_de: str, extra: str) -> typing.ByteString:
     n28a, sh_a = pack28(call_to)
-    n28b, sh_b = pack28(call_de)
-
     if n28a < 0:
         raise FTXErrorCallSign1
 
+    n28b, sh_b = pack28(call_de)
     if n28b < 0:
         raise FTXErrorCallSign2
 
-    i3 = 1  # No suffix or /R
+    suffix = 1  # No suffix or /R
     if any(call.endswith("/P") for call in (call_to, call_de)):
-        i3 = 2  # Suffix /P for EU VHF contest
+        suffix = 2  # Suffix /P for EU VHF contest
         if any(call.endswith("/R") for call in (call_to, call_de)):
             raise FTXErrorSuffix
 
@@ -127,7 +126,7 @@ def ftx_message_encode_std(call_to: str, call_de: str, extra: str) -> typing.Byt
         n29a |= 1  # sh_a = 1
     elif call_to.endswith("/P"):
         n29a |= 1  # sh_a = 1
-        i3 = 2
+        suffix = 2
 
     # Pack into (28 + 1) + (28 + 1) + (1 + 15) + 3 bits
     payload = bytearray(b"\x00" * 10)
@@ -140,7 +139,7 @@ def ftx_message_encode_std(call_to: str, call_de: str, extra: str) -> typing.Byt
     payload[6] = byte(n29b >> 2)
     payload[7] = byte(n29b << 6) | byte(igrid4 >> 10)
     payload[8] = byte(igrid4 >> 2)
-    payload[9] = byte(igrid4 << 6) | byte(i3 << 3)
+    payload[9] = byte(igrid4 << 6) | byte(suffix << 3)
 
     return payload
 
