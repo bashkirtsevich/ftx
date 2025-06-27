@@ -2,11 +2,11 @@ class FTXException(Exception):
     pass
 
 
-class FTXErrorCallSign1(FTXException):
+class FTXErrorCallSignTo(FTXException):
     pass
 
 
-class FTXErrorCallSign2(FTXException):
+class FTXErrorCallSignDe(FTXException):
     pass
 
 
@@ -38,7 +38,7 @@ class FTXInvalidReport(FTXException):
     pass
 
 
-class FTXPack28Error(FTXException):
+class FTXPackCallsignError(FTXException):
     pass
 
 

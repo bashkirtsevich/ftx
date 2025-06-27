@@ -14,12 +14,12 @@ from consts import FTX_MESSAGE_TYPE_STANDARD
 from consts import FTX_MESSAGE_TYPE_TELEMETRY
 from consts import FTX_MESSAGE_TYPE_UNKNOWN
 from consts import FTX_MESSAGE_TYPE_WWROF
-from exceptions import FTXErrorCallSign1, FTXErrorTooLong, FTXErrorInvalidChar, FTXException
-from exceptions import FTXErrorCallSign2
+from exceptions import FTXErrorCallSignTo, FTXErrorTooLong, FTXErrorInvalidChar, FTXException
+from exceptions import FTXErrorCallSignDe
 from exceptions import FTXErrorGrid
 from exceptions import FTXErrorMsgType
 from exceptions import FTXErrorSuffix
-from pack import pack28, save_callsign, pack_extra, pack58, unpack28, unpackgrid, lookup_callsign, unpack58, \
+from pack import pack_callsign, save_callsign, pack_extra, pack58, unpack28, unpackgrid, lookup_callsign, unpack58, \
     pack_basecall
 from text import FTX_CHAR_TABLE_FULL, charn, nchar, endswith_any
 from tools import byte, dword
@@ -27,10 +27,10 @@ from tools import byte, dword
 
 def ftx_message_encode(call_to: str, call_de: str, extra: str = "") -> typing.ByteString:
     if len(call_to) > 11:
-        raise FTXErrorCallSign1
+        raise FTXErrorCallSignTo
 
     if len(call_de) > 11:
-        raise FTXErrorCallSign2
+        raise FTXErrorCallSignDe
 
     if len(extra) > 19:
         raise FTXErrorGrid
@@ -98,50 +98,49 @@ def ftx_message_get_type(payload: typing.ByteString) -> int:
 
 
 def ftx_message_encode_std(call_to: str, call_de: str, extra: str) -> typing.ByteString:
-    n28a, sh_a = pack28(call_to)
-    if n28a < 0:
-        raise FTXErrorCallSign1
+    b28_to, sh_to = pack_callsign(call_to)
+    if b28_to < 0:
+        raise FTXErrorCallSignTo
 
-    n28b, sh_b = pack28(call_de)
-    if n28b < 0:
-        raise FTXErrorCallSign2
+    b28_de, sh_de = pack_callsign(call_de)
+    if b28_de < 0:
+        raise FTXErrorCallSignDe
 
     suffix = 1  # No suffix or /R
-    if any(call.endswith("/P") for call in (call_to, call_de)):
+    if any(cs.endswith("/P") for cs in (call_to, call_de)):
         suffix = 2  # Suffix /P for EU VHF contest
-        if any(call.endswith("/R") for call in (call_to, call_de)):
+        if any(cs.endswith("/R") for cs in (call_to, call_de)):
             raise FTXErrorSuffix
 
     if call_to == "CQ" and "/" in call_de and not endswith_any(call_de, "/P", "/R"):
-        raise FTXErrorCallSign2  # nonstandard call: need a type 4 message
+        raise FTXErrorCallSignDe  # nonstandard call: need a type 4 message
 
-    igrid4 = pack_extra(extra)
+    b16_extra = pack_extra(extra)
 
     # Shift in sh_a and sh_b bits into n28a and n28b
-    n29a = dword(n28a << 1 | sh_a)
-    n29b = dword(n28b << 1 | sh_b)
+    b29_to = dword(b28_to << 1 | sh_to)
+    b29_de = dword(b28_de << 1 | sh_de)
 
     # TODO: check for suffixes
-    if call_to.endswith("/R"):
-        n29a |= 1  # sh_a = 1
-    elif call_to.endswith("/P"):
-        n29a |= 1  # sh_a = 1
-        suffix = 2
+    if endswith_any(call_to, "/P", "/R"):
+        b29_to |= 1  # sh_a = 11
+        if call_to.endswith("/P"):
+            suffix = 2
 
     # Pack into (28 + 1) + (28 + 1) + (1 + 15) + 3 bits
-    payload = bytearray(b"\x00" * 10)
-    payload[0] = byte(n29a >> 21)
-    payload[1] = byte(n29a >> 13)
-    payload[2] = byte(n29a >> 5)
-    payload[3] = byte(n29a << 3) | byte(n29b >> 26)
-    payload[4] = byte(n29b >> 18)
-    payload[5] = byte(n29b >> 10)
-    payload[6] = byte(n29b >> 2)
-    payload[7] = byte(n29b << 6) | byte(igrid4 >> 10)
-    payload[8] = byte(igrid4 >> 2)
-    payload[9] = byte(igrid4 << 6) | byte(suffix << 3)
-
-    return payload
+    bytes = [
+        byte(b29_to >> 21),
+        byte(b29_to >> 13),
+        byte(b29_to >> 5),
+        byte(b29_to << 3) | byte(b29_de >> 26),
+        byte(b29_de >> 18),
+        byte(b29_de >> 10),
+        byte(b29_de >> 2),
+        byte(b29_de << 6) | byte(b16_extra >> 10),
+        byte(b16_extra >> 2),
+        byte(b16_extra << 6) | byte(suffix << 3)
+    ]
+    return bytearray(b for b in bytes)
 
 
 def ftx_message_decode_std(payload: typing.ByteString) -> typing.Tuple[str, str, str]:
@@ -165,10 +164,10 @@ def ftx_message_decode_std(payload: typing.ByteString) -> typing.Tuple[str, str,
     i3 = (payload[9] >> 3) & 0x07
 
     if (call_to := unpack28(n29a >> 1, n29a & 1, i3)) is None:
-        raise FTXErrorCallSign1
+        raise FTXErrorCallSignTo
 
     if (call_de := unpack28(n29b >> 1, n29b & 1, i3)) is None:
-        raise FTXErrorCallSign2
+        raise FTXErrorCallSignDe
 
     if (extra := unpackgrid(igrid4, ir)) is None:
         raise FTXErrorGrid
@@ -229,14 +228,14 @@ def ftx_message_encode_nonstd(call_to: str, call_de: str, extra: str) -> typing.
     len_call_de = len(call_de)
 
     if not icq and len_call_to < 3:
-        raise FTXErrorCallSign1
+        raise FTXErrorCallSignTo
 
     if len_call_de < 3:
-        raise FTXErrorCallSign2
+        raise FTXErrorCallSignDe
 
     if icq or pack_basecall(call_to) < 0:
         # CQ with non-std call, should use free text (without hash)
-        raise FTXErrorCallSign1
+        raise FTXErrorCallSignTo
 
     if not icq:
         # choose which of the callsigns to encode as plain-text (58 bits) or hash (12 bits)
@@ -246,7 +245,7 @@ def ftx_message_encode_nonstd(call_to: str, call_de: str, extra: str) -> typing.
         call58 = call_to if iflip else call_de
 
         if (x := save_callsign(call12)) is None:
-            raise FTXErrorCallSign1
+            raise FTXErrorCallSignTo
 
         _, n12, _ = x
     else:
@@ -255,7 +254,7 @@ def ftx_message_encode_nonstd(call_to: str, call_de: str, extra: str) -> typing.
         call58 = call_de
 
     if (n58 := pack58(call58)) is None:
-        raise FTXErrorCallSign2
+        raise FTXErrorCallSignDe
 
     if icq:
         nrpt = 0

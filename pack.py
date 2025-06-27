@@ -9,7 +9,7 @@ from consts import FTX_CALLSIGN_HASH_10_BITS
 from consts import FTX_CALLSIGN_HASH_12_BITS
 from consts import FTX_CALLSIGN_HASH_22_BITS
 from exceptions import FTXInvalidCallsign, FTXErrorGrid, FTXInvalidReport
-from exceptions import FTXPack28Error
+from exceptions import FTXPackCallsignError
 from text import FTX_CHAR_TABLE_ALPHANUM
 from text import FTX_GRID_CHAR_MAP
 from text import FTX_BASECALL_CHAR_MAP
@@ -125,7 +125,7 @@ def pack_extra(extra: str) -> int:
     return (FTX_MAX_GRID_4 + i_report) | (0x8000 if r_sign is not None else 0)
 
 
-def pack28(callsign: str) -> typing.Tuple[int, int]:
+def pack_callsign(callsign: str) -> typing.Tuple[int, int]:
     shift = 0
     # Check for special tokens first
     if token := FTX_TOKEN_CODE.get(callsign):
@@ -174,7 +174,7 @@ def pack28(callsign: str) -> typing.Tuple[int, int]:
         n22, _, _ = x
         return dword(NTOKENS + n22), shift  # 22-bit hashed callsign
 
-    raise FTXPack28Error
+    raise FTXPackCallsignError
 
 
 def pack58(callsign: str) -> typing.Optional[int]:
