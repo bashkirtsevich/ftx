@@ -8,7 +8,7 @@ from consts import FTX_TOKEN_STR
 from consts import FTX_CALLSIGN_HASH_10_BITS
 from consts import FTX_CALLSIGN_HASH_12_BITS
 from consts import FTX_CALLSIGN_HASH_22_BITS
-from exceptions import FTXInvalidCallsign, FTXErrorGrid, FTXInvalidRST
+from exceptions import FTXInvalidCallsign, FTXErrorGrid, FTXInvalidReport
 from exceptions import FTXPack28Error
 from text import FTX_CHAR_TABLE_ALPHANUM
 from text import FTX_GRID_CHAR_MAP
@@ -118,7 +118,7 @@ def pack_extra(extra: str) -> int:
 
     # Parse report: +dd / -dd / R+dd / R-dd
     if not (report := re.match(r"^(R){0,1}([\+\-]{0,1}[0-9]+)$", extra)):
-        raise FTXInvalidRST
+        raise FTXInvalidReport
 
     r_sign, r_val = report.groups()
     i_report = int(r_val) + 35

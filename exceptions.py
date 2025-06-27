@@ -34,7 +34,7 @@ class FTXInvalidCallsign(FTXException):
     pass
 
 
-class FTXInvalidRST(FTXException):
+class FTXInvalidReport(FTXException):
     pass
 
 
