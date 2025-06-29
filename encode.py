@@ -6,12 +6,12 @@ from consts import FTX_LDPC_K
 from consts import FTX_LDPC_K_BYTES
 from consts import FTX_LDPC_M
 from consts import FTX_LDPC_N_BYTES
-from consts import kFT4_Costas_pattern
-from consts import kFT4_Gray_map
-from consts import kFT4_XOR_sequence
-from consts import kFT8_Costas_pattern
-from consts import kFT8_Gray_map
-from consts import kFTX_LDPC_generator
+from consts import FT4_COSTAS_PATTERN
+from consts import FT4_GRAY_MAP
+from consts import FT4_XOR_SEQUENCE
+from consts import FT8_COSTAS_PATTERN
+from consts import FT8_GRAY_MAP
+from consts import FTX_LDPC_GENERATOR
 from crc import ftx_add_crc
 from tools import byte
 
@@ -47,7 +47,7 @@ def ftx_encode(message: typing.ByteString) -> typing.ByteString:
         # but we only compute the sum modulo 2.
         nsum = 0
         for j in range(FTX_LDPC_K_BYTES):
-            bits = message[j] & kFTX_LDPC_generator[i][j]  # bitwise AND (bitwise multiplication)
+            bits = message[j] & FTX_LDPC_GENERATOR[i][j]  # bitwise AND (bitwise multiplication)
             nsum ^= parity8(bits)  # bitwise XOR (addition modulo 2)
 
         # Set the current checksum bit in codeword if nsum is odd
@@ -77,11 +77,11 @@ def ft8_encode(payload: typing.ByteString) -> typing.Generator[int, None, None]:
     for i_tone in range(FT8_NN):
         # FIXME: Optimize/normalize
         if 7 > i_tone >= 0:
-            yield kFT8_Costas_pattern[i_tone]
+            yield FT8_COSTAS_PATTERN[i_tone]
         elif 43 > i_tone >= 36:
-            yield kFT8_Costas_pattern[i_tone - 36]
+            yield FT8_COSTAS_PATTERN[i_tone - 36]
         elif 79 > i_tone >= 72:
-            yield kFT8_Costas_pattern[i_tone - 72]
+            yield FT8_COSTAS_PATTERN[i_tone - 72]
         else:
             # Extract 3 bits from codeword at i-th position
             bits3 = 0
@@ -96,7 +96,7 @@ def ft8_encode(payload: typing.ByteString) -> typing.Generator[int, None, None]:
                     mask = 0x80
                     i_byte += 1
 
-            yield kFT8_Gray_map[bits3]
+            yield FT8_GRAY_MAP[bits3]
 
 
 def ft4_encode(payload: typing.ByteString) -> typing.Generator[int, None, None]:
@@ -104,7 +104,7 @@ def ft4_encode(payload: typing.ByteString) -> typing.Generator[int, None, None]:
     # the assembled 77-bit message is bitwise exclusive-OR’ed with [a] pseudorandom sequence before computing the CRC and FEC parity bits'
     payload_xor = bytearray(b"\x00" * 10)
     for i in range(10):
-        payload_xor[i] = payload[i] ^ kFT4_XOR_sequence[i]
+        payload_xor[i] = payload[i] ^ FT4_XOR_SEQUENCE[i]
 
     # Compute and add CRC at the end of the message
     # a91 contains 77 bits of payload + 14 bits of CRC
@@ -122,13 +122,13 @@ def ft4_encode(payload: typing.ByteString) -> typing.Generator[int, None, None]:
             yield 0  # R (ramp) symbol
         # FIXME: Optimize
         elif 5 > i_tone >= 1:
-            yield kFT4_Costas_pattern[0][i_tone - 1]
+            yield FT4_COSTAS_PATTERN[0][i_tone - 1]
         elif 38 > i_tone >= 34:
-            yield kFT4_Costas_pattern[1][i_tone - 34]
+            yield FT4_COSTAS_PATTERN[1][i_tone - 34]
         elif 71 > i_tone >= 67:
-            yield kFT4_Costas_pattern[2][i_tone - 67]
+            yield FT4_COSTAS_PATTERN[2][i_tone - 67]
         elif 104 > i_tone >= 100:
-            yield kFT4_Costas_pattern[3][i_tone - 100]
+            yield FT4_COSTAS_PATTERN[3][i_tone - 100]
         else:
             bits2 = 0  # Extract 2 bits from codeword at i-th position
 
@@ -141,4 +141,4 @@ def ft4_encode(payload: typing.ByteString) -> typing.Generator[int, None, None]:
                     mask = 0x80
                     i_byte += 1
 
-            yield kFT4_Gray_map[bits2]
+            yield FT4_GRAY_MAP[bits2]

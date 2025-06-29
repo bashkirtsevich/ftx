@@ -225,7 +225,7 @@ class Monitor:
                 p8 = mag_cand + block * wf.block_stride
 
                 # Check only the neighbors of the expected symbol frequency- and time-wise
-                sm = kFT8_Costas_pattern[k]  # Index of the expected bin
+                sm = FT8_COSTAS_PATTERN[k]  # Index of the expected bin
                 p8sm = p8 + sm
                 if sm > 0:  # look at one frequency bin lower
                     score += wf.mag[p8sm] - wf.mag[p8sm - 1]
@@ -269,7 +269,7 @@ class Monitor:
                 # Get the pointer to symbol 'block' of the candidate
                 p4 = mag_cand + (block * wf.block_stride)
 
-                sm = kFT4_Costas_pattern[m][k]  # Index of the expected bin
+                sm = FT4_COSTAS_PATTERN[m][k]  # Index of the expected bin
                 p4sm = p4 + sm
 
                 # score += (4 * p4[sm]) - p4[0] - p4[1] - p4[2] - p4[3];
@@ -405,7 +405,7 @@ class Monitor:
     def ft4_extract_symbol(self, mag_idx: int) -> typing.Tuple[float, float]:
         # Compute unnormalized log likelihood log(p(1) / p(0)) of 2 message bits (1 FSK symbol)
         # Cleaned up code for the simple case of n_syms==1
-        s2 = [self.wf.mag[mag_idx + kFT4_Gray_map[j]] for j in range(4)]
+        s2 = [self.wf.mag[mag_idx + FT4_GRAY_MAP[j]] for j in range(4)]
 
         logl_0 = max(s2[2], s2[3]) - max(s2[0], s2[1])
         logl_1 = max(s2[1], s2[3]) - max(s2[0], s2[2])
@@ -415,7 +415,7 @@ class Monitor:
     def ft8_extract_symbol(self, mag_idx: int) -> typing.Tuple[float, float, float]:
         # Compute unnormalized log likelihood log(p(1) / p(0)) of 3 message bits (1 FSK symbol)
         # Cleaned up code for the simple case of n_syms==1
-        s2 = [self.wf.mag[mag_idx + kFT8_Gray_map[j]] for j in range(8)]
+        s2 = [self.wf.mag[mag_idx + FT8_GRAY_MAP[j]] for j in range(8)]
 
         logl_0 = max(s2[4], s2[5], s2[6], s2[7]) - max(s2[0], s2[1], s2[2], s2[3])
         logl_1 = max(s2[2], s2[3], s2[6], s2[7]) - max(s2[0], s2[1], s2[4], s2[5])
@@ -458,7 +458,7 @@ class Monitor:
         if wf.protocol == FTX_PROTOCOL_FT4:
             # '[..] for FT4 only, in order to avoid transmitting a long string of zeros when sending CQ messages,
             # the assembled 77-bit message is bitwise exclusive-OR’ed with [a] pseudorandom sequence before computing the CRC and FEC parity bits'
-            payload = bytearray(a91[i] ^ xor for i, xor in enumerate(kFT4_XOR_sequence))
+            payload = bytearray(a91[i] ^ xor for i, xor in enumerate(FT4_XOR_SEQUENCE))
             tones = ft4_encode(payload)
         else:
             payload = a91

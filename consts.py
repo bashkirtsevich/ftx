@@ -87,8 +87,8 @@ FTX_LDPC_N_BYTES = ((FTX_LDPC_N + 7) // 8)
 FTX_LDPC_K_BYTES = ((FTX_LDPC_K + 7) // 8)
 
 # Costas sync tone pattern
-kFT8_Costas_pattern = [3, 1, 4, 0, 6, 5, 2]
-kFT4_Costas_pattern = [
+FT8_COSTAS_PATTERN = [3, 1, 4, 0, 6, 5, 2]
+FT4_COSTAS_PATTERN = [
     [0, 1, 3, 2],
     [1, 0, 2, 3],
     [2, 3, 1, 0],
@@ -96,10 +96,10 @@ kFT4_Costas_pattern = [
 ]
 
 # Gray code map (FTx bits -> channel symbols)
-kFT8_Gray_map = [0, 1, 3, 2, 5, 6, 4, 7]
-kFT4_Gray_map = [0, 1, 3, 2]
+FT8_GRAY_MAP = [0, 1, 3, 2, 5, 6, 4, 7]
+FT4_GRAY_MAP = [0, 1, 3, 2]
 
-kFT4_XOR_sequence = [
+FT4_XOR_SEQUENCE = [
     0x4A,  # 01001010
     0x5E,  # 01011110
     0x89,  # 10001001
@@ -113,7 +113,7 @@ kFT4_XOR_sequence = [
 ]
 
 # Parity generator matrix for (174,91) LDPC code, stored in bitpacked format (MSB first)
-kFTX_LDPC_generator = [
+FTX_LDPC_GENERATOR = [
     [0x83, 0x29, 0xce, 0x11, 0xbf, 0x31, 0xea, 0xf5, 0x09, 0xf2, 0x7f, 0xc0],
     [0x76, 0x1c, 0x26, 0x4e, 0x25, 0xc2, 0x59, 0x33, 0x54, 0x93, 0x13, 0x20],
     [0xdc, 0x26, 0x59, 0x02, 0xfb, 0x27, 0x7c, 0x64, 0x10, 0xa1, 0xbd, 0xc0],
