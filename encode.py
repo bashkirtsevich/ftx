@@ -29,7 +29,7 @@ def parity8(x: int) -> int:
 # Arguments:
 # [IN] message   - array of 91 bits stored as 12 bytes (MSB first)
 # [OUT] codeword - array of 174 bits stored as 22 bytes (MSB first)
-def encode174(message: typing.ByteString) -> typing.ByteString:
+def ftx_encode(message: typing.ByteString) -> typing.ByteString:
     # This implementation accesses the generator bits straight from the packed binary representation in kFTX_LDPC_generator
     # Fill the codeword with message and zeros, as we will only update binary ones later
     codeword = bytearray(b"\x00" * FTX_LDPC_N_BYTES)
@@ -67,7 +67,7 @@ def ft8_encode(payload: typing.ByteString) -> typing.Generator[int, None, None]:
     # Compute and add CRC at the end of the message
     # a91 contains 77 bits of payload + 14 bits of CRC
     a91 = ftx_add_crc(payload)
-    codeword = encode174(a91)
+    codeword = ftx_encode(a91)
 
     # Message structure: S7 D29 S7 D29 S7
     # Total symbols: 79 (FT8_NN)
@@ -110,7 +110,7 @@ def ft4_encode(payload: typing.ByteString) -> typing.Generator[int, None, None]:
     # a91 contains 77 bits of payload + 14 bits of CRC
     a91 = ftx_add_crc(payload_xor)
 
-    codeword = encode174(a91)  # 91 bits -> 174 bits
+    codeword = ftx_encode(a91)  # 91 bits -> 174 bits
 
     # Message structure: R S4_1 D29 S4_2 D29 S4_3 D29 S4_4 R
     # Total symbols: 105 (FT4_NN)
