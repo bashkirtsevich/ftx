@@ -5,9 +5,9 @@ from tools import byte
 
 FTX_CRC_POLYNOMIAL = 0x2757
 FTX_CRC_WIDTH = 14
+FFTX_CRC_TOP_BIT = 1 << (FTX_CRC_WIDTH - 1)
 FTX_PAYLOAD_BITS = 96
 FTX_MESSAGE_BITS = FTX_PAYLOAD_BITS - FTX_CRC_WIDTH
-TOPBIT = 1 << (FTX_CRC_WIDTH - 1)
 
 
 def ftx_compute_crc(message: typing.ByteString, num_bits: int) -> int:
@@ -19,12 +19,12 @@ def ftx_compute_crc(message: typing.ByteString, num_bits: int) -> int:
             remainder ^= message[idx_byte] << (FTX_CRC_WIDTH - 8)
             idx_byte += 1
 
-        if remainder & TOPBIT != 0:
+        if remainder & FFTX_CRC_TOP_BIT != 0:
             remainder = (remainder << 1) ^ FTX_CRC_POLYNOMIAL
         else:
             remainder = remainder << 1
 
-    return remainder & ((TOPBIT << 1) - 1)
+    return remainder & ((FFTX_CRC_TOP_BIT << 1) - 1)
 
 
 def ftx_extract_crc(a91: typing.ByteString) -> int:
