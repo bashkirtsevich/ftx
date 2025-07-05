@@ -17,9 +17,11 @@ from tools import byte
 
 
 def parity8(x: int) -> int:
-    x ^= x >> 4  # a b c d ae bf cg dh
-    x ^= x >> 2  # a b ac bd cae dbf aecg bfdh
-    x ^= x >> 1  # a ab bac acbd bdcae caedbf aecgbfdh
+    for i in [4, 2, 1]:
+        x ^= x >> i
+    # x ^= x >> 4  # a b c d ae bf cg dh
+    # x ^= x >> 2  # a b ac bd cae dbf aecg bfdh
+    # x ^= x >> 1  # a ab bac acbd bdcae caedbf aecgbfdh
     return byte(x % 2)  # modulo 2
 
 
@@ -32,9 +34,7 @@ def parity8(x: int) -> int:
 def ftx_encode(message: typing.ByteString) -> typing.ByteString:
     # This implementation accesses the generator bits straight from the packed binary representation in kFTX_LDPC_generator
     # Fill the codeword with message and zeros, as we will only update binary ones later
-    codeword = bytearray(b"\x00" * FTX_LDPC_N_BYTES)
-    for i in range(FTX_LDPC_N_BYTES):
-        codeword[i] = message[i] if i < FTX_LDPC_K_BYTES else 0
+    codeword = bytearray(message[i] if i < FTX_LDPC_K_BYTES else 0 for i in range(FTX_LDPC_N_BYTES))
 
     # Compute the byte index and bit mask for the first checksum bit
     col_mask = 0x80 >> (FTX_LDPC_K % 8)  # bitmask of current byte
@@ -102,9 +102,7 @@ def ft8_encode(payload: typing.ByteString) -> typing.Generator[int, None, None]:
 def ft4_encode(payload: typing.ByteString) -> typing.Generator[int, None, None]:
     # '[..] for FT4 only, in order to avoid transmitting a long string of zeros when sending CQ messages,
     # the assembled 77-bit message is bitwise exclusive-OR’ed with [a] pseudorandom sequence before computing the CRC and FEC parity bits'
-    payload_xor = bytearray(b"\x00" * 10)
-    for i in range(10):
-        payload_xor[i] = payload[i] ^ FT4_XOR_SEQUENCE[i]
+    payload_xor = bytearray(payload[i] ^ FT4_XOR_SEQUENCE[i] for i in range(10))
 
     # Compute and add CRC at the end of the message
     # a91 contains 77 bits of payload + 14 bits of CRC
