@@ -4,8 +4,7 @@ import typing
 FT8_SYMBOL_BT = 2.0  # < symbol smoothing filter bandwidth factor (BT)
 FT4_SYMBOL_BT = 1.0  # < symbol smoothing filter bandwidth factor (BT)
 
-M_PI = 3.14159265358979323846
-GFSK_CONST_K = 5.336446  # < == pi * sqrt(2 / log(2))
+GFSK_K = math.pi * math.sqrt(2 / math.log(2))  # pi * sqrt(2 / log(2)) = 5.336446
 
 
 def gfsk_pulse(n_spsym: int, symbol_bt: float) -> typing.Generator[float, None, None]:
@@ -20,8 +19,8 @@ def gfsk_pulse(n_spsym: int, symbol_bt: float) -> typing.Generator[float, None, 
     """
     for i in range(3 * n_spsym):
         t = i / n_spsym - 1.5
-        arg1 = GFSK_CONST_K * symbol_bt * (t + 0.5)
-        arg2 = GFSK_CONST_K * symbol_bt * (t - 0.5)
+        arg1 = GFSK_K * symbol_bt * (t + 0.5)
+        arg2 = GFSK_K * symbol_bt * (t - 0.5)
         val = (math.erf(arg1) - math.erf(arg2)) / 2
 
         yield val
@@ -48,9 +47,9 @@ def synth_gfsk(symbols: typing.List[int], n_sym: int,
 
     # Compute the smoothed frequency waveform.
     # Length = (nsym+2)*n_spsym samples, first and last symbols extended
-    dphi_peak = 2 * M_PI * hmod / n_spsym
+    dphi_peak = 2 * math.pi * hmod / n_spsym
     # Shift frequency up by f0
-    dphi = [2 * M_PI * f0 / signal_rate] * (n_wave + 2 * n_spsym)
+    dphi = [2 * math.pi * f0 / signal_rate] * (n_wave + 2 * n_spsym)
 
     pulse = list(gfsk_pulse(n_spsym, symbol_bt))
 
@@ -70,12 +69,12 @@ def synth_gfsk(symbols: typing.List[int], n_sym: int,
     for k in range(n_wave):
         #  Don't include dummy symbols
         signal.append(math.sin(phi))
-        phi = math.fmod(phi + dphi[k + n_spsym], 2 * M_PI)
+        phi = math.fmod(phi + dphi[k + n_spsym], 2 * math.pi)
 
     # Apply envelope shaping to the first and last symbols
     n_ramp = n_spsym // 8
     for i in range(n_ramp):
-        env = (1 - math.cos(2 * M_PI * i / (2 * n_ramp))) / 2
+        env = (1 - math.cos(2 * math.pi * i / (2 * n_ramp))) / 2
         signal[i] *= env
         signal[n_wave - 1 - i] *= env
 
