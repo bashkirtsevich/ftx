@@ -29,7 +29,7 @@ def gfsk_pulse(n_spsym: int, symbol_bt: float) -> typing.Generator[float, None, 
 def synth_gfsk(symbols: typing.List[int], n_sym: int,
                f0: float,
                symbol_bt: float, symbol_period: float,
-               signal_rate: int) -> typing.List[float]:
+               signal_rate: int) -> typing.Generator[float, None, None]:
     """
     Synthesize waveform data using GFSK phase shaping.
     The output waveform will contain n_sym symbols.
@@ -63,19 +63,17 @@ def synth_gfsk(symbols: typing.List[int], n_sym: int,
         dphi[j] += dphi_peak * pulse[j + n_spsym] * symbols[0]
         dphi[j + n_sym * n_spsym] += dphi_peak * pulse[j] * symbols[n_sym - 1]
 
-    # Calculate and insert the audio waveform
-    signal = []
+    # Calculate the audio waveform
     phi = 0.0
+    n_ramp = n_spsym // 8
     for k in range(n_wave):
-        #  Don't include dummy symbols
-        signal.append(math.sin(phi))
+        val = math.sin(phi)
         phi = math.fmod(phi + dphi[k + n_spsym], 2 * math.pi)
 
-    # Apply envelope shaping to the first and last symbols
-    n_ramp = n_spsym // 8
-    for i in range(n_ramp):
-        env = (1 - math.cos(2 * math.pi * i / (2 * n_ramp))) / 2
-        signal[i] *= env
-        signal[n_wave - 1 - i] *= env
+        # Apply envelope shaping to the first and last symbols
+        if k < n_ramp or k >= n_wave - n_ramp:
+            i_ramp = (k if k < n_ramp else n_wave - k - 1)
+            env = (1 - math.cos(2 * math.pi * i_ramp / (2 * n_ramp))) / 2
+            val *= env
 
-    return signal
+        yield val

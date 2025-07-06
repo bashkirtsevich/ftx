@@ -41,14 +41,14 @@ def main():
     num_samples = int(0.5 + num_tones * symbol_period * sample_rate)
     num_silence = int((slot_time * sample_rate - num_samples) / 2)
 
-    signal = synth_gfsk(tones, num_tones, frequency, symbol_bt, symbol_period, sample_rate)
+    signal = np.fromiter(synth_gfsk(tones, num_tones, frequency, symbol_bt, symbol_period, sample_rate), dtype=float)
     # save_wav(signal, sample_rate, "example.wav")
     # data = np.array(signal)
     # write("example.wav", sample_rate, data)
 
     silence = np.zeros(num_silence)
     amplitude = np.iinfo(np.int16).max
-    data = np.concat([silence, amplitude * np.array(signal), silence])
+    data = np.concat([silence, amplitude * signal, silence])
     write("examples/signal.wav", sample_rate, data.astype(np.int16))
 
 
