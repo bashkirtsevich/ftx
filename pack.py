@@ -203,7 +203,7 @@ def pack58(callsign: str) -> typing.Optional[int]:
     return result
 
 
-def unpack28(n28: int, ip: int, i3: int) -> typing.Optional[str]:
+def unpack_callsign(n28: int, ip: int, i3: int) -> typing.Optional[str]:
     # LOG(LOG_DEBUG, "unpack28() n28=%d i3=%d\n", n28, i3);
     # Check for special tokens DE, QRZ, CQ, CQ_nnn, CQ_aaaa
     if n28 < NTOKENS:
@@ -278,40 +278,24 @@ def unpack28(n28: int, ip: int, i3: int) -> typing.Optional[str]:
     return result
 
 
-def unpackgrid(igrid4: int, ir: int) -> typing.Optional[str]:
-    if igrid4 <= FTX_MAX_GRID_4:
+def unpack_extra(extra: int, is_report: bool) -> typing.Optional[str]:
+    if extra <= FTX_MAX_GRID_4:
+        n = extra
+        dst = ""
         # Extract 4 symbol grid locator
-        n = igrid4
+        for ct in reversed(FTX_GRID_CHAR_MAP):
+            ct_l = len(ct)
+            dst = charn(n % ct_l, ct) + dst
+            n //= ct_l
 
-        # FIXME: Optimize
-        dst = charn(n % 10, FTX_CHAR_TABLE_NUMERIC)  # 0..9
-        n //= 10
-        dst = charn(n % 10, FTX_CHAR_TABLE_NUMERIC) + dst  # 0..9
-        n //= 10
-        dst = charn(n % 18, FTX_CHAR_TABLE_LETTERS) + dst  # A..R
-        n //= 18
-        dst = charn(n % 18, FTX_CHAR_TABLE_LETTERS) + dst  # A..R
-
-        # In case of ir=1 add an "R " before grid
-        return f"{'R ' if ir else ''}{dst}"
-    else:
-        # Extract report
-        if irpt := FTX_RESPONSE_EXTRAS_STR.get(igrid4):
+        # In case of ir add an "R " before grid
+        return f"{'R ' if is_report else ''}{dst}"
+    else:  # Extract report
+        if irpt := FTX_RESPONSE_EXTRAS_STR.get(extra):
             return irpt
-        # irpt = igrid4 - FTX_MAX_GRID_4
-        #
-        # # Check special cases first (irpt > 0 always)
-        # if irpt == 1:
-        #     return ""
-        # elif irpt == 2:
-        #     return "RRR"
-        # elif irpt == 3:
-        #     return "RR73"
-        # elif irpt == 4:
-        #     return "73"
-        else:
-            # Extract signal report as a two digit number with a + or - sign
-            return f"{'R' if ir else ''}{int(irpt - 35):+03}"
+
+        # Extract signal report as a two digit number with a + or - sign
+        return f"{'R' if is_report else ''}{int(irpt - 35):+03}"
 
 
 def unpack58(n58: int) -> str:

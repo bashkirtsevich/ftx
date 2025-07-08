@@ -19,7 +19,7 @@ from exceptions import FTXErrorCallSignDe
 from exceptions import FTXErrorGrid
 from exceptions import FTXErrorMsgType
 from exceptions import FTXErrorSuffix
-from pack import pack_callsign, save_callsign, pack_extra, pack58, unpack28, unpackgrid, lookup_callsign, unpack58, \
+from pack import pack_callsign, save_callsign, pack_extra, pack58, unpack_callsign, unpack_extra, lookup_callsign, unpack58, \
     pack_basecall
 from text import FTX_CHAR_TABLE_FULL, charn, nchar, endswith_any
 from tools import byte, dword
@@ -149,6 +149,7 @@ def ftx_message_decode_std(payload: typing.ByteString) -> typing.Tuple[str, str,
     n29a |= payload[1] << 13
     n29a |= payload[2] << 5
     n29a |= payload[3] >> 3
+
     n29b = (payload[3] & 0x07) << 26
     n29b |= payload[4] << 18
     n29b |= payload[5] << 10
@@ -163,13 +164,13 @@ def ftx_message_decode_std(payload: typing.ByteString) -> typing.Tuple[str, str,
     # Extract i3 (bits 74..76)
     i3 = (payload[9] >> 3) & 0x07
 
-    if (call_to := unpack28(n29a >> 1, n29a & 1, i3)) is None:
+    if (call_to := unpack_callsign(n29a >> 1, n29a & 1, i3)) is None:
         raise FTXErrorCallSignTo
 
-    if (call_de := unpack28(n29b >> 1, n29b & 1, i3)) is None:
+    if (call_de := unpack_callsign(n29b >> 1, n29b & 1, i3)) is None:
         raise FTXErrorCallSignDe
 
-    if (extra := unpackgrid(igrid4, ir)) is None:
+    if (extra := unpack_extra(igrid4, ir > 0)) is None:
         raise FTXErrorGrid
 
     return call_to, call_de, extra
