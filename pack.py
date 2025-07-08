@@ -203,7 +203,7 @@ def pack58(callsign: str) -> typing.Optional[int]:
     return result
 
 
-def unpack_callsign(n28: int, ip: int, i3: int) -> typing.Optional[str]:
+def unpack_callsign(n28: int, ip: int, flags: int) -> typing.Optional[str]:
     # LOG(LOG_DEBUG, "unpack28() n28=%d i3=%d\n", n28, i3);
     # Check for special tokens DE, QRZ, CQ, CQ_nnn, CQ_aaaa
     if n28 < NTOKENS:
@@ -265,9 +265,9 @@ def unpack_callsign(n28: int, ip: int, i3: int) -> typing.Optional[str]:
     # Check if we should append /R or /P suffix
     if ip:
         # FIXME: Optimize
-        if i3 == 1:
+        if flags == 1:
             result = f"{result}/R"
-        elif i3 == 2:
+        elif flags == 2:
             result = f"{result}/P"
         else:
             raise ValueError

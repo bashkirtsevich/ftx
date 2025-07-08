@@ -19,7 +19,8 @@ from exceptions import FTXErrorCallSignDe
 from exceptions import FTXErrorGrid
 from exceptions import FTXErrorMsgType
 from exceptions import FTXErrorSuffix
-from pack import pack_callsign, save_callsign, pack_extra, pack58, unpack_callsign, unpack_extra, lookup_callsign, unpack58, \
+from pack import pack_callsign, save_callsign, pack_extra, pack58, unpack_callsign, unpack_extra, lookup_callsign, \
+    unpack58, \
     pack_basecall
 from text import FTX_CHAR_TABLE_FULL, charn, nchar, endswith_any
 from tools import byte, dword
@@ -145,32 +146,32 @@ def ftx_message_encode_std(call_to: str, call_de: str, extra: str) -> typing.Byt
 
 def ftx_message_decode_std(payload: typing.ByteString) -> typing.Tuple[str, str, str]:
     # Extract packed fields
-    n29a = payload[0] << 21
-    n29a |= payload[1] << 13
-    n29a |= payload[2] << 5
-    n29a |= payload[3] >> 3
+    n29_to = payload[0] << 21
+    n29_to |= payload[1] << 13
+    n29_to |= payload[2] << 5
+    n29_to |= payload[3] >> 3
 
-    n29b = (payload[3] & 0x07) << 26
-    n29b |= payload[4] << 18
-    n29b |= payload[5] << 10
-    n29b |= payload[6] << 2
-    n29b |= payload[7] >> 6
+    n29_de = (payload[3] & 0x07) << 26
+    n29_de |= payload[4] << 18
+    n29_de |= payload[5] << 10
+    n29_de |= payload[6] << 2
+    n29_de |= payload[7] >> 6
 
-    ir = (payload[7] & 0x20) >> 5
-    igrid4 = (payload[7] & 0x1F) << 10
-    igrid4 |= payload[8] << 2
-    igrid4 |= payload[9] >> 6
+    r_flag = (payload[7] & 0x20) >> 5
+    n16_extra = (payload[7] & 0x1F) << 10
+    n16_extra |= payload[8] << 2
+    n16_extra |= payload[9] >> 6
 
-    # Extract i3 (bits 74..76)
-    i3 = (payload[9] >> 3) & 0x07
+    # Extract cs_flags (bits 74..76)
+    cs_flags = (payload[9] >> 3) & 0x07
 
-    if (call_to := unpack_callsign(n29a >> 1, n29a & 1, i3)) is None:
+    if (call_to := unpack_callsign(n29_to >> 1, n29_to & 1, cs_flags)) is None:
         raise FTXErrorCallSignTo
 
-    if (call_de := unpack_callsign(n29b >> 1, n29b & 1, i3)) is None:
+    if (call_de := unpack_callsign(n29_de >> 1, n29_de & 1, cs_flags)) is None:
         raise FTXErrorCallSignDe
 
-    if (extra := unpack_extra(igrid4, ir > 0)) is None:
+    if (extra := unpack_extra(n16_extra, r_flag > 0)) is None:
         raise FTXErrorGrid
 
     return call_to, call_de, extra
