@@ -286,7 +286,7 @@ def unpack_extra(ex_16: int, is_report: bool) -> typing.Optional[str]:
             return irpt
 
         # Extract signal report as a two digit number with a + or - sign
-        return f"{'R' if is_report else ''}{int(irpt - 35):+03}"
+        return f"{'R' if is_report else ''}{int(ex_16 - FTX_MAX_GRID_4 - 35):+03}"
 
 
 def unpack58(n58: int) -> str:
