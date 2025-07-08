@@ -8,19 +8,15 @@ from consts import FTX_TOKEN_STR
 from consts import FTX_CALLSIGN_HASH_10_BITS
 from consts import FTX_CALLSIGN_HASH_12_BITS
 from consts import FTX_CALLSIGN_HASH_22_BITS
-from exceptions import FTXInvalidCallsign, FTXErrorGrid, FTXInvalidReport
+from exceptions import FTXInvalidCallsign, FTXInvalidReport
 from exceptions import FTXPackCallsignError
-from text import FTX_CHAR_TABLE_ALPHANUM
+from text import FTX_BASECALL_SUFFIX_FMT
 from text import FTX_GRID_CHAR_MAP
 from text import FTX_BASECALL_CHAR_MAP
-from text import FTX_CHAR_TABLE_ALPHANUM_SPACE
 from text import FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH
-from text import FTX_CHAR_TABLE_LETTERS
 from text import FTX_CHAR_TABLE_LETTERS_SPACE
-from text import FTX_CHAR_TABLE_NUMERIC
 from text import charn
 from text import endswith_any
-from text import in_range
 from text import nchar
 from tools import dword, qword
 
@@ -203,47 +199,46 @@ def pack58(callsign: str) -> typing.Optional[int]:
     return result
 
 
-def unpack_callsign(n28: int, ip: int, flags: int) -> typing.Optional[str]:
+def unpack_callsign(cs_28: int, flags: bool, suffix: int) -> typing.Optional[str]:
     # LOG(LOG_DEBUG, "unpack28() n28=%d i3=%d\n", n28, i3);
     # Check for special tokens DE, QRZ, CQ, CQ_nnn, CQ_aaaa
-    if n28 < NTOKENS:
-        if n28 <= 2:
-            return FTX_TOKEN_STR.get(n28)
+    if cs_28 < NTOKENS:
+        if cs_28 <= 2:
+            return FTX_TOKEN_STR.get(cs_28)
 
-        if n28 <= 1002:
+        if cs_28 <= 1002:
             # CQ nnn with 3 digits
-            return f"CQ_{n28 - 3:03}"
+            return f"CQ_{cs_28 - 3:03}"
 
-        if n28 <= 532443:
+        if cs_28 <= 532443:
             # CQ ABCD with 4 alphanumeric symbols
-            n = n28 - 1003
+            n = cs_28 - 1003
+
             aaaa = ""
             for i in range(4):
-                aaaa = charn(n % 27, FTX_CHAR_TABLE_LETTERS_SPACE) + aaaa
-                n //= 27
+                ct = FTX_CHAR_TABLE_LETTERS_SPACE
+                ct_l = len(ct)
+                aaaa = charn(n % ct_l, ct) + aaaa
+                n //= ct_l
+
             return f"CQ_{aaaa.strip()}"
 
         # unspecified
         return None
 
-    n28 -= NTOKENS
-    if n28 < MAX22:
+    cs_28 -= NTOKENS
+    if cs_28 < MAX22:
         # This is a 22-bit hash of a result
-        return lookup_callsign(FTX_CALLSIGN_HASH_22_BITS, n28)
+        return lookup_callsign(FTX_CALLSIGN_HASH_22_BITS, cs_28)
 
     # Standard callsign
-    n = n28 - MAX22
-    callsign = charn(n % 27, FTX_CHAR_TABLE_LETTERS_SPACE)
-    n //= 27
-    callsign = charn(n % 27, FTX_CHAR_TABLE_LETTERS_SPACE) + callsign
-    n //= 27
-    callsign = charn(n % 27, FTX_CHAR_TABLE_LETTERS_SPACE) + callsign
-    n //= 27
-    callsign = charn(n % 10, FTX_CHAR_TABLE_NUMERIC) + callsign
-    n //= 10
-    callsign = charn(n % 36, FTX_CHAR_TABLE_ALPHANUM) + callsign
-    n //= 36
-    callsign = charn(n % 37, FTX_CHAR_TABLE_ALPHANUM_SPACE) + callsign
+    n = cs_28 - MAX22
+
+    callsign = ""
+    for ct in reversed(FTX_BASECALL_CHAR_MAP):
+        ct_l = len(ct)
+        callsign = charn(n % ct_l, ct) + callsign
+        n //= ct_l
 
     callsign = callsign.strip()
 
@@ -258,17 +253,13 @@ def unpack_callsign(n28: int, ip: int, flags: int) -> typing.Optional[str]:
         # Skip trailing and leading whitespace in case of a short callsign
         result = callsign
 
-    length = len(result)
-    if length < 3:
+    if len(result) < 3:
         return None  # Callsign too short
 
     # Check if we should append /R or /P suffix
-    if ip:
-        # FIXME: Optimize
-        if flags == 1:
-            result = f"{result}/R"
-        elif flags == 2:
-            result = f"{result}/P"
+    if flags:
+        if fmt := FTX_BASECALL_SUFFIX_FMT.get(suffix):
+            result = fmt.format(cs=result)
         else:
             raise ValueError
 
@@ -278,9 +269,9 @@ def unpack_callsign(n28: int, ip: int, flags: int) -> typing.Optional[str]:
     return result
 
 
-def unpack_extra(extra: int, is_report: bool) -> typing.Optional[str]:
-    if extra <= FTX_MAX_GRID_4:
-        n = extra
+def unpack_extra(ex_16: int, is_report: bool) -> typing.Optional[str]:
+    if ex_16 <= FTX_MAX_GRID_4:
+        n = ex_16
         dst = ""
         # Extract 4 symbol grid locator
         for ct in reversed(FTX_GRID_CHAR_MAP):
@@ -291,7 +282,7 @@ def unpack_extra(extra: int, is_report: bool) -> typing.Optional[str]:
         # In case of ir add an "R " before grid
         return f"{'R ' if is_report else ''}{dst}"
     else:  # Extract report
-        if irpt := FTX_RESPONSE_EXTRAS_STR.get(extra):
+        if irpt := FTX_RESPONSE_EXTRAS_STR.get(ex_16):
             return irpt
 
         # Extract signal report as a two digit number with a + or - sign

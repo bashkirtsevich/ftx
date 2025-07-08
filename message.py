@@ -146,32 +146,33 @@ def ftx_message_encode_std(call_to: str, call_de: str, extra: str) -> typing.Byt
 
 def ftx_message_decode_std(payload: typing.ByteString) -> typing.Tuple[str, str, str]:
     # Extract packed fields
-    n29_to = payload[0] << 21
-    n29_to |= payload[1] << 13
-    n29_to |= payload[2] << 5
-    n29_to |= payload[3] >> 3
+    b29_to = payload[0] << 21
+    b29_to |= payload[1] << 13
+    b29_to |= payload[2] << 5
+    b29_to |= payload[3] >> 3
 
-    n29_de = (payload[3] & 0x07) << 26
-    n29_de |= payload[4] << 18
-    n29_de |= payload[5] << 10
-    n29_de |= payload[6] << 2
-    n29_de |= payload[7] >> 6
+    b29_de = (payload[3] & 0x07) << 26
+    b29_de |= payload[4] << 18
+    b29_de |= payload[5] << 10
+    b29_de |= payload[6] << 2
+    b29_de |= payload[7] >> 6
 
     r_flag = (payload[7] & 0x20) >> 5
-    n16_extra = (payload[7] & 0x1F) << 10
-    n16_extra |= payload[8] << 2
-    n16_extra |= payload[9] >> 6
+
+    b16_extra = (payload[7] & 0x1F) << 10
+    b16_extra |= payload[8] << 2
+    b16_extra |= payload[9] >> 6
 
     # Extract cs_flags (bits 74..76)
     cs_flags = (payload[9] >> 3) & 0x07
 
-    if (call_to := unpack_callsign(n29_to >> 1, n29_to & 1, cs_flags)) is None:
+    if (call_to := unpack_callsign(b29_to >> 1, bool(b29_to & 1), cs_flags)) is None:
         raise FTXErrorCallSignTo
 
-    if (call_de := unpack_callsign(n29_de >> 1, n29_de & 1, cs_flags)) is None:
+    if (call_de := unpack_callsign(b29_de >> 1, bool(b29_de & 1), cs_flags)) is None:
         raise FTXErrorCallSignDe
 
-    if (extra := unpack_extra(n16_extra, r_flag > 0)) is None:
+    if (extra := unpack_extra(b16_extra, bool(r_flag & 1))) is None:
         raise FTXErrorGrid
 
     return call_to, call_de, extra

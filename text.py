@@ -25,6 +25,11 @@ FTX_GRID_CHAR_MAP = [
     FTX_CHAR_TABLE_NUMERIC
 ]
 
+FTX_BASECALL_SUFFIX_FMT = {
+    1: "{cs}/R",
+    2: "{cs}/P",
+}
+
 
 def charn(c: int, table: str) -> str:
     # Convert integer index to ASCII character according to one of character tables
