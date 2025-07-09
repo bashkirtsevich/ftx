@@ -202,7 +202,7 @@ FTX_LDPC_GENERATOR = [
 # Each row describes one LDPC parity check.
 # Each number is an index into the codeword (1-origin).
 # The codeword bits mentioned in each row must XOR to zero.
-kFTX_LDPC_Nm = [
+FTX_LDPC_NM = [
     [4, 31, 59, 91, 92, 96, 153],
     [5, 32, 60, 93, 115, 146, 0],
     [6, 24, 61, 94, 122, 151, 0],
@@ -291,7 +291,7 @@ kFTX_LDPC_Nm = [
 # Each row corresponds to a codeword bit.
 # The numbers indicate which three LDPC parity checks (rows in Nm) refer to the codeword bit.
 # 1-origin.
-kFTX_LDPC_Mn = [
+FTX_LDPC_MN = [
     [16, 45, 73],
     [25, 51, 62],
     [33, 58, 78],
@@ -468,7 +468,7 @@ kFTX_LDPC_Mn = [
     [42, 49, 57],
 ]
 
-kFTX_LDPC_Num_rows = [
+FTX_LDPC_NUM_ROWS = [
     7, 6, 6, 6, 7, 6, 7, 6, 6, 7, 6, 6, 7, 7, 6, 6,
     6, 7, 6, 7, 6, 7, 6, 6, 6, 7, 6, 6, 6, 7, 6, 6,
     6, 6, 7, 6, 6, 6, 7, 7, 6, 6, 6, 6, 7, 7, 6, 6,

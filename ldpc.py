@@ -13,9 +13,9 @@ from consts import FTX_LDPC_K
 from consts import FTX_LDPC_M
 from consts import FTX_LDPC_N
 from consts import GEN_SYS
-from consts import kFTX_LDPC_Mn
-from consts import kFTX_LDPC_Nm
-from consts import kFTX_LDPC_Num_rows
+from consts import FTX_LDPC_MN
+from consts import FTX_LDPC_NM
+from consts import FTX_LDPC_NUM_ROWS
 
 
 # Ideas for approximating tanh/atanh:
@@ -63,11 +63,11 @@ def ldpc_decode(codeword: typing.List[float], max_iters: int) -> typing.Tuple[in
 
     for _ in range(max_iters):
         for j in range(FTX_LDPC_M):
-            for ii1 in range(kFTX_LDPC_Num_rows[j]):
-                i1 = kFTX_LDPC_Nm[j][ii1] - 1
+            for ii1 in range(FTX_LDPC_NUM_ROWS[j]):
+                i1 = FTX_LDPC_NM[j][ii1] - 1
                 a = 1.0
-                for ii2 in range(kFTX_LDPC_Num_rows[j]):
-                    i2 = kFTX_LDPC_Nm[j][ii2] - 1
+                for ii2 in range(FTX_LDPC_NUM_ROWS[j]):
+                    i2 = FTX_LDPC_NM[j][ii2] - 1
                     if i2 != i1:
                         a *= fast_tanh(-m[j][i2] / 2.0)
 
@@ -76,7 +76,7 @@ def ldpc_decode(codeword: typing.List[float], max_iters: int) -> typing.Tuple[in
         for i in range(FTX_LDPC_N):
             l = codeword[i]
             for j in range(3):
-                l += e[kFTX_LDPC_Mn[i][j] - 1][i]
+                l += e[FTX_LDPC_MN[i][j] - 1][i]
 
             plain[i] = int(l > 0)
 
@@ -89,11 +89,11 @@ def ldpc_decode(codeword: typing.List[float], max_iters: int) -> typing.Tuple[in
 
         for i in range(FTX_LDPC_N):
             for ji1 in range(3):
-                j1 = kFTX_LDPC_Mn[i][ji1] - 1
+                j1 = FTX_LDPC_MN[i][ji1] - 1
                 l = codeword[i]
                 for ji2 in range(3):
                     if ji1 != ji2:
-                        j2 = kFTX_LDPC_Mn[i][ji2] - 1
+                        j2 = FTX_LDPC_MN[i][ji2] - 1
                         l += e[j2][i]
                 m[j1][i] = l
 
@@ -110,8 +110,8 @@ def ldpc_check(codeword: bytes) -> int:
 
     for m in range(FTX_LDPC_M):
         x = 0
-        for i in range(kFTX_LDPC_Num_rows[m]):
-            x ^= codeword[kFTX_LDPC_Nm[m][i] - 1]
+        for i in range(FTX_LDPC_NUM_ROWS[m]):
+            x ^= codeword[FTX_LDPC_NM[m][i] - 1]
 
         if x:
             errors += 1
@@ -176,21 +176,21 @@ def bp_decode(codeword: typing.List[float], max_iters: int) -> typing.Tuple[int,
 
         # Send messages from bits to check nodes
         for m in range(FTX_LDPC_M):
-            for n_idx in range(kFTX_LDPC_Num_rows[m]):
-                n = kFTX_LDPC_Nm[m][n_idx] - 1
+            for n_idx in range(FTX_LDPC_NUM_ROWS[m]):
+                n = FTX_LDPC_NM[m][n_idx] - 1
                 Tnm = codeword[n]
                 for m_idx in range(3):
-                    if (kFTX_LDPC_Mn[n][m_idx] - 1) != m:
+                    if (FTX_LDPC_MN[n][m_idx] - 1) != m:
                         Tnm += tov[n][m_idx]
                 toc[m][n_idx] = fast_tanh(-Tnm / 2)
 
         # send messages from check nodes to variable nodes
         for n in range(FTX_LDPC_N):
             for m_idx in range(3):
-                m = kFTX_LDPC_Mn[n][m_idx] - 1
+                m = FTX_LDPC_MN[n][m_idx] - 1
                 Tmn = 1.0
-                for n_idx in range(kFTX_LDPC_Num_rows[m]):
-                    if (kFTX_LDPC_Nm[m][n_idx] - 1) != n:
+                for n_idx in range(FTX_LDPC_NUM_ROWS[m]):
+                    if (FTX_LDPC_NM[m][n_idx] - 1) != n:
                         Tmn *= toc[m][n_idx]
                 tov[n][m_idx] = -2 * fast_atanh(Tmn)
 
