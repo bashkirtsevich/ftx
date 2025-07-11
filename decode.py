@@ -9,7 +9,6 @@ import numpy as np
 from consts import *
 from crc import ftx_extract_crc, ftx_check_crc
 from encode import ft4_encode, ft8_encode
-from gfsk import M_PI
 from ldpc import bp_decode
 from message import ftx_message_decode
 from osd import osd_decode
@@ -77,7 +76,7 @@ class Monitor:
     # FT4/FT8 monitor object that manages DSP processing of incoming audio data and prepares a waterfall object
     @staticmethod
     def hann_i(i: int, N: int) -> float:
-        x = math.sin(M_PI * i / N)
+        x = math.sin(math.pi * i / N)
         return x ** 2
 
     @staticmethod
