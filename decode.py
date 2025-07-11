@@ -301,12 +301,13 @@ class Monitor:
     def ftx_sync_score(self, candidate: Candidate) -> int:
         wf = self.wf
 
-        syncs = {
-            FTX_PROTOCOL_FT4: self.ft4_sync_score,
-            FTX_PROTOCOL_FT8: self.ft8_sync_score,
-        }
+        if wf.protocol == FTX_PROTOCOL_FT4:
+            sync_fun = self.ft4_sync_score
+        elif wf.protocol == FTX_PROTOCOL_FT8:
+            sync_fun = self.ft8_sync_score
+        else:
+            raise ValueError("Invalid protocol")
 
-        sync_fun = syncs[wf.protocol]
         return sync_fun(candidate)
 
     def ftx_find_candidates(self, num_candidates: int, min_score: int) -> typing.List[Candidate]:
