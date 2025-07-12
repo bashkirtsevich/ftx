@@ -2,6 +2,7 @@ import math
 import typing
 from collections import namedtuple
 from copy import copy
+from dataclasses import dataclass
 from itertools import cycle
 
 import numpy as np
@@ -48,25 +49,13 @@ class Waterfall:
         self.protocol = protocol
 
 
+@dataclass
 class Candidate:
-    # Output structure of ftx_find_sync() and input structure of ftx_decode().
-    # Holds the position of potential start of a message in time and frequency.
-    def __init__(self, time_offset, freq_offset, time_sub, freq_sub, score=0):
-        self.score: int = score  # < Candidate score (non-negative number; higher score means higher likelihood)
-        self.time_offset: int = time_offset  # < Index of the time block
-        self.freq_offset: int = freq_offset  # < Index of the frequency bin
-        self.time_sub: int = time_sub  # < Index of the time subdivision used
-        self.freq_sub: int = freq_sub  # < Index of the frequency subdivision used
-
-    def __repr__(self):
-        return str(self)
-
-    def __str__(self):
-        return (f"[score: {self.score}; "
-                f"time_offset: {self.time_offset}; "
-                f"freq_offset: {self.freq_offset}; "
-                f"time_sub: {self.time_sub}; "
-                f"freq_sub: {self.freq_sub}]")
+    time_offset: int  # < Index of the time block
+    freq_offset: int  # < Index of the frequency bin
+    time_sub: int  # < Index of the time subdivision used
+    freq_sub: int  # < Index of the frequency subdivision used
+    score: int = 0  # < Candidate score (non-negative number; higher score means higher likelihood)
 
 
 DecodeStatus = namedtuple("DecodeStatus", ["ldpc_errors", "crc_extracted"])
