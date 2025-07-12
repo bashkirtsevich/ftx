@@ -20,6 +20,7 @@ kLDPC_iterations = 25
 kMaxLDPCErrors = 32
 
 
+@dataclass
 class Waterfall:
     # Input structure to ftx_find_sync() function. This structure describes stored waterfall data over the whole message slot.
     # Fields time_osr and freq_osr specify additional oversampling rate for time and frequency resolution.
@@ -28,25 +29,19 @@ class Waterfall:
     # If freq_osr=1, each bin in the FFT magnitude data corresponds to 6.25 Hz, which is the tone spacing.
     # Values freq_osr > 1 mean the tone spacing is further subdivided by FFT analysis.
 
-    def __init__(self, max_blocks: int, num_bins: int, time_osr: int, freq_osr: int, protocol):
-        # max_blocks;       ///< number of blocks (symbols) allocated in the mag array
-        # num_blocks;       ///< number of blocks (symbols) stored in the mag array
-        # num_bins;         ///< number of FFT bins in terms of 6.25 Hz
-        # time_osr;         ///< number of time subdivisions
-        # freq_osr;         ///< number of frequency subdivisions
-        # WF_ELEM_T* mag;   ///< FFT magnitudes stored as uint8_t[blocks][time_osr][freq_osr][num_bins]
-        # block_stride;     ///< Helper value = time_osr * freq_osr * num_bins
-        # protocol;         ///< Indicate if using FT4 or FT8
+    num_bins: int  # number of FFT bins in terms of 6.25 Hz
+    time_osr: int  # number of time subdivisions
+    freq_osr: int  # number of frequency subdivisions
+    protocol: int  # Indicate if using FT4 or FT8
+    mag = typing.List[int]  # FFT magnitudes stored as uint8_t[blocks][time_osr][freq_osr][num_bins]
+    max_blocks: int  # number of blocks (symbols) allocated in the mag array
 
-        self.max_blocks = max_blocks
-        self.num_blocks = 0
-        self.num_bins = num_bins
-        self.time_osr = time_osr
-        self.freq_osr = freq_osr
-        self.block_stride = (time_osr * freq_osr * num_bins)
-        self.mag = [0] * (max_blocks * time_osr * freq_osr * num_bins)
-        # self.mag = np.zeros(max_blocks * time_osr * freq_osr * num_bins, dtype=np.int16)
-        self.protocol = protocol
+    num_blocks: int = 0  # number of blocks (symbols) stored in the mag array
+    block_stride: int = 0  # Helper value = time_osr * freq_osr * num_bins
+
+    def __post_init__(self):
+        self.block_stride = (self.time_osr * self.freq_osr * self.num_bins)
+        self.mag = [0] * (self.max_blocks * self.time_osr * self.freq_osr * self.num_bins)
 
 
 @dataclass
@@ -141,7 +136,9 @@ class Monitor:
         self.max_bin = int(f_max * symbol_period + 1)
         num_bins = self.max_bin - self.min_bin
 
-        self.wf = Waterfall(max_blocks, num_bins, time_osr, freq_osr, protocol)
+        # max_blocks: int, num_bins: int, time_osr: int, freq_osr: int, protocol
+        self.wf = Waterfall(max_blocks=max_blocks, num_bins=num_bins, time_osr=time_osr, freq_osr=freq_osr,
+                            protocol=protocol)
 
         self.symbol_period = symbol_period
 
