@@ -312,30 +312,30 @@ def ftx_message_encode_telemetry(payload: typing.ByteString) -> typing.ByteStrin
     return data
 
 
-def ftx_message_decode_telemetry(payload: typing.ByteString) -> typing.Generator[int, None, None]:
+def ftx_message_decode_telemetry(data: typing.ByteString) -> typing.Generator[int, None, None]:
     # Shift bits in payload right by 1 bit to right-align the data
     carry = 0
-    for p_byte in payload:
+    for p_byte in data:
         yield byte((carry << 7) | (p_byte >> 1))
         carry = byte(p_byte & 0x01)
 
 
-def ftx_message_decode_telemetry_hex(payload: typing.ByteString) -> str:
-    b71 = ftx_message_decode_telemetry(payload)
+def ftx_message_decode_telemetry_hex(data: typing.ByteString) -> str:
+    b71 = ftx_message_decode_telemetry(data)
     return "".join(f"{b:x}" for b in b71)
 
 
-def ftx_message_decode_free(payload: typing.ByteString) -> str:
-    b71 = bytearray(ftx_message_decode_telemetry(payload))
-    c14 = " "
+def ftx_message_decode_free(data: typing.ByteString) -> str:
+    payload = bytearray(ftx_message_decode_telemetry(data))
+    text = " "
     for _ in range(12):
-        # Divide the long integer in b71 by 42
+        # Divide the long integer in payload by 42
         rem = 0
         for i in range(9):
-            rem = (rem << 8) | b71[i]
-            b71[i] = byte(rem // 42)
+            rem = (rem << 8) | payload[i]
+            payload[i] = byte(rem // 42)
             rem = rem % 42
 
-        c14 = charn(rem, FTX_CHAR_TABLE_FULL) + c14
+        text = charn(rem, FTX_CHAR_TABLE_FULL) + text
 
-    return c14.strip()
+    return text.strip()
