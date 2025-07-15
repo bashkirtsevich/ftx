@@ -286,7 +286,7 @@ def ftx_message_encode_free(text: str) -> typing.ByteString:
     if len(text) > 12:
         raise FTXErrorTooLong
 
-    payload = bytearray(b"\x00" * 12)
+    payload = bytearray(b"\x00" * 9)
     text = (" " * (12 - len(text))) + text
     for c in text:
         if (cid := nchar(c, FTX_CHAR_TABLE_FULL)) == -1:
@@ -302,7 +302,7 @@ def ftx_message_encode_free(text: str) -> typing.ByteString:
 
 
 def ftx_message_encode_telemetry(payload: typing.ByteString) -> typing.ByteString:
-    if len(payload) > 12:
+    if len(payload) > 9:
         raise FTXErrorTooLong
 
     # Shift bits in payload right by 1 bit to right-align the data
