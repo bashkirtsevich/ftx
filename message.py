@@ -302,6 +302,9 @@ def ftx_message_encode_free(text: str) -> typing.ByteString:
 
 
 def ftx_message_encode_telemetry(payload: typing.ByteString) -> typing.ByteString:
+    if len(payload) > 12:
+        raise FTXErrorTooLong
+
     # Shift bits in payload right by 1 bit to right-align the data
     carry = 0
     data = bytearray(b"\x00" * len(payload))
