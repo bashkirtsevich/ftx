@@ -24,6 +24,9 @@ FTX_MESSAGE_TYPE_NONSTD_CALL = 11  # 4     <WA9XYZ> PJ4/KA1ABC RR73           12
 FTX_MESSAGE_TYPE_WWROF = 12  # 5     TU; W9XYZ K1ABC R-07 FN            1 28 28 1 7 9    74   WWROF contest ?
 FTX_MESSAGE_TYPE_UNKNOWN = 13  # Unknown or invalid type
 
+FTX_MESSAGE_FREE_TEXT_LEN = 12
+FTX_MESSAGE_TELEMETRY_LEN = 9
+
 CALLSIGN_HASHTABLE_SIZE = 256
 
 FT8_SYMBOL_PERIOD = 0.160  # < FT8 symbol duration, defines tone deviation in Hz and symbol rate

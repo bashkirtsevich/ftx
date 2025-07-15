@@ -2,6 +2,8 @@ import typing
 from contextlib import suppress
 
 from consts import FTX_CALLSIGN_HASH_12_BITS
+from consts import FTX_MESSAGE_FREE_TEXT_LEN
+from consts import FTX_MESSAGE_TELEMETRY_LEN
 from consts import FTX_EXTRAS_CODE
 from consts import FTX_EXTRAS_STR
 from consts import FTX_MESSAGE_TYPE_ARRL_FD
@@ -283,17 +285,17 @@ def ftx_message_encode_nonstd(call_to: str, call_de: str, extra: str) -> typing.
 
 
 def ftx_message_encode_free(text: str) -> typing.ByteString:
-    if len(text) > 12:
+    if len(text) > FTX_MESSAGE_FREE_TEXT_LEN:
         raise FTXErrorTooLong
 
-    payload = bytearray(b"\x00" * 9)
-    text = (" " * (12 - len(text))) + text
+    payload = bytearray(b"\x00" * FTX_MESSAGE_TELEMETRY_LEN)
+    text = (" " * (FTX_MESSAGE_FREE_TEXT_LEN - len(text))) + text
     for c in text:
         if (cid := nchar(c, FTX_CHAR_TABLE_FULL)) == -1:
             raise FTXErrorInvalidChar
 
         rem = cid
-        for i in reversed(range(9)):
+        for i in reversed(range(FTX_MESSAGE_TELEMETRY_LEN)):
             rem += payload[i] * len(FTX_CHAR_TABLE_FULL)
             payload[i] = byte(rem)
             rem >>= 8
@@ -302,7 +304,7 @@ def ftx_message_encode_free(text: str) -> typing.ByteString:
 
 
 def ftx_message_encode_telemetry(payload: typing.ByteString) -> typing.ByteString:
-    if len(payload) > 9:
+    if len(payload) > FTX_MESSAGE_TELEMETRY_LEN:
         raise FTXErrorTooLong
 
     # Shift bits in payload right by 1 bit to right-align the data
@@ -331,10 +333,10 @@ def ftx_message_decode_telemetry_hex(data: typing.ByteString) -> str:
 def ftx_message_decode_free(data: typing.ByteString) -> str:
     payload = bytearray(ftx_message_decode_telemetry(data))
     text = " "
-    for _ in range(12):
+    for _ in range(FTX_MESSAGE_FREE_TEXT_LEN):
         # Divide the long integer in payload by 42
         rem = 0
-        for i in range(9):
+        for i in range(FTX_MESSAGE_TELEMETRY_LEN):
             rem = (rem << 8) | payload[i]
             payload[i] = byte(rem // 42)
             rem = rem % 42
