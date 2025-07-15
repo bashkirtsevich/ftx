@@ -338,8 +338,8 @@ def ftx_message_decode_free(data: typing.ByteString) -> str:
         rem = 0
         for i in range(FTX_MESSAGE_TELEMETRY_LEN):
             rem = (rem << 8) | payload[i]
-            payload[i] = byte(rem // 42)
-            rem = rem % 42
+            payload[i] = byte(rem // len(FTX_CHAR_TABLE_FULL))
+            rem = rem % len(FTX_CHAR_TABLE_FULL)
 
         text = charn(rem, FTX_CHAR_TABLE_FULL) + text
 
