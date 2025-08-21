@@ -1,24 +1,27 @@
+import typing
+
 import numpy as np
 from scipy.io.wavfile import write
 
 from consts import *
 from encode import ft8_encode, ft4_encode
 from gfsk import synth_gfsk, FT4_SYMBOL_BT, FT8_SYMBOL_BT
-from message import ftx_message_encode
+from message import ftx_message_encode, ftx_message_encode_free
 
 
-def main():
-    try:
-        # call = "R9FEU/P R1AAA/R R+01"
-        call = "CQ R9FEU LO87"
-        payload = ftx_message_encode(*call.split())
-        # payload = ftx_message_encode_free("0123456789AB")
-    except Exception as e:
-        print(f"Cannot parse message: {type(e)}")
-        return
+def gen_signal(tones: typing.List[int], frequency: int, sample_rate: int, is_ft4: bool):
+    symbol_period = FT4_SYMBOL_PERIOD if is_ft4 else FT8_SYMBOL_PERIOD
+    symbol_bt = FT4_SYMBOL_BT if is_ft4 else FT8_SYMBOL_BT
 
-    is_ft4 = False
-    # is_ft4 = True
+    num_tones = FT4_NN if is_ft4 else FT8_NN
+
+    signal = np.fromiter(synth_gfsk(tones, num_tones, frequency, symbol_bt, symbol_period, sample_rate), dtype=float)
+
+    return signal
+
+
+def gen_free_text_tones(msg: str, is_ft4: bool) -> typing.List[int]:
+    payload = ftx_message_encode_free(msg)
 
     if is_ft4:
         tones = ft4_encode(payload)
@@ -27,25 +30,28 @@ def main():
 
     tones = list(tones)
 
-    print("FSK tones:", "".join(str(i) for i in tones))
+    return tones
 
-    frequency = 1000
+
+def main():
+    sample_rate = 12000
+    is_ft4 = False
+
+    print("Gen tones")
+    tones = gen_free_text_tones(f"0123456789AB", is_ft4=is_ft4)
+
+    print("Gen signal")
+    signal = gen_signal(tones, 1000, sample_rate=sample_rate, is_ft4=is_ft4)
 
     symbol_period = FT4_SYMBOL_PERIOD if is_ft4 else FT8_SYMBOL_PERIOD
-    symbol_bt = FT4_SYMBOL_BT if is_ft4 else FT8_SYMBOL_BT
 
-    sample_rate = 12000
     num_tones = FT4_NN if is_ft4 else FT8_NN
     slot_time = FT4_SLOT_TIME if is_ft4 else FT8_SLOT_TIME
 
     num_samples = int(0.5 + num_tones * symbol_period * sample_rate)
     num_silence = int((slot_time * sample_rate - num_samples) / 2)
 
-    signal = np.fromiter(synth_gfsk(tones, num_tones, frequency, symbol_bt, symbol_period, sample_rate), dtype=float)
-    # save_wav(signal, sample_rate, "example.wav")
-    # data = np.array(signal)
-    # write("example.wav", sample_rate, data)
-
+    print("Write signals")
     silence = np.zeros(num_silence)
     amplitude = np.iinfo(np.int16).max
     data = np.concat([silence, amplitude * signal, silence])
