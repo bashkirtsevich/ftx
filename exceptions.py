@@ -2,6 +2,14 @@ class FTXException(Exception):
     pass
 
 
+class FTXErrorCallSign(FTXException):
+    pass
+
+
+class FTXErrorExtra(FTXException):
+    pass
+
+
 class FTXErrorCallSignTo(FTXException):
     pass
 

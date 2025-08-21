@@ -4,18 +4,22 @@ from scipy.io.wavfile import write
 from consts import *
 from encode import ft8_encode, ft4_encode
 from gfsk import synth_gfsk, FT4_SYMBOL_BT, FT8_SYMBOL_BT
-from message import ftx_message_encode
+from message import ftx_message_encode, ftx_message_decode, ftx_message_encode_free, ftx_message_decode_free
 
 
 def main():
     try:
         # call = "R9FEU/P R1AAA/R R+01"
-        call = "CQ R9FEU LO87"
+        # call = "R9FEU R1AAA R+01"
+        call = "CQ R9FEU LO88"
+        # call = "R2CBA R1ABC RR73"
         payload = ftx_message_encode(*call.split())
         # payload = ftx_message_encode_free("0123456789AB")
     except Exception as e:
         print(f"Cannot parse message: {type(e)}")
         return
+
+    print("Payload", ''.join('{:08b}'.format(x) for x in payload))
 
     is_ft4 = False
     # is_ft4 = True

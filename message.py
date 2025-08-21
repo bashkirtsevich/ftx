@@ -1,7 +1,12 @@
+import abc
+import re
 import typing
 from contextlib import suppress
+from dataclasses import dataclass
+from enum import Enum
+from functools import reduce
 
-from consts import FTX_CALLSIGN_HASH_12_BITS
+from consts import FTX_CALLSIGN_HASH_12_BITS, FTX_RESPONSE_EXTRAS_CODE, FTX_MAX_GRID_4
 from consts import FTX_MESSAGE_FREE_TEXT_LEN
 from consts import FTX_MESSAGE_TELEMETRY_LEN
 from consts import FTX_EXTRAS_CODE
@@ -16,7 +21,8 @@ from consts import FTX_MESSAGE_TYPE_STANDARD
 from consts import FTX_MESSAGE_TYPE_TELEMETRY
 from consts import FTX_MESSAGE_TYPE_UNKNOWN
 from consts import FTX_MESSAGE_TYPE_WWROF
-from exceptions import FTXErrorCallSignTo, FTXErrorTooLong, FTXErrorInvalidChar, FTXException
+from exceptions import FTXErrorCallSignTo, FTXErrorTooLong, FTXErrorInvalidChar, FTXException, FTXErrorCallSign, \
+    FTXErrorExtra
 from exceptions import FTXErrorCallSignDe
 from exceptions import FTXErrorGrid
 from exceptions import FTXErrorMsgType
@@ -24,9 +30,159 @@ from exceptions import FTXErrorSuffix
 from pack import pack_callsign, save_callsign, pack_extra, pack58, unpack_callsign, unpack_extra, lookup_callsign, \
     unpack58, \
     pack_basecall
-from text import FTX_CHAR_TABLE_FULL, charn, nchar, endswith_any
+from text import FTX_CHAR_TABLE_FULL, charn, nchar, endswith_any, FTX_GRID_CHAR_MAP
 from tools import byte, dword
 
+
+@dataclass
+class Callsign:
+    callsign: str
+    suffix: typing.Optional[str] = None
+
+    def __init__(self, call: str, suffix: typing.Optional[str] = None):
+        if len(call) > 11:
+            raise FTXErrorCallSign
+
+        if isinstance(suffix, str):
+            suffix = suffix.upper()
+
+            if suffix not in {"R", "P"}:
+                raise FTXErrorSuffix
+
+        super().__init__(call.upper(), suffix)
+
+    def __str__(self):
+        return self.callsign + (f"/{self.suffix}" if self.suffix else "")
+
+    def __repr__(self):
+        return str(self)
+
+
+class ExtraType(Enum):
+    ROGER = 1
+    GRID = 2
+    REPORT = 3
+
+@dataclass
+class Extra:
+    extra: str
+    _value: typing.Any
+    _type: "ExtraType"
+
+    def __post_init__(self):
+        if id_resp := FTX_RESPONSE_EXTRAS_CODE.get(self.extra):
+            self._type = ExtraType.ROGER
+            self._value = id_resp
+        # Check for standard 4 letter grid
+        elif re.match(r"^(([A-R]{2})([0-9]{2}))$", self.extra):
+            self._type = ExtraType.GRID
+            self._value = self.extra
+        # Parse report: +dd / -dd / R+dd / R-dd
+        elif report := re.match(r"^(R){0,1}([\+\-]{0,1}[0-9]+)$", self.extra):
+            self._type = ExtraType.REPORT
+            self._value = report.groups()
+        else:
+            raise ValueError  # FIXME
+
+    def _encode_grid(self) -> int:
+        n_chars = list(map(nchar, self._value, FTX_GRID_CHAR_MAP))
+        n = reduce(lambda a, it: a * len(it[0]) + it[1], zip(FTX_GRID_CHAR_MAP, n_chars), 0)
+        return n
+
+    def _encode_report(self):
+        r_sign, r_val = self._value
+        i_report = int(r_val) + 35
+        return (FTX_MAX_GRID_4 + i_report) | (0x8000 if r_sign is not None else 0)
+
+    def encode(self) -> int:
+        match self._type:
+            case ExtraType.ROGER:
+                return self._value
+            case  ExtraType.GRID:
+                return self._encode_grid()
+            case ExtraType.REPORT:
+                return self._encode_report()
+            case _:
+                raise ValueError  # FIXME
+
+
+
+class Message:
+    call_to: Callsign = None
+    call_de: Callsign = None
+    extra: Extra = None
+    raw: typing.Optional[typing.Union[str, typing.ByteString]] = None
+
+    def encode(self) -> typing.ByteString:
+        pass
+
+class WSMessage(Message, metaclass=abc.ABCMeta):
+    @staticmethod
+    def _compute_crc_x(data: typing.ByteString, num_bits: int, crc_width, polynomial: int, top_bit: int) -> int:
+        remainder = 0
+        idx_byte = 0
+
+        for idx_bit in range(num_bits):
+            if idx_bit % 8 == 0:
+                remainder ^= data[idx_byte] << (crc_width - 8)
+                idx_byte += 1
+
+            if remainder & top_bit != 0:
+                remainder = (remainder << 1) ^ polynomial
+            else:
+                remainder = remainder << 1
+
+        return remainder & ((top_bit << 1) - 1)
+
+    @staticmethod
+    @abc.abstractmethod
+    def _extract_crc(a91: typing.ByteString) -> int:
+        ...
+
+    @classmethod
+    @abc.abstractmethod
+    def _add_crc(cls, payload: typing.ByteString) -> typing.ByteString:
+        ...
+
+
+@dataclass
+class FTXMessage(WSMessage):
+    _FTX_CRC_POLYNOMIAL = 0x2757
+    _FTX_CRC_WIDTH = 14
+    _FTX_CRC_TOP_BIT = 1 << (_FTX_CRC_WIDTH - 1)
+
+    @classmethod
+    def _compute_crc_14(cls, data: typing.ByteString, num_bits: int)->int:
+        return cls._compute_crc_x(
+            data, num_bits,
+            crc_width=cls._FTX_CRC_WIDTH,
+            polynomial=cls._FTX_CRC_POLYNOMIAL,
+            top_bit=cls._FTX_CRC_TOP_BIT
+        )
+
+    @staticmethod
+    def _extract_crc(a91: typing.ByteString) -> int:
+        return ((a91[9] & 0x07) << 11) | (a91[10] << 3) | (a91[11] >> 5)
+
+    @classmethod
+    def _add_crc(cls, payload: typing.ByteString) -> typing.ByteString:
+        # Copy 77 bits of payload data
+        message = payload + (b"\x00" * (FTX_LDPC_K_BYTES - len(payload)))
+
+        # Clear 3 bits after the payload to make 82 bits
+        message[-3] &= 0xf8
+        message[-2] = 0
+
+        # Calculate CRC of 82 bits (77 + 5 zeros)
+        # 'The CRC is calculated on the source-encoded message, zero-extended from 77 to 82 bits'
+        checksum = cls._compute_crc_14(message, FTX_MESSAGE_BITS)
+
+        # Store the CRC at the end of 77 bit message
+        message[-3] |= byte(checksum >> 11)
+        message[-2] = byte(checksum >> 3)
+        message[-1] = byte(checksum << 5)
+
+        return message
 
 def ftx_message_encode(call_to: str, call_de: str, extra: str = "") -> typing.ByteString:
     if len(call_to) > 11:
@@ -46,58 +202,6 @@ def ftx_message_encode(call_to: str, call_de: str, extra: str = "") -> typing.By
 
     with suppress(FTXException):
         return ftx_message_encode_free(call_to)
-
-
-def ftx_message_decode(payload: typing.ByteString) -> typing.Tuple[str, typing.Optional[str], typing.Optional[str]]:
-    msg_type = ftx_message_get_type(payload)
-    if msg_type == FTX_MESSAGE_TYPE_STANDARD:
-        field1, field2, field3 = ftx_message_decode_std(payload)
-    elif msg_type == FTX_MESSAGE_TYPE_NONSTD_CALL:
-        field1, field2, field3 = ftx_message_decode_nonstd(payload)
-    elif msg_type == FTX_MESSAGE_TYPE_FREE_TEXT:
-        field1 = ftx_message_decode_free(payload)
-        field2 = None
-        field3 = None
-    elif msg_type == FTX_MESSAGE_TYPE_TELEMETRY:
-        field1 = ftx_message_decode_telemetry_hex(payload)
-        field2 = None
-        field3 = None
-    else:
-        # not handled yet
-        raise FTXErrorMsgType
-
-    return field1, field2, field3
-
-
-def ftx_message_get_type(payload: typing.ByteString) -> int:
-    # Extract i3 (bits 74..76)
-    # FIXME: Optimize, use dict instead
-    i3 = (payload[9] >> 3) & 0x07
-    if i3 == 0:
-        # Extract n3 (bits 71..73)
-        n3 = ((payload[8] << 2) & 0x04) | ((payload[9] >> 6) & 0x03)
-        if n3 == 0:
-            return FTX_MESSAGE_TYPE_FREE_TEXT
-        elif n3 == 1:
-            return FTX_MESSAGE_TYPE_DXPEDITION
-        elif n3 == 2:
-            return FTX_MESSAGE_TYPE_EU_VHF
-        elif n3 < 5:
-            return FTX_MESSAGE_TYPE_ARRL_FD
-        elif n3 == 5:
-            return FTX_MESSAGE_TYPE_TELEMETRY
-        else:
-            return FTX_MESSAGE_TYPE_UNKNOWN
-    elif i3 < 3:
-        return FTX_MESSAGE_TYPE_STANDARD
-    elif i3 == 3:
-        return FTX_MESSAGE_TYPE_ARRL_RTTY
-    elif i3 == 4:
-        return FTX_MESSAGE_TYPE_NONSTD_CALL
-    elif i3 == 5:
-        return FTX_MESSAGE_TYPE_WWROF
-    else:
-        return FTX_MESSAGE_TYPE_UNKNOWN
 
 
 def ftx_message_encode_std(call_to: str, call_de: str, extra: str) -> typing.ByteString:
@@ -144,85 +248,6 @@ def ftx_message_encode_std(call_to: str, call_de: str, extra: str) -> typing.Byt
         byte(b16_extra << 6) | byte(suffix << 3)
     ]
     return bytearray(b for b in bytes)
-
-
-def ftx_message_decode_std(payload: typing.ByteString) -> typing.Tuple[str, str, str]:
-    # Extract packed fields
-    b29_to = payload[0] << 21
-    b29_to |= payload[1] << 13
-    b29_to |= payload[2] << 5
-    b29_to |= payload[3] >> 3
-
-    b29_de = (payload[3] & 0x07) << 26
-    b29_de |= payload[4] << 18
-    b29_de |= payload[5] << 10
-    b29_de |= payload[6] << 2
-    b29_de |= payload[7] >> 6
-
-    r_flag = (payload[7] & 0x20) >> 5
-
-    b16_extra = (payload[7] & 0x1F) << 10
-    b16_extra |= payload[8] << 2
-    b16_extra |= payload[9] >> 6
-
-    # Extract cs_flags (bits 74..76)
-    cs_flags = (payload[9] >> 3) & 0x07
-
-    if (call_to := unpack_callsign(b29_to >> 1, bool(b29_to & 1), cs_flags)) is None:
-        raise FTXErrorCallSignTo
-
-    if (call_de := unpack_callsign(b29_de >> 1, bool(b29_de & 1), cs_flags)) is None:
-        raise FTXErrorCallSignDe
-
-    if (extra := unpack_extra(b16_extra, bool(r_flag & 1))) is None:
-        raise FTXErrorGrid
-
-    return call_to, call_de, extra
-
-
-def ftx_message_decode_nonstd(payload: typing.ByteString) -> typing.Tuple[str, str, str]:
-    # non-standard messages, code originally by KD8CEC
-    n12 = payload[0] << 4  # 11 ~ 4 : 8
-    n12 |= payload[1] >> 4  # 3 ~ 0  : 12
-
-    n58 = (payload[1] & 0x0F) << 54  # 57 ~ 54 : 4
-    n58 |= payload[2] << 46  # 53 ~ 46 : 12
-    n58 |= payload[3] << 38  # 45 ~ 38 : 12
-    n58 |= payload[4] << 30  # 37 ~ 30 : 12
-    n58 |= payload[5] << 22  # 29 ~ 22 : 12
-    n58 |= payload[6] << 14  # 21 ~ 14 : 12
-    n58 |= payload[7] << 6  # 13 ~ 6  : 12
-    n58 |= payload[8] >> 2  # 5 ~ 0   : 765432 10
-
-    iflip = (payload[8] >> 1) & 0x01  # 76543210
-    nrpt = (payload[8] & 0x01) << 1
-    nrpt |= payload[9] >> 7  # 76543210
-    icq = (payload[9] >> 6) & 0x01
-
-    # Extract i3 (bits 74..76)
-    # i3 = (payload[9] >> 3) & 0x07  # UNUSED
-
-    # Decode one of the calls from 58 bit encoded string
-    call_decoded = unpack58(n58)
-
-    # Decode the other call from hash lookup table
-    call_3 = lookup_callsign(FTX_CALLSIGN_HASH_12_BITS, n12)
-
-    # Possibly flip them around
-    call_1 = call_decoded if iflip else call_3
-    call_2 = call_3 if iflip else call_decoded
-
-    if not icq:
-        call_to = call_1
-
-        extra = FTX_EXTRAS_STR.get(nrpt, "")
-    else:
-        call_to = "CQ"
-        extra = ""
-
-    call_de = call_2
-
-    return call_to, call_de, extra
 
 
 def ftx_message_encode_nonstd(call_to: str, call_de: str, extra: str) -> typing.ByteString:
@@ -315,6 +340,137 @@ def ftx_message_encode_telemetry(payload: typing.ByteString) -> typing.ByteStrin
         carry = byte(t_byte & 0x80)
 
     return data
+
+
+def ftx_message_get_type(payload: typing.ByteString) -> int:
+    # Extract i3 (bits 74..76)
+    # FIXME: Optimize, use dict instead
+    i3 = (payload[9] >> 3) & 0x07
+    if i3 == 0:
+        # Extract n3 (bits 71..73)
+        n3 = ((payload[8] << 2) & 0x04) | ((payload[9] >> 6) & 0x03)
+        if n3 == 0:
+            return FTX_MESSAGE_TYPE_FREE_TEXT
+        elif n3 == 1:
+            return FTX_MESSAGE_TYPE_DXPEDITION
+        elif n3 == 2:
+            return FTX_MESSAGE_TYPE_EU_VHF
+        elif n3 < 5:
+            return FTX_MESSAGE_TYPE_ARRL_FD
+        elif n3 == 5:
+            return FTX_MESSAGE_TYPE_TELEMETRY
+        else:
+            return FTX_MESSAGE_TYPE_UNKNOWN
+    elif i3 < 3:
+        return FTX_MESSAGE_TYPE_STANDARD
+    elif i3 == 3:
+        return FTX_MESSAGE_TYPE_ARRL_RTTY
+    elif i3 == 4:
+        return FTX_MESSAGE_TYPE_NONSTD_CALL
+    elif i3 == 5:
+        return FTX_MESSAGE_TYPE_WWROF
+    else:
+        return FTX_MESSAGE_TYPE_UNKNOWN
+
+
+def ftx_message_decode(payload: typing.ByteString) -> typing.Tuple[str, typing.Optional[str], typing.Optional[str]]:
+    msg_type = ftx_message_get_type(payload)
+    if msg_type == FTX_MESSAGE_TYPE_STANDARD:
+        field1, field2, field3 = ftx_message_decode_std(payload)
+    elif msg_type == FTX_MESSAGE_TYPE_NONSTD_CALL:
+        field1, field2, field3 = ftx_message_decode_nonstd(payload)
+    elif msg_type == FTX_MESSAGE_TYPE_FREE_TEXT:
+        field1 = ftx_message_decode_free(payload)
+        field2 = None
+        field3 = None
+    elif msg_type == FTX_MESSAGE_TYPE_TELEMETRY:
+        field1 = ftx_message_decode_telemetry_hex(payload)
+        field2 = None
+        field3 = None
+    else:
+        # not handled yet
+        raise FTXErrorMsgType
+
+    return field1, field2, field3
+
+
+def ftx_message_decode_std(payload: typing.ByteString) -> typing.Tuple[str, str, str]:
+    # Extract packed fields
+    b29_to = payload[0] << 21
+    b29_to |= payload[1] << 13
+    b29_to |= payload[2] << 5
+    b29_to |= payload[3] >> 3
+
+    b29_de = (payload[3] & 0x07) << 26
+    b29_de |= payload[4] << 18
+    b29_de |= payload[5] << 10
+    b29_de |= payload[6] << 2
+    b29_de |= payload[7] >> 6
+
+    r_flag = (payload[7] & 0x20) >> 5
+
+    b16_extra = (payload[7] & 0x1F) << 10
+    b16_extra |= payload[8] << 2
+    b16_extra |= payload[9] >> 6
+
+    # Extract cs_flags (bits 74..76)
+    cs_flags = (payload[9] >> 3) & 0x07
+
+    if (call_to := unpack_callsign(b29_to >> 1, bool(b29_to & 1), cs_flags)) is None:
+        raise FTXErrorCallSignTo
+
+    if (call_de := unpack_callsign(b29_de >> 1, bool(b29_de & 1), cs_flags)) is None:
+        raise FTXErrorCallSignDe
+
+    if (extra := unpack_extra(b16_extra, bool(r_flag & 1))) is None:
+        raise FTXErrorGrid
+
+    return call_to, call_de, extra
+
+
+def ftx_message_decode_nonstd(payload: typing.ByteString) -> typing.Tuple[str, str, str]:
+    # non-standard messages, code originally by KD8CEC
+    n12 = payload[0] << 4  # 11 ~ 4 : 8
+    n12 |= payload[1] >> 4  # 3 ~ 0  : 12
+
+    n58 = (payload[1] & 0x0F) << 54  # 57 ~ 54 : 4
+    n58 |= payload[2] << 46  # 53 ~ 46 : 12
+    n58 |= payload[3] << 38  # 45 ~ 38 : 12
+    n58 |= payload[4] << 30  # 37 ~ 30 : 12
+    n58 |= payload[5] << 22  # 29 ~ 22 : 12
+    n58 |= payload[6] << 14  # 21 ~ 14 : 12
+    n58 |= payload[7] << 6  # 13 ~ 6  : 12
+    n58 |= payload[8] >> 2  # 5 ~ 0   : 765432 10
+
+    iflip = (payload[8] >> 1) & 0x01  # 76543210
+    nrpt = (payload[8] & 0x01) << 1
+    nrpt |= payload[9] >> 7  # 76543210
+    icq = (payload[9] >> 6) & 0x01
+
+    # Extract i3 (bits 74..76)
+    # i3 = (payload[9] >> 3) & 0x07  # UNUSED
+
+    # Decode one of the calls from 58 bit encoded string
+    call_decoded = unpack58(n58)
+
+    # Decode the other call from hash lookup table
+    call_3 = lookup_callsign(FTX_CALLSIGN_HASH_12_BITS, n12)
+
+    # Possibly flip them around
+    call_1 = call_decoded if iflip else call_3
+    call_2 = call_3 if iflip else call_decoded
+
+    if not icq:
+        call_to = call_1
+
+        extra = FTX_EXTRAS_STR.get(nrpt, "")
+    else:
+        call_to = "CQ"
+        extra = ""
+
+    call_de = call_2
+
+    return call_to, call_de, extra
 
 
 def ftx_message_decode_telemetry(data: typing.ByteString) -> typing.Generator[int, None, None]:
