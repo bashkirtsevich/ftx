@@ -67,5 +67,5 @@ def main():
 
 
 if __name__ == '__main__':
-    # python -m cProfile -s time demo_decode.py
+    # python -m cProfile -s time demo_decode_ftx.py
     main()
