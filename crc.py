@@ -16,38 +16,40 @@ MSKX_PAYLOAD_BITS = 96
 MSKX_MESSAGE_BITS = MSKX_PAYLOAD_BITS - MSKX_CRC_WIDTH
 
 
-def ftx_compute_crc(message: typing.ByteString, num_bits: int) -> int:
+def compute_crc(message: typing.ByteString, num_bits: int,
+                crc_width: int, crc_top_bit: int, crc_polynomial: int) -> int:
     remainder = 0
     idx_byte = 0
 
     for idx_bit in range(num_bits):
         if idx_bit % 8 == 0:
-            remainder ^= message[idx_byte] << (FTX_CRC_WIDTH - 8)
+            remainder ^= message[idx_byte] << (crc_width - 8)
             idx_byte += 1
 
-        if remainder & FTX_CRC_TOP_BIT != 0:
-            remainder = (remainder << 1) ^ FTX_CRC_POLYNOMIAL
+        if remainder & crc_top_bit != 0:
+            remainder = (remainder << 1) ^ crc_polynomial
         else:
             remainder = remainder << 1
 
-    return remainder & ((FTX_CRC_TOP_BIT << 1) - 1)
+    return remainder & ((crc_top_bit << 1) - 1)
+
+
+def ftx_compute_crc(message: typing.ByteString, num_bits: int) -> int:
+    return compute_crc(
+        message, num_bits,
+        crc_width=FTX_CRC_WIDTH,
+        crc_top_bit=FTX_CRC_TOP_BIT,
+        crc_polynomial=FTX_CRC_POLYNOMIAL
+    )
 
 
 def mskx_compute_crc(message: typing.ByteString, num_bits: int) -> int:
-    remainder = 0
-    idx_byte = 0
-
-    for idx_bit in range(num_bits):
-        if idx_bit % 8 == 0:
-            remainder ^= message[idx_byte] << (MSKX_CRC_WIDTH - 8)
-            idx_byte += 1
-
-        if remainder & MSKX_CRC_TOP_BIT != 0:
-            remainder = (remainder << 1) ^ MSKX_CRC_POLYNOMIAL
-        else:
-            remainder = remainder << 1
-
-    return remainder & ((MSKX_CRC_TOP_BIT << 1) - 1)
+    return compute_crc(
+        message, num_bits,
+        crc_width=MSKX_CRC_WIDTH,
+        crc_top_bit=MSKX_CRC_TOP_BIT,
+        crc_polynomial=MSKX_CRC_POLYNOMIAL
+    )
 
 
 def ftx_extract_crc(a91: typing.ByteString) -> int:
@@ -75,18 +77,13 @@ def ftx_add_crc(payload: typing.ByteString) -> typing.ByteString:
 
 
 def mskx_add_crc(payload: typing.ByteString) -> typing.ByteString:
-    # Copy 77 bits of payload data
     message = payload + (b"\x00" * (MSKX_LDPC_K_BYTES - len(payload)))
 
-    # Clear 2 bits after the payload to make 83 bits
     message[-3] &= 0xfc
     message[-2] = 0
 
-    # Calculate CRC of 83 bits (77 + 5 zeros)
-    # 'The CRC is calculated on the source-encoded message, zero-extended from 77 to 82 bits'
     checksum = mskx_compute_crc(message, MSKX_MESSAGE_BITS)
 
-    # Store the CRC at the end of 77 bit message
     message[-3] |= byte(checksum >> 10)
     message[-2] = byte(checksum >> 2)
     message[-1] = byte(checksum << 6)
