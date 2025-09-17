@@ -1,9 +1,9 @@
-from message import ftx_message_encode, ftx_message_decode
+from message import message_encode, message_decode
 
 
 def test_std_msg(call_to_tx, call_de_tx, extra_tx):
-    payload = ftx_message_encode(call_to_tx, call_de_tx, extra_tx)
-    call_to_rx, call_de_rx, extra_rx = ftx_message_decode(payload)
+    payload = message_encode(call_to_tx, call_de_tx, extra_tx)
+    call_to_rx, call_de_rx, extra_rx = message_decode(payload)
 
     assert call_to_tx == call_to_rx
     assert call_de_tx == call_de_rx

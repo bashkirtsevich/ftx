@@ -11,7 +11,7 @@ from consts import *
 from crc import ftx_extract_crc, ftx_check_crc
 from encode import ft4_encode, ft8_encode
 from ldpc import bp_decode
-from message import ftx_message_decode
+from message import message_decode
 from osd import osd_decode
 
 kMin_score = 5  # Minimum sync score threshold for candidates
@@ -585,6 +585,6 @@ class Monitor:
 
             hashes.add(crc)
 
-            call_to_rx, call_de_rx, extra_rx = ftx_message_decode(message)
+            call_to_rx, call_de_rx, extra_rx = message_decode(message)
 
             yield snr, time_sec, freq_hz, " ".join([call_to_rx, call_de_rx or "", extra_rx or ""])

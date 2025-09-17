@@ -6,7 +6,7 @@ from scipy.io.wavfile import write
 from consts import *
 from encode import ft8_encode, ft4_encode
 from gfsk import synth_gfsk, FT4_SYMBOL_BT, FT8_SYMBOL_BT
-from message import ftx_message_encode, ftx_message_encode_free
+from message import message_encode, message_encode_free
 
 
 def gen_signal(tones: typing.List[int], frequency: int, sample_rate: int, is_ft4: bool):
@@ -32,13 +32,13 @@ def gen_ftx_tones(payload: typing.ByteString, is_ft4: bool) -> typing.List[int]:
 
 
 def gen_free_text_tones(msg: str, is_ft4: bool) -> typing.List[int]:
-    payload = ftx_message_encode_free(msg)
+    payload = message_encode_free(msg)
 
     return gen_ftx_tones(payload, is_ft4)
 
 
 def gen_msg_tones(call_to: str, call_de: str, extra: str, is_ft4: bool) -> typing.List[int]:
-    payload = ftx_message_encode(call_to, call_de, extra)
+    payload = message_encode(call_to, call_de, extra)
 
     return gen_ftx_tones(payload, is_ft4)
 

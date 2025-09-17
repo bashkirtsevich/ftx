@@ -4,7 +4,7 @@ import numpy as np
 from scipy.io.wavfile import write
 
 from encode import msk144_encode
-from message import ftx_message_encode, ftx_message_encode_free
+from message import message_encode, message_encode_free
 from msk import mskx_gen_signal
 
 
@@ -23,13 +23,13 @@ def gen_msk144_tones(payload: typing.ByteString) -> typing.List[int]:
 
 
 def gen_free_text_tones(msg: str) -> typing.List[int]:
-    payload = ftx_message_encode_free(msg)
+    payload = message_encode_free(msg)
 
     return gen_msk144_tones(payload)
 
 
 def gen_msg_tones(call_to: str, call_de: str, extra: str) -> typing.List[int]:
-    payload = ftx_message_encode(call_to, call_de, extra)
+    payload = message_encode(call_to, call_de, extra)
 
     return gen_msk144_tones(payload)
 
