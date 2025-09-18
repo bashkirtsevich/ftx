@@ -2,7 +2,7 @@ import numpy as np
 import typing
 
 
-def mskx_gen_signal(
+def msk_gen_signal(
         tones: typing.List[int], sample_rate: int,
         carrier_freq: int = 1000, delta_freq: int = 1000,
         sampling_factor: int = 1, sampling_rate_coef: int = 4):

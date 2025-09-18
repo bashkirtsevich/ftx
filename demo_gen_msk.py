@@ -5,11 +5,11 @@ from scipy.io.wavfile import write
 
 from encode import msk144_encode
 from message import message_encode, message_encode_free
-from msk import mskx_gen_signal
+from msk import msk_gen_signal
 
 
 def gen_signal(tones: typing.List[int], sample_rate: int):
-    signal = mskx_gen_signal(tones, sample_rate=sample_rate)
+    signal = msk_gen_signal(tones, sample_rate=sample_rate)
 
     return signal
 
