@@ -7,7 +7,7 @@ from itertools import cycle
 
 import numpy as np
 
-from consts import *
+from consts_ftx import *
 from crc import ftx_extract_crc, ftx_check_crc
 from encode import ft4_encode, ft8_encode
 from ldpc import bp_decode

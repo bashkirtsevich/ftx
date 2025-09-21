@@ -3,7 +3,7 @@ import time
 import numpy as np
 from scipy.io.wavfile import read
 
-from consts import FTX_PROTOCOL_FT8, FTX_PROTOCOL_FT4
+from consts_ftx import FTX_PROTOCOL_FT8, FTX_PROTOCOL_FT4
 from decode import Monitor
 
 kFreq_osr = 2  # Frequency oversampling rate (bin subdivision)

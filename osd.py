@@ -2,7 +2,7 @@ import math
 import typing
 from functools import partial, cmp_to_key
 
-from consts import *
+from consts_ftx import *
 from crc import ftx_check_crc
 from ldpc import ldpc_encode
 

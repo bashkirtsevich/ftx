@@ -1,23 +1,18 @@
 import typing
 
-from consts import FT4_NN
-from consts import FT8_NN
-from consts import FTX_LDPC_K
-from consts import FTX_LDPC_K_BYTES
-from consts import FTX_LDPC_M
-from consts import FTX_LDPC_N_BYTES
-from consts import FT4_COSTAS_PATTERN
-from consts import FT4_GRAY_MAP
-from consts import FT4_XOR_SEQUENCE
-from consts import FT8_COSTAS_PATTERN
-from consts import FT8_GRAY_MAP
-from consts import FTX_LDPC_GENERATOR
-from consts import MSKX_LDPC_GENERATOR
-from consts import MSKX_LDPC_K
-from consts import MSKX_LDPC_K_BYTES
-from consts import MSKX_LDPC_M
-from consts import MSKX_LDPC_N_BYTES
-from consts import MSKX_LDPC_N
+from consts_ftx import FT4_NN
+from consts_ftx import FT8_NN
+from consts_ftx import FTX_LDPC_K
+from consts_ftx import FTX_LDPC_K_BYTES
+from consts_ftx import FTX_LDPC_M
+from consts_ftx import FTX_LDPC_N_BYTES
+from consts_ftx import FT4_COSTAS_PATTERN
+from consts_ftx import FT4_GRAY_MAP
+from consts_ftx import FT4_XOR_SEQUENCE
+from consts_ftx import FT8_COSTAS_PATTERN
+from consts_ftx import FT8_GRAY_MAP
+from consts_ftx import FTX_LDPC_GENERATOR
+from consts_mskx import MSKX_LDPC_K, MSKX_LDPC_M, MSKX_LDPC_N, MSKX_LDPC_N_BYTES, MSKX_LDPC_K_BYTES, MSK144_LDPC_GENERATOR
 from crc import ftx_add_crc
 from crc import mskx_add_crc
 from tools import byte
@@ -165,7 +160,7 @@ def mskx_encode(message: typing.ByteString) -> typing.ByteString:
         # but we only compute the sum modulo 2.
         nsum = 0
         for j in range(MSKX_LDPC_K_BYTES):
-            bits = message[j] & MSKX_LDPC_GENERATOR[i][j]  # bitwise AND (bitwise multiplication)
+            bits = message[j] & MSK144_LDPC_GENERATOR[i][j]  # bitwise AND (bitwise multiplication)
             nsum ^= parity8(bits)  # bitwise XOR (addition modulo 2)
 
         # Set the current checksum bit in codeword if nsum is odd

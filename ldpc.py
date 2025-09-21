@@ -9,13 +9,13 @@
 
 import typing
 
-from consts import FTX_LDPC_K
-from consts import FTX_LDPC_M
-from consts import FTX_LDPC_N
-from consts import GEN_SYS
-from consts import FTX_LDPC_MN
-from consts import FTX_LDPC_NM
-from consts import FTX_LDPC_NUM_ROWS
+from consts_ftx import FTX_LDPC_K
+from consts_ftx import FTX_LDPC_M
+from consts_ftx import FTX_LDPC_N
+from consts_ftx import GEN_SYS
+from consts_ftx import FTX_LDPC_MN
+from consts_ftx import FTX_LDPC_NM
+from consts_ftx import FTX_LDPC_NUM_ROWS
 
 
 # Ideas for approximating tanh/atanh:

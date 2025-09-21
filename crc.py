@@ -1,6 +1,7 @@
 import typing
 
-from consts import *
+from consts_ftx import *
+from consts_mskx import MSKX_LDPC_K_BYTES
 from tools import byte
 
 FTX_CRC_POLYNOMIAL = 0x2757

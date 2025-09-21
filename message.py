@@ -1,21 +1,21 @@
 import typing
 from contextlib import suppress
 
-from consts import FTX_CALLSIGN_HASH_12_BITS
-from consts import FTX_MESSAGE_FREE_TEXT_LEN
-from consts import FTX_MESSAGE_TELEMETRY_LEN
-from consts import FTX_EXTRAS_CODE
-from consts import FTX_EXTRAS_STR
-from consts import FTX_MESSAGE_TYPE_ARRL_FD
-from consts import FTX_MESSAGE_TYPE_ARRL_RTTY
-from consts import FTX_MESSAGE_TYPE_DXPEDITION
-from consts import FTX_MESSAGE_TYPE_EU_VHF
-from consts import FTX_MESSAGE_TYPE_FREE_TEXT
-from consts import FTX_MESSAGE_TYPE_NONSTD_CALL
-from consts import FTX_MESSAGE_TYPE_STANDARD
-from consts import FTX_MESSAGE_TYPE_TELEMETRY
-from consts import FTX_MESSAGE_TYPE_UNKNOWN
-from consts import FTX_MESSAGE_TYPE_WWROF
+from consts_ftx import FTX_CALLSIGN_HASH_12_BITS
+from consts_ftx import FTX_MESSAGE_FREE_TEXT_LEN
+from consts_ftx import FTX_MESSAGE_TELEMETRY_LEN
+from consts_ftx import FTX_EXTRAS_CODE
+from consts_ftx import FTX_EXTRAS_STR
+from consts_ftx import FTX_MESSAGE_TYPE_ARRL_FD
+from consts_ftx import FTX_MESSAGE_TYPE_ARRL_RTTY
+from consts_ftx import FTX_MESSAGE_TYPE_DXPEDITION
+from consts_ftx import FTX_MESSAGE_TYPE_EU_VHF
+from consts_ftx import FTX_MESSAGE_TYPE_FREE_TEXT
+from consts_ftx import FTX_MESSAGE_TYPE_NONSTD_CALL
+from consts_ftx import FTX_MESSAGE_TYPE_STANDARD
+from consts_ftx import FTX_MESSAGE_TYPE_TELEMETRY
+from consts_ftx import FTX_MESSAGE_TYPE_UNKNOWN
+from consts_ftx import FTX_MESSAGE_TYPE_WWROF
 from exceptions import FTXErrorCallSignTo, FTXErrorTooLong, FTXErrorInvalidChar, FTXException
 from exceptions import FTXErrorCallSignDe
 from exceptions import FTXErrorGrid
