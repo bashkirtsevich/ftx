@@ -1,38 +1,15 @@
 import typing
 
-from consts_ftx import *
-from consts_mskx import MSKX_LDPC_K_BYTES
+from consts.ftx import FTX_LDPC_K_BYTES, FTX_LDPC_M, FTX_LDPC_K
+from .crc import compute_crc
 from tools import byte
 
+# FIXME: Replace to "consts"
 FTX_CRC_POLYNOMIAL = 0x2757
 FTX_CRC_WIDTH = 14
 FTX_CRC_TOP_BIT = 1 << (FTX_CRC_WIDTH - 1)
 FTX_PAYLOAD_BITS = 96
 FTX_MESSAGE_BITS = FTX_PAYLOAD_BITS - FTX_CRC_WIDTH
-
-MSKX_CRC_POLYNOMIAL = 0x15D7
-MSKX_CRC_WIDTH = 13
-MSKX_CRC_TOP_BIT = 1 << (MSKX_CRC_WIDTH - 1)
-MSKX_PAYLOAD_BITS = 96
-MSKX_MESSAGE_BITS = MSKX_PAYLOAD_BITS - MSKX_CRC_WIDTH
-
-
-def compute_crc(message: typing.ByteString, num_bits: int,
-                crc_width: int, crc_top_bit: int, crc_polynomial: int) -> int:
-    remainder = 0
-    idx_byte = 0
-
-    for idx_bit in range(num_bits):
-        if idx_bit % 8 == 0:
-            remainder ^= message[idx_byte] << (crc_width - 8)
-            idx_byte += 1
-
-        if remainder & crc_top_bit != 0:
-            remainder = (remainder << 1) ^ crc_polynomial
-        else:
-            remainder = remainder << 1
-
-    return remainder & ((crc_top_bit << 1) - 1)
 
 
 def ftx_compute_crc(message: typing.ByteString, num_bits: int) -> int:
@@ -41,15 +18,6 @@ def ftx_compute_crc(message: typing.ByteString, num_bits: int) -> int:
         crc_width=FTX_CRC_WIDTH,
         crc_top_bit=FTX_CRC_TOP_BIT,
         crc_polynomial=FTX_CRC_POLYNOMIAL
-    )
-
-
-def mskx_compute_crc(message: typing.ByteString, num_bits: int) -> int:
-    return compute_crc(
-        message, num_bits,
-        crc_width=MSKX_CRC_WIDTH,
-        crc_top_bit=MSKX_CRC_TOP_BIT,
-        crc_polynomial=MSKX_CRC_POLYNOMIAL
     )
 
 
@@ -73,21 +41,6 @@ def ftx_add_crc(payload: typing.ByteString) -> typing.ByteString:
     message[-3] |= byte(checksum >> 11)
     message[-2] = byte(checksum >> 3)
     message[-1] = byte(checksum << 5)
-
-    return message
-
-
-def mskx_add_crc(payload: typing.ByteString) -> typing.ByteString:
-    message = payload + (b"\x00" * (MSKX_LDPC_K_BYTES - len(payload)))
-
-    message[-3] &= 0xfc
-    message[-2] = 0
-
-    checksum = mskx_compute_crc(message, MSKX_MESSAGE_BITS)
-
-    message[-3] |= byte(checksum >> 10)
-    message[-2] = byte(checksum >> 2)
-    message[-1] = byte(checksum << 6)
 
     return message
 

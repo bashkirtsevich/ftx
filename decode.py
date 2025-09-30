@@ -7,8 +7,8 @@ from itertools import cycle
 
 import numpy as np
 
-from consts_ftx import *
-from crc import ftx_extract_crc, ftx_check_crc
+from consts.ftx import *
+from crc.ftx import ftx_extract_crc, ftx_check_crc
 from encode import ft4_encode, ft8_encode
 from ldpc import bp_decode
 from message import message_decode

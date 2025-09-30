@@ -1,20 +1,20 @@
 import typing
 
-from consts_ftx import FT4_NN
-from consts_ftx import FT8_NN
-from consts_ftx import FTX_LDPC_K
-from consts_ftx import FTX_LDPC_K_BYTES
-from consts_ftx import FTX_LDPC_M
-from consts_ftx import FTX_LDPC_N_BYTES
-from consts_ftx import FT4_COSTAS_PATTERN
-from consts_ftx import FT4_GRAY_MAP
-from consts_ftx import FT4_XOR_SEQUENCE
-from consts_ftx import FT8_COSTAS_PATTERN
-from consts_ftx import FT8_GRAY_MAP
-from consts_ftx import FTX_LDPC_GENERATOR
-from consts_mskx import MSKX_LDPC_K, MSKX_LDPC_M, MSKX_LDPC_N, MSKX_LDPC_N_BYTES, MSKX_LDPC_K_BYTES, MSK144_LDPC_GENERATOR
-from crc import ftx_add_crc
-from crc import mskx_add_crc
+from consts.ftx import FT4_NN
+from consts.ftx import FT8_NN
+from consts.ftx import FTX_LDPC_K
+from consts.ftx import FTX_LDPC_K_BYTES
+from consts.ftx import FTX_LDPC_M
+from consts.ftx import FTX_LDPC_N_BYTES
+from consts.ftx import FT4_COSTAS_PATTERN
+from consts.ftx import FT4_GRAY_MAP
+from consts.ftx import FT4_XOR_SEQUENCE
+from consts.ftx import FT8_COSTAS_PATTERN
+from consts.ftx import FT8_GRAY_MAP
+from consts.ftx import FTX_LDPC_GENERATOR
+from consts.mskx import MSKX_LDPC_K, MSKX_LDPC_M, MSKX_LDPC_N, MSKX_LDPC_N_BYTES, MSKX_LDPC_K_BYTES, MSK144_LDPC_GENERATOR
+from crc.ftx import ftx_add_crc
+from crc.mskx import mskx_add_crc
 from tools import byte
 
 
