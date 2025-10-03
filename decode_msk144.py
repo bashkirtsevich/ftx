@@ -365,27 +365,9 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
             for i in range(6):
                 cd_b = ic0 + i
                 if ic0 + 11 + NSPM < NPTS:
-                    # bb(i) = sum( ( cdat(ic0+i-1+6:ic0+i-1+6+NSPM:6) * conjg( cdat(ic0+i-1:ic0+i-1+NSPM:6) ) )**2 )
-                    # # FIXME: Rewrite this shit
-                    sum_1 = complex(0, 0)
-                    b_c = cd_b
-                    for x in range(cd_b + 6, cd_b + 6 + NSPM, 6):
-                        ss = (cdat[x] * np.conj(cdat[b_c]))
-                        sum_1 += ss * ss
-                        b_c += 6
-                    bb[i] = sum_1
-                    # bb[i] = sum(cdat[cd_b+6: cd_b+6+NSPM: 6] * np.conj(cdat[cd_b::6]))
+                    bb[i] = np.sum((cdat[cd_b + 6: cd_b + 6 + NSPM: 6] * np.conj(cdat[cd_b:cd_b + NSPM:6])) ** 2)
                 else:
-                    # bb(i) = sum( ( cdat(ic0+i-1+6:NPTS:6) * conjg( cdat(ic0+i-1:NPTS-6:6) ) )**2 )
-                    # # FIXME: Rewrite this shit
-                    sum_1 = complex(0, 0)
-                    b_c = cd_b
-                    for x in range(cd_b + 6, NPTS, 6):
-                        ss = (cdat[x] * np.conj(cdat[b_c]))
-                        sum_1 += ss * ss
-                        b_c += 6
-                    bb[i] = sum_1
-                    # bb[i] = sum(cdat[cd_b + 6: NPTS: 6] * np.conj(cdat[cd_b::6]))
+                    bb[i] = np.sum((cdat[cd_b + 6: NPTS: 6] * np.conj(cdat[cd_b:NPTS - 6:6])) ** 2)
 
             ibb = np.argmax(np.abs(bb))
 
