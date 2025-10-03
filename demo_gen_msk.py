@@ -28,7 +28,7 @@ def gen_free_text_tones(msg: str) -> typing.List[int]:
     return gen_msk144_tones(payload)
 
 
-def gen_msg_tones(call_to: str, call_de: str, extra: str) -> typing.List[int]:
+def gen_msg_tones(call_to: str, call_de: str, extra: str = "") -> typing.List[int]:
     payload = message_encode(call_to, call_de, extra)
 
     return gen_msk144_tones(payload)
@@ -39,7 +39,8 @@ def main():
 
     print("Gen tones")
     # tones = gen_free_text_tones(f"0123456789AB)
-    tones = gen_msg_tones("CQ", "R1ABC", "AA00")
+    # tones = gen_msg_tones("CQ", "R1ABC", "AA00")
+    tones = gen_free_text_tones("R9FEU 73")
 
     print("Gen signal")
     signal = gen_signal(tones, sample_rate=sample_rate)

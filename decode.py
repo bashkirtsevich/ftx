@@ -3,9 +3,12 @@ import typing
 from collections import namedtuple
 from copy import copy
 from dataclasses import dataclass
+from functools import cache
 from itertools import cycle
 
 import numpy as np
+from numba import jit
+from numpy import typing as npt
 
 from consts.ftx import *
 from crc.ftx import ftx_extract_crc, ftx_check_crc
@@ -588,3 +591,57 @@ class Monitor:
             call_to_rx, call_de_rx, extra_rx = message_decode(message)
 
             yield snr, time_sec, freq_hz, " ".join([call_to_rx, call_de_rx or "", extra_rx or ""])
+
+
+@cache
+@jit(nopython=True)
+def msk_filter_response(n_fft: int, sample_rate: int) -> npt.NDArray[np.float64]:
+    t = 1 / 2000
+    beta = 0.1
+    df = sample_rate / n_fft
+
+    nh = (n_fft // 2) + 1
+
+    response = np.full(nh, 1, dtype=np.float64)
+    for i in range(nh):
+        f = abs(df * i - 1500)
+
+        if (1 + beta) / (2 * t) >= f > (1 - beta) / (2 * t):
+            response[i] = response[i] * 0.5 * (1 + np.cos((np.pi * t / beta) * (f - (1 - beta) / (2 * t))))
+
+        elif f > (1 + beta) / (2 * t):
+            response[i] = 0.0
+
+    return response
+
+
+def fourier_bpf(signal: npt.NDArray[np.float64], n_fft: int,
+                response: npt.NDArray[np.float64]) -> npt.NDArray[np.complex128]:
+    # Time domain -> Freq domain
+    freq_d = np.fft.fft(signal, n=n_fft)
+
+    # Frequency attenuation
+    freq_d[:len(response)] = freq_d[:len(response)] * response
+    freq_d[0] = 0.5 * freq_d[0]
+    # Attenuate other
+    freq_d[len(response): n_fft] = complex(0, 0)
+
+    # Freq domain -> Time domain
+    time_d = np.fft.ifft(freq_d, n=n_fft)
+
+    return time_d
+
+
+@jit(nopython=True)
+def shift_freq(complex_signal: npt.NDArray[np.complex128], freq: float, sample_rate: int) -> npt.NDArray[np.complex128]:
+    phi = 2 * np.pi * freq / sample_rate
+    step = complex(np.cos(phi), np.sin(phi))
+
+    phasor = complex(1, 1)
+    signal = np.zeros(len(complex_signal), dtype=np.complex128)
+
+    for i, cs_val in enumerate(complex_signal):
+        phasor *= step
+        signal[i] = phasor * cs_val
+
+    return signal
