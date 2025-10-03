@@ -185,15 +185,15 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
     NPTS = 3 * NSPM
     NFFT = 864
 
+    rx_freq = 1500
+
     # ! define half-sine pulse and raised-cosine edge window
     dt_msk144 = 1 / sample_rate
 
-    rx_freq = 1500
-
     df = sample_rate / NFFT
 
-    nstepsize = 216
-    nstep = (n - NPTS) // nstepsize
+    n_step_size = 216
+    n_steps = (n - NPTS) // n_step_size
 
     nfhi = 2 * (rx_freq + 500)
     nflo = 2 * (rx_freq - 500)
@@ -211,19 +211,19 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
     freq_errs = np.zeros(max_cand, dtype=np.float64)
     snrs = np.zeros(max_cand, dtype=np.float64)
 
-    detmet = np.zeros(nstep)
-    detmet2 = np.zeros(nstep)
-    detfer = np.full(nstep, -999.99)
+    detmet = np.zeros(n_steps)
+    detmet2 = np.zeros(n_steps)
+    detfer = np.full(n_steps, -999.99)
 
     steps_real = 0
-    for step in range(nstep):
-        ns = 0 + nstepsize * (step - 0)
-        ne = ns + NSPM - 0
+    for step in range(n_steps):
+        ns = n_step_size * step
+        ne = ns + NSPM
 
         if ne > n:
             break
 
-        ctmp = signal[ns:ne]
+        ctmp = signal[ns: ne]
 
         # Coarse carrier frequency sync - seek tones at 2000 Hz and 4000 Hz in
         # squared signal spectrum.
@@ -256,13 +256,13 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
         tratl = mag_l / (alavp + 0.01)
         ##########
 
-        ferrh = (h_peak + delta_h - i4000_msk144) * df / 2
-        ferrl = (l_peak + delta_l - i2000_msk144) * df / 2
+        freq_err_h = (h_peak + delta_h - i4000_msk144) * df / 2
+        freq_err_l = (l_peak + delta_l - i2000_msk144) * df / 2
 
         if mag_h >= mag_l:
-            f_error = ferrh
+            f_error = freq_err_h
         else:
-            f_error = ferrl
+            f_error = freq_err_l
 
         detmet[step] = max(mag_h, mag_l)
         detmet2[step] = max(trath, tratl)
@@ -278,7 +278,7 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
 
     detmet[:steps_real] = detmet[:steps_real] / xmed
 
-    ndet = 0
+    count_cand = 0
     for ip in range(max_cand):
         # use something like the "clean" algorithm to find candidates
         il = np.argmax(detmet[:steps_real])
@@ -287,17 +287,17 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
             break
 
         if abs(detfer[il]) <= tolerance:
-            times[ndet] = ((il - 0) * nstepsize + NSPM / 2) * dt_msk144
-            freq_errs[ndet] = detfer[il]
-            snrs[ndet] = 12 * np.log10(detmet[il]) / 2 - 9
+            times[count_cand] = ((il - 0) * n_step_size + NSPM / 2) * dt_msk144
+            freq_errs[count_cand] = detfer[il]
+            snrs[count_cand] = 12 * np.log10(detmet[il]) / 2 - 9
 
-            ndet += 1
+            count_cand += 1
 
         detmet[il] = 0.0
 
-    if ndet < 3:  # for Tropo/ES
-        for ip in range(max_cand - ndet):
-            if ip >= max_cand - ndet:
+    if count_cand < 3:  # for Tropo/ES
+        for ip in range(max_cand - count_cand):
+            if ip >= max_cand - count_cand:
                 break
 
             # Find candidates
@@ -307,19 +307,19 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
                 break
 
             if abs(detfer[il]) <= tolerance:
-                times[ndet] = ((il - 0) * nstepsize + NSPM / 2) * dt_msk144
-                freq_errs[ndet] = detfer[il]
-                snrs[ndet] = 12 * np.log10(detmet2[il]) / 2 - 9
+                times[count_cand] = ((il - 0) * n_step_size + NSPM / 2) * dt_msk144
+                freq_errs[count_cand] = detfer[il]
+                snrs[count_cand] = 12 * np.log10(detmet2[il]) / 2 - 9
 
-                ndet += 1
+                count_cand += 1
 
             detmet2[il] = 0
 
-    if ndet > 0:
-        indices = np.argsort(times[:ndet])
+    if count_cand > 0:
+        indices = np.argsort(times[:count_cand])
 
     # ! Try to sync/demod/decode each candidate.
-    for iip in range(ndet):
+    for iip in range(count_cand):
         ip = indices[iip]
         imid = int(times[ip] * sample_rate)
 
