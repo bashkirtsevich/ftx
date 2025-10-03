@@ -9,6 +9,8 @@
 
 import typing
 
+import numpy as np
+import numpy.typing as ntp
 from consts.mskx import MSKX_LDPC_K
 from consts.mskx import MSKX_LDPC_M
 from consts.mskx import MSKX_LDPC_N
@@ -46,7 +48,8 @@ def fast_atanh(x: float) -> float:
     return a / b
 
 
-def ldpc_check(codeword: bytes) -> int:
+@jit(nopython=True)
+def ldpc_check(codeword: ntp.NDArray[np.uint8]) -> int:
     """
     does a 174-bit codeword pass the FT8's LDPC parity checks?
     :param codeword:
@@ -65,14 +68,15 @@ def ldpc_check(codeword: bytes) -> int:
     return errors
 
 
-def bp_decode(codeword: typing.List[float], max_iters: int) -> typing.Tuple[int, typing.ByteString]:
+# @jit(nopython=True)
+def bp_decode(codeword: ntp.NDArray[np.float64], max_iters: int) -> typing.Tuple[int, ntp.NDArray[np.uint8]]:
     min_errors = MSKX_LDPC_M
 
     # initialize message data
-    tov = [[0.0] * 3 for _ in range(MSKX_LDPC_N)]
-    toc = [[0.0] * 11 for _ in range(MSKX_LDPC_M)]
+    tov = np.zeros((MSKX_LDPC_N, 3), dtype=np.float64)
+    toc = np.zeros((MSKX_LDPC_M, 11), dtype=np.float64)
 
-    plain = bytearray(b"\x00" * MSKX_LDPC_N)
+    plain = np.zeros(MSKX_LDPC_N, dtype=np.uint8)
 
     for _ in range(max_iters):
         # Do a hard decision guess (tov=0 in iter 0)
