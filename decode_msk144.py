@@ -16,6 +16,7 @@ from decode import msk_filter_response, fourier_bpf, shift_freq
 
 # ss_msk144ms = False
 
+MSK144_BITS_COUNT = 144
 # s8ms = [0, 1, 0, 0, 1, 1, 1, 0]
 MSK144_SYNC = [0, 1, 1, 1, 0, 0, 1, 0]
 
@@ -27,12 +28,14 @@ sync_words = np.array([2 * s8 - 1 for s8 in MSK144_SYNC])
 
 sync_I = np.array([
     pp * sync_words[j * 2 + 1]
-    for j in range(4) for pp in pp_msk144
+    for j in range(4)
+    for pp in pp_msk144
 ])
 
 sync_Q = np.array([
     pp * sync_words[j * 2]
-    for j in range(4) for pp in (pp_msk144[6:] if j == 0 else pp_msk144)
+    for j in range(4)
+    for pp in (pp_msk144[6:] if j == 0 else pp_msk144)
 ])
 
 SYNC_WAVEFORM = np.array([complex(sync_I[i], sync_Q[i]) for i in range(42)])
@@ -73,8 +76,8 @@ def msk144_decode_fame(frame: npt.NDArray[np.complex128]):
 
     frame *= cfac.conjugate()
 
-    soft_bits = np.zeros(144, dtype=np.float64)
-    hard_bits = np.zeros(144, dtype=np.int64)
+    soft_bits = np.zeros(MSK144_BITS_COUNT, dtype=np.float64)
+    hard_bits = np.zeros(MSK144_BITS_COUNT, dtype=np.int64)
 
     for i in range(6):
         soft_bits[0] += frame[i].imag * pp_msk144[i + 6]
@@ -121,18 +124,18 @@ def msk144_decode_fame(frame: npt.NDArray[np.complex128]):
 
     sav = 0.0
     s2av = 0.0
-    for i in range(144):
+    for i in range(MSK144_BITS_COUNT):
         sav += soft_bits[i]
         s2av += soft_bits[i] * soft_bits[i]
 
-    sav /= 144
-    s2av /= 144
+    sav /= MSK144_BITS_COUNT
+    s2av /= MSK144_BITS_COUNT
 
     ssig = np.sqrt(s2av - (sav * sav))
     if ssig == 0.0:
         ssig = 1.0
 
-    for i in range(144):
+    for i in range(MSK144_BITS_COUNT):
         soft_bits[i] = soft_bits[i] / ssig
 
     sigma = 0.60  # 0.75 if ss_msk144ms else 0.60
@@ -237,7 +240,7 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
         h_peak = ihlo_msk144 + np.argmax(tone_spec[ihlo_msk144:ihhi_msk144])
 
         delta_h = -((ctmp[h_peak - 1] - ctmp[h_peak + 1]) / (
-                    2 * ctmp[h_peak] - ctmp[h_peak - 1] - ctmp[h_peak + 1])).real
+                2 * ctmp[h_peak] - ctmp[h_peak - 1] - ctmp[h_peak + 1])).real
         mag_h = tone_spec[h_peak]
 
         ahavp = (np.sum(tone_spec[ihlo_msk144:ihhi_msk144]) - mag_h) / (ihhi_msk144 - ihlo_msk144)
@@ -246,7 +249,7 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
         l_peak = illo_msk144 + np.argmax(tone_spec[illo_msk144:ilhi_msk144])
 
         delta_l = -((ctmp[l_peak - 1] - ctmp[l_peak + 1]) / (
-                    2 * ctmp[l_peak] - ctmp[l_peak - 1] - ctmp[l_peak + 1])).real
+                2 * ctmp[l_peak] - ctmp[l_peak - 1] - ctmp[l_peak + 1])).real
         mag_l = tone_spec[l_peak]
 
         alavp = (np.sum(tone_spec[illo_msk144:ilhi_msk144]) - mag_l) / (ilhi_msk144 - illo_msk144)
@@ -457,6 +460,8 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
                         # msk144_decode_fame(frame,softbits,msgreceived,nsuccess,ident,true);
                         if msk144_decode_fame(frame):
                             return
+
+
 #                         if nsuccess > 0:
 #                             ndupe=0
 #                             for (int im = 0; im<nmessages; im++)
