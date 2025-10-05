@@ -442,6 +442,7 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
 
                             msg = message_decode(payload)
                             print("Msg:", " ".join(msg))
+                            print("CRC:", status.crc_extracted)
 
                             return
 

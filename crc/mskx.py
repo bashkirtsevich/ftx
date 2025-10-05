@@ -24,7 +24,7 @@ def mskx_compute_crc(message: typing.ByteString, num_bits: int) -> int:
 
 
 def mskx_extract_crc(msg: typing.ByteString) -> int:
-    return ((msg[9] & 0x07) << 11) | (msg[10] << 3) | (msg[11] >> 5)
+    return ((msg[9] & 0x07) << 10) | (msg[10] << 2) | (msg[11] >> 6)
 
 
 def mskx_add_crc(payload: typing.ByteString) -> typing.ByteString:
