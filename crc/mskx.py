@@ -1,6 +1,8 @@
 import typing
 
-from consts.mskx import MSKX_LDPC_K_BYTES
+import numpy as np
+import numpy.typing as npt
+from consts.mskx import *
 from .crc import compute_crc
 from tools import byte
 
@@ -34,3 +36,26 @@ def mskx_add_crc(payload: typing.ByteString) -> typing.ByteString:
     message[-1] = byte(checksum << 6)
 
     return message
+
+
+def mskx_crc(msg1: npt.NDArray[np.uint8], msglen: int) -> npt.NDArray[np.uint8]:
+    div = [1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1]  # 0x15D7 in binary representation
+
+    # FIXME: Use concat
+    msg = np.zeros(msglen + MSKX_CRC_WIDTH, dtype=np.uint8)
+    for i in range(msglen + MSKX_CRC_WIDTH):
+        if i < 77:
+            msg[i] = msg1[i]
+
+    for i in range(msglen):
+        if msg[i] != 0:
+            for j, d in enumerate(div):
+                msg[i + j] = msg[i + j] ^ d
+
+    return msg[msglen:msglen + MSKX_CRC_WIDTH]
+
+
+def mskx_check_crc(bits: npt.NDArray[np.uint8]) -> bool:
+    # [1]: 'The CRC is calculated on the source-encoded message, zero-extended from 77 to 83 bits.'
+    crc = mskx_crc(bits, 83)
+    return np.array_equal(crc, bits[MSKX_LDPC_K - MSKX_CRC_WIDTH:MSKX_LDPC_K])

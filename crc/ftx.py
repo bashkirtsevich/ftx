@@ -49,7 +49,7 @@ def ftx_crc(msg1: typing.ByteString, msglen: int) -> typing.ByteString:
     div = [1, 1, 0, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1]
 
     # FIXME: Use concat
-    msg = bytearray(b"\x00" * (FTX_LDPC_M + FTX_CRC_WIDTH))
+    msg = bytearray(b"\x00" * (msglen + FTX_CRC_WIDTH))
     for i in range(msglen + FTX_CRC_WIDTH):
         if i < 77:
             msg[i] = msg1[i]
