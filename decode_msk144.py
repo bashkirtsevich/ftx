@@ -8,7 +8,7 @@ import numpy.typing as npt
 import json
 from scipy.io.wavfile import read
 
-from crc.mskx import mskx_check_crc
+from crc.mskx import mskx_check_crc, mskx_extract_crc
 from ldpc_mskx import bp_decode
 from consts.mskx import *
 import typing
@@ -16,8 +16,13 @@ from numba import jit
 
 from decode import msk_filter_response, fourier_bpf, shift_freq
 from message import message_decode
+from collections import namedtuple
 
 # ss_msk144ms = False
+
+kMaxLDPCErrors = 18
+
+DecodeStatus = namedtuple("DecodeStatus", ["ldpc_errors", "crc_extracted"])
 
 MSK144_BITS_COUNT = 144
 # s8ms = [0, 1, 0, 0, 1, 1, 1, 0]
@@ -44,9 +49,7 @@ sync_Q = np.array([
 SYNC_WAVEFORM = np.array([complex(sync_I[i], sync_Q[i]) for i in range(42)])
 
 
-def pack_bits(bit_array: typing.ByteString, num_bits: int) -> typing.ByteString:
-    # bytearray(b'\x00\x00\x00\x0b\xd8r\x97R\xb8\x07\xd9ZP\xfb-N')
-
+def pack_bits(bit_array: npt.NDArray[np.uint8], num_bits: int) -> typing.ByteString:
     # Packs a string of bits each represented as a zero/non-zero byte in plain[],
     # as a string of packed bits starting from the MSB of the first byte of packed[]
     num_bytes = (num_bits + 7) // 8
@@ -148,38 +151,22 @@ def msk144_decode_fame(frame: npt.NDArray[np.complex128]):
 
     max_iterations = 10
 
-    print("got llr")
-
     ldpc_errors, plain128 = bp_decode(llr, max_iterations)
 
     print("plain128 bits", "".join(str(b) for b in plain128))
 
-    kMaxLDPCErrors = 18
     if ldpc_errors > kMaxLDPCErrors:
         return None
 
     if not mskx_check_crc(plain128):
         return None
 
-    foo = pack_bits(plain128, 120)
-    print(foo)
-    bar = message_decode(foo)
-    print(bar)
-
     # Extract payload + CRC (first FTX_LDPC_K bits) packed into a byte array
-    # a90 = pack_bits(plain128, MSKX_LDPC_K)
-    # print(a90)
-    # # Extract CRC and check it
-    # crc_extracted = mskx_extract_crc(a90)
-    #
-    #
-    # payload = a90
-    # tones = ft8_encode(payload)
-    #
-    # snr = self.ftx_subtract(cand, tones)
-    # # snr = self.ftx_get_snr(cand, tones)
-    # return DecodeStatus(ldpc_errors, crc_extracted), payload, snr
-    return True
+    payload = pack_bits(plain128, MSKX_LDPC_K)
+    # Extract CRC
+    crc_extracted = mskx_extract_crc(payload)
+
+    return DecodeStatus(ldpc_errors, crc_extracted), payload
 
 
 def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate: int,
@@ -443,7 +430,8 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
 
                         # nsuccess = 0
                         # msk144_decode_fame(frame,softbits,msgreceived,nsuccess,ident,true);
-                        if msk144_decode_fame(frame):
+                        if x := msk144_decode_fame(frame):
+                            status, payload = x
                             df_hv = fest - rx_freq
 
                             print("dB:", snr)
@@ -451,6 +439,9 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
                             print("DF:", df_hv)
                             print("Navig:", iav + 1)
                             print("Freq:", fest)
+
+                            msg = message_decode(payload)
+                            print("Msg:", " ".join(msg))
 
                             return
 
