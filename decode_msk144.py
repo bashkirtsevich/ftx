@@ -7,12 +7,15 @@ import numpy as np
 import numpy.typing as npt
 import json
 from scipy.io.wavfile import read
+
+from crc.mskx import mskx_check_crc
 from ldpc_mskx import bp_decode
 from consts.mskx import *
 import typing
 from numba import jit
 
 from decode import msk_filter_response, fourier_bpf, shift_freq
+from message import message_decode
 
 # ss_msk144ms = False
 
@@ -149,19 +152,19 @@ def msk144_decode_fame(frame: npt.NDArray[np.complex128]):
 
     ldpc_errors, plain128 = bp_decode(llr, max_iterations)
 
-    # plain128 from MSHV (R9FEU 73)
-    # 010111000100011000101100100010110110111001001011010001100011001100000000000000000000000000000000000000000000000000000000
-    # 01011100010001100010110010001011011011100100101101000110001100110000000000000010110111000000011000001100101100010010000100110110
-    # 01011100010001100010110010001011011011100100101101000110001100110000000000000010110111000000011000001100101100010010000100110110
-
     print("plain128 bits", "".join(str(b) for b in plain128))
 
     kMaxLDPCErrors = 18
     if ldpc_errors > kMaxLDPCErrors:
         return None
 
-    # if not mskx_check_crc(plain128):
-    #     return None
+    if not mskx_check_crc(plain128):
+        return None
+
+    foo = pack_bits(plain128, 120)
+    print(foo)
+    bar = message_decode(foo)
+    print(bar)
 
     # Extract payload + CRC (first FTX_LDPC_K bits) packed into a byte array
     # a90 = pack_bits(plain128, MSKX_LDPC_K)
@@ -403,7 +406,7 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
                     ferr2 = np.atan2(cfac.imag, cfac.real) / (2 * np.pi * 88 * 6 * dt_msk144)
 
                 # ! Final estimate of the carrier frequency - returned to the calling program
-                # fest=int(nrxfreq+f_error+ferr2)
+                fest = int(rx_freq + f_error + ferr2)
 
                 for idf in range(5):  # frequency jitter
                     if idf == 0:
@@ -441,6 +444,14 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
                         # nsuccess = 0
                         # msk144_decode_fame(frame,softbits,msgreceived,nsuccess,ident,true);
                         if msk144_decode_fame(frame):
+                            df_hv = fest - rx_freq
+
+                            print("dB:", snr)
+                            print("T:", t0)
+                            print("DF:", df_hv)
+                            print("Navig:", iav + 1)
+                            print("Freq:", fest)
+
                             return
 
 
@@ -508,5 +519,7 @@ def read_wav(path: str) -> typing.Tuple[int, npt.NDArray]:
     return sample_rate, wave
 
 
-sample_rate, wave = read_wav("/home/mad/projects/MSHV_2763/bin/RxWavs/msk144.wav")
+wav_path = "/home/mad/projects/MSHV_2763/bin/RxWavs/msk144-cq-r9feu-lo87.wav"
+# wav_path = "/home/mad/projects/MSHV_2763/bin/RxWavs/msk144.wav"
+sample_rate, wave = read_wav(wav_path)
 msk144_decode(wave, 0, sample_rate)
