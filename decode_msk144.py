@@ -172,15 +172,9 @@ def msk144_decode_fame(frame: npt.NDArray[np.complex128]):
     for i in range(len(tones) - 1):
         j = i + 1
         if tones[i] == 0:
-            if j % 2 == 1:
-                msg_bits[j] = msg_bits[i]
-            else:
-                msg_bits[j] = (msg_bits[i] + 1) % 2
+            msg_bits[j] = msg_bits[i] if j % 2 == 1 else (msg_bits[i] + 1) % 2
         else:
-            if j % 2 == 1:
-                msg_bits[j] = (msg_bits[i] + 1) % 2
-            else:
-                msg_bits[j] = msg_bits[i]
+            msg_bits[j] = (msg_bits[i] + 1) % 2 if j % 2 == 1 else msg_bits[i]
 
     eye_top = 1.0
     eye_bot = -1.0
