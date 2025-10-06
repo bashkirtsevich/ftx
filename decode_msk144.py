@@ -167,38 +167,36 @@ def msk144_decode_fame(frame: npt.NDArray[np.complex128]):
     # Extract CRC
     crc_extracted = mskx_extract_crc(payload)
 
-    msgbits = np.zeros(144)
     tones = list(msk144_encode(payload))
-    for i in range(144 - 1):
+    msg_bits = np.zeros(len(tones))
+    for i in range(len(tones) - 1):
+        j = i + 1
         if tones[i] == 0:
-            if (i + 1) % 2 == 1:
-                msgbits[i + 1] = msgbits[i]
+            if j % 2 == 1:
+                msg_bits[j] = msg_bits[i]
             else:
-                msgbits[i + 1] = (msgbits[i] + 1) % 2
+                msg_bits[j] = (msg_bits[i] + 1) % 2
         else:
-            if (i + 1) % 2 == 1:
-                msgbits[i + 1] = (msgbits[i] + 1) % 2
+            if j % 2 == 1:
+                msg_bits[j] = (msg_bits[i] + 1) % 2
             else:
-                msgbits[i + 1] = msgbits[i]
+                msg_bits[j] = msg_bits[i]
 
-    eyetop = 1.0
-    eyebot = -1.0
-    nbiterrors = 0
-    for i in range(144):
-        k = 1
-        if msgbits[i] == k:
-            if soft_bits[i] < eyetop:
-                eyetop = soft_bits[i]
+    eye_top = 1.0
+    eye_bot = -1.0
+    bit_errors = 0
+    for i in range(len(msg_bits)):
+        if msg_bits[i] == 1:
+            eye_top = min(soft_bits[i], eye_top)
         else:
-            if soft_bits[i] > eyebot:
-                eyebot = soft_bits[i]
+            eye_bot = max(soft_bits[i], eye_bot)
 
-        if hard_bits[i] != msgbits[i]:
-            nbiterrors += 1
+        if hard_bits[i] != msg_bits[i]:
+            bit_errors += 1
 
-    eyeopening = eyetop - eyebot
-    print("eyeopening:", eyeopening)
-    print("nbiterrors:", nbiterrors)
+    eye_opening = eye_top - eye_bot
+    print("eye_opening:", eye_opening)
+    print("bit_errors:", bit_errors)
 
     return DecodeStatus(ldpc_errors, crc_extracted), payload
 
