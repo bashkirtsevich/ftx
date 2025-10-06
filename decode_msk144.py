@@ -9,6 +9,7 @@ import json
 from scipy.io.wavfile import read
 
 from crc.mskx import mskx_check_crc, mskx_extract_crc
+from encode import msk144_encode
 from ldpc_mskx import bp_decode
 from consts.mskx import *
 import typing
@@ -165,6 +166,39 @@ def msk144_decode_fame(frame: npt.NDArray[np.complex128]):
     payload = pack_bits(plain128, MSKX_LDPC_K)
     # Extract CRC
     crc_extracted = mskx_extract_crc(payload)
+
+    msgbits = np.zeros(144)
+    tones = list(msk144_encode(payload))
+    for i in range(144 - 1):
+        if tones[i] == 0:
+            if (i + 1) % 2 == 1:
+                msgbits[i + 1] = msgbits[i]
+            else:
+                msgbits[i + 1] = (msgbits[i] + 1) % 2
+        else:
+            if (i + 1) % 2 == 1:
+                msgbits[i + 1] = (msgbits[i] + 1) % 2
+            else:
+                msgbits[i + 1] = msgbits[i]
+
+    eyetop = 1.0
+    eyebot = -1.0
+    nbiterrors = 0
+    for i in range(144):
+        k = 1
+        if msgbits[i] == k:
+            if soft_bits[i] < eyetop:
+                eyetop = soft_bits[i]
+        else:
+            if soft_bits[i] > eyebot:
+                eyebot = soft_bits[i]
+
+        if hard_bits[i] != msgbits[i]:
+            nbiterrors += 1
+
+    eyeopening = eyetop - eyebot
+    print("eyeopening:", eyeopening)
+    print("nbiterrors:", nbiterrors)
 
     return DecodeStatus(ldpc_errors, crc_extracted), payload
 
@@ -441,7 +475,7 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
                             print("Freq:", fest)
 
                             msg = message_decode(payload)
-                            print("Msg:", " ".join(msg))
+                            print("Msg:", " ".join(s for s in msg if isinstance(s, str)))
                             print("CRC:", status.crc_extracted)
 
                             return
