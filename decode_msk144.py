@@ -402,50 +402,48 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
                 if ic + 56 * 6 + 42 < NPTS:
                     ccb = np.sum(part[ic + 56 * 6:ic + 56 * 6 + len(SYNC_WAVEFORM)] * np.conj(SYNC_WAVEFORM))
                     cfac = ccb * np.conj(cca)
-                    ferr2 = np.atan2(cfac.imag, cfac.real) / (2 * np.pi * 56 * 6 * dt_msk144)
+                    f_error_2 = np.atan2(cfac.imag, cfac.real) / (2 * np.pi * 56 * 6 * dt_msk144)
                 else:
                     ccb = np.sum(part[ic - 88 * 6:ic - 88 * 6 + len(SYNC_WAVEFORM)] * np.conj(SYNC_WAVEFORM))
                     cfac = ccb * np.conj(cca)
-                    ferr2 = np.atan2(cfac.imag, cfac.real) / (2 * np.pi * 88 * 6 * dt_msk144)
+                    f_error_2 = np.atan2(cfac.imag, cfac.real) / (2 * np.pi * 88 * 6 * dt_msk144)
 
                 # ! Final estimate of the carrier frequency - returned to the calling program
-                fest = int(rx_freq + f_error + ferr2)
+                fest = int(rx_freq + f_error + f_error_2)
 
                 for idf in range(5):  # frequency jitter
                     if idf == 0:
-                        delta_f = 0.0
+                        delta_f = 0
                     elif idf % 2 == 0:
                         delta_f = idf
                     else:
-                        delta_f = -(idf + 1.0)
+                        delta_f = -(idf + 1)
 
                     # ! Remove fine frequency error
-                    cdat2 = shift_freq(part, -(ferr2 + delta_f), sample_rate)
+                    subpart = shift_freq(part, -(f_error_2 + delta_f), sample_rate)
                     # ! place the beginning of frame at index NSPM+1
-                    cdat2 = np.roll(cdat2, -(ic - NSPM))
+                    subpart = np.roll(subpart, -(ic - NSPM))
 
                     for iav in range(8):  # ! Hopefully we can eliminate some of these after looking at more examples
                         if iav == 0:
-                            frame = cdat2[NSPM: NSPM + NSPM]
+                            frame = subpart[NSPM: NSPM + NSPM]
                         elif iav == 1:
-                            frame = cdat2[NSPM - 432: NSPM - 432 + NSPM]
+                            frame = subpart[NSPM - 432: NSPM - 432 + NSPM]
                             frame = np.roll(frame, 432)  # frame = np.roll(frame, -432)
                         elif iav == 2:
-                            frame = cdat2[2 * NSPM - 432: 2 * NSPM - 432 + NSPM]
+                            frame = subpart[2 * NSPM - 432: 2 * NSPM - 432 + NSPM]
                             frame = np.roll(frame, 432)  # frame = np.roll(frame, -432)
                         elif iav == 3:
-                            frame = cdat2[:NSPM]
+                            frame = subpart[:NSPM]
                         elif iav == 4:
-                            frame = cdat2[2 * NSPM: 2 * NSPM + NSPM]
+                            frame = subpart[2 * NSPM: 2 * NSPM + NSPM]
                         elif iav == 5:
-                            frame = cdat2[:NSPM] + cdat2[NSPM:NSPM + NSPM]
+                            frame = subpart[:NSPM] + subpart[NSPM:NSPM + NSPM]
                         elif iav == 6:
-                            frame = cdat2[NSPM: NSPM + NSPM] + cdat2[2 * NSPM: 2 * NSPM + NSPM]
+                            frame = subpart[NSPM: NSPM + NSPM] + subpart[2 * NSPM: 2 * NSPM + NSPM]
                         elif iav == 7:
-                            frame = cdat2[:NSPM] + cdat2[NSPM:NSPM + NSPM] + cdat2[2 * NSPM:2 * NSPM + NSPM]
+                            frame = subpart[:NSPM] + subpart[NSPM:NSPM + NSPM] + subpart[2 * NSPM:2 * NSPM + NSPM]
 
-                        # nsuccess = 0
-                        # msk144_decode_fame(frame,softbits,msgreceived,nsuccess,ident,true);
                         if x := msk144_decode_fame(frame, kLDPC_iterations):
                             status, payload, eye_opening, bit_errors = x
 
