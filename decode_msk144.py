@@ -22,6 +22,7 @@ from collections import namedtuple
 # ss_msk144ms = False
 
 kMaxLDPCErrors = 18
+kLDPC_iterations = 10
 
 DecodeStatus = namedtuple("DecodeStatus", ["ldpc_errors", "crc_extracted"])
 
@@ -70,7 +71,7 @@ def pack_bits(bit_array: npt.NDArray[np.uint8], num_bits: int) -> typing.ByteStr
     return packed
 
 
-def msk144_decode_fame(frame: npt.NDArray[np.complex128]):
+def msk144_decode_fame(frame: npt.NDArray[np.complex128], max_iterations: int):
     cca = sum(frame[:len(SYNC_WAVEFORM)] * np.conj(SYNC_WAVEFORM))
     ccb = sum(frame[56 * 6: 56 * 6 + len(SYNC_WAVEFORM)] * np.conj(SYNC_WAVEFORM))
     cc = cca + ccb
@@ -150,11 +151,7 @@ def msk144_decode_fame(frame: npt.NDArray[np.complex128]):
     lratio = np.concat([soft_bits[8:9 + 47], soft_bits[64:65 + 80 - 1]])
     llr = 2 * lratio / (sigma * sigma)
 
-    max_iterations = 10
-
     ldpc_errors, plain128 = bp_decode(llr, max_iterations)
-
-    print("plain128 bits", "".join(str(b) for b in plain128))
 
     if ldpc_errors > kMaxLDPCErrors:
         return None
@@ -178,7 +175,7 @@ def msk144_decode_fame(frame: npt.NDArray[np.complex128]):
 
     eye_top = 1.0
     eye_bot = -1.0
-    for i in range(len(msg_bits)):
+    for i in range(MSK144_BITS_COUNT):
         if msg_bits[i] == 1:
             eye_top = min(soft_bits[i], eye_top)
         else:
@@ -187,10 +184,8 @@ def msk144_decode_fame(frame: npt.NDArray[np.complex128]):
     bit_errors = np.count_nonzero(hard_bits != msg_bits)
 
     eye_opening = eye_top - eye_bot
-    print("eye_opening:", eye_opening)
-    print("bit_errors:", bit_errors)
 
-    return DecodeStatus(ldpc_errors, crc_extracted), payload
+    return DecodeStatus(ldpc_errors, crc_extracted), payload, eye_opening, bit_errors
 
 
 def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate: int,
@@ -454,8 +449,9 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
 
                         # nsuccess = 0
                         # msk144_decode_fame(frame,softbits,msgreceived,nsuccess,ident,true);
-                        if x := msk144_decode_fame(frame):
-                            status, payload = x
+                        if x := msk144_decode_fame(frame, kLDPC_iterations):
+                            status, payload, eye_opening, bit_errors = x
+
                             df_hv = fest - rx_freq
 
                             print("dB:", snr)
@@ -463,6 +459,9 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
                             print("DF:", df_hv)
                             print("Navig:", iav + 1)
                             print("Freq:", fest)
+
+                            print("eye_opening:", eye_opening)
+                            print("bit_errors:", bit_errors)
 
                             msg = message_decode(payload)
                             print("Msg:", " ".join(s for s in msg if isinstance(s, str)))
