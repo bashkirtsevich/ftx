@@ -1,5 +1,6 @@
 import itertools
 import operator
+from contextlib import suppress
 from functools import cache
 
 # import matplotlib.pyplot as plt
@@ -19,7 +20,12 @@ from decode import msk_filter_response, fourier_bpf, shift_freq
 from message import message_decode
 from collections import namedtuple
 
+
 # ss_msk144ms = False
+
+class NextCand(Exception):
+    pass
+
 
 kMaxLDPCErrors = 18
 kLDPC_iterations = 10
@@ -324,178 +330,155 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
         indices = np.argsort(times[:count_cand])
 
     # ! Try to sync/demod/decode each candidate.
+    hashes = set()
     for iip in range(count_cand):
-        ip = indices[iip]
-        imid = int(times[ip] * sample_rate)
+        with suppress(NextCand):
+            ip = indices[iip]
+            imid = int(times[ip] * sample_rate)
 
-        if imid < NPTS / 2:
-            imid = NPTS // 2
-        if imid > n - NPTS / 2:
-            imid = n - NPTS // 2
+            if imid < NPTS / 2:
+                imid = NPTS // 2
+            if imid > n - NPTS / 2:
+                imid = n - NPTS // 2
 
-        t0 = times[ip] + dt_msk144 * (start)
+            t0 = times[ip] + dt_msk144 * (start)
 
-        part = signal[imid - NPTS // 2: imid + NPTS // 2]
+            part = signal[imid - NPTS // 2: imid + NPTS // 2]
 
-        f_error = freq_errs[ip]
-        snr = 2.0 * int(snrs[ip] / 2.0)
-        snr = max(-4.0, min(24.0, snr))
+            f_error = freq_errs[ip]
+            snr = 2.0 * int(snrs[ip] / 2.0)
+            snr = max(-4.0, min(24.0, snr))
 
-        # ! remove coarse freq error - should now be within a few Hz
-        part = shift_freq(part, -(MSK144_CENTER_FREQ + f_error), sample_rate)
+            # ! remove coarse freq error - should now be within a few Hz
+            part = shift_freq(part, -(MSK144_CENTER_FREQ + f_error), sample_rate)
 
-        cc1 = np.zeros(NPTS, dtype=np.complex128)
-        cc2 = np.zeros(NPTS, dtype=np.complex128)
+            cc1 = np.zeros(NPTS, dtype=np.complex128)
+            cc2 = np.zeros(NPTS, dtype=np.complex128)
 
-        for i in range(NPTS - (56 * 6 + 42)):
-            cc1[i] = sum(part[i: i + len(SYNC_WAVEFORM)] * np.conj(SYNC_WAVEFORM))
-            cc2[i] = sum(part[i + 56 * 6: i + 56 * 6 + len(SYNC_WAVEFORM)] * np.conj(SYNC_WAVEFORM))
+            for i in range(NPTS - (56 * 6 + 42)):
+                cc1[i] = sum(part[i: i + len(SYNC_WAVEFORM)] * np.conj(SYNC_WAVEFORM))
+                cc2[i] = sum(part[i + 56 * 6: i + 56 * 6 + len(SYNC_WAVEFORM)] * np.conj(SYNC_WAVEFORM))
 
-        dd = abs(cc1) * abs(cc2)
+            dd = abs(cc1) * abs(cc2)
 
-        # ! Find 6 largest peaks
-        peaks = []
-        for ipk in range(6):
-            # HV Good work cc ic1 no dd and ic2
-            ic2 = np.argmax(dd)
-            dd[max(0, ic2 - 7): min(NPTS - 56 * 6 - 42, ic2 + 7)] = 0.0
-            peaks.append(ic2)
+            # ! Find 6 largest peaks
+            peaks = []
+            for ipk in range(6):
+                # HV Good work cc ic1 no dd and ic2
+                ic2 = np.argmax(dd)
+                dd[max(0, ic2 - 7): min(NPTS - 56 * 6 - 42, ic2 + 7)] = 0.0
+                peaks.append(ic2)
 
-        # ! we want ic to be the index of the first sample of the frame
-        for ic0 in peaks:  # ic0=peaks[ipk]
-            # ! fine adjustment of sync index
-            # ! bb lag used to place the sampling index at the center of the eye
-            bb = np.zeros(6, dtype=np.complex128)
-            for i in range(6):
-                cd_b = ic0 + i
-                if ic0 + 11 + NSPM < NPTS:
-                    bb[i] = np.sum((part[cd_b + 6: cd_b + 6 + NSPM: 6] * np.conj(part[cd_b:cd_b + NSPM:6])) ** 2)
-                else:
-                    bb[i] = np.sum((part[cd_b + 6: NPTS: 6] * np.conj(part[cd_b:NPTS - 6:6])) ** 2)
-
-            ibb = np.argmax(np.abs(bb))
-
-            if ibb <= 2:
-                ibb -= 1
-            if ibb > 2:
-                ibb -= 7
-
-            for id in range(3):
-                if id == 1:
-                    sign = -1
-                elif id == 2:
-                    sign = 1
-                else:
-                    sign = 0
-
-                # ! Adjust frame index to place peak of bb at desired lag
-                ic = ic0 + ibb + sign
-
-                if ic < 0:
-                    ic = ic + NSPM
-
-                # ! Estimate fine frequency error.
-                # ! Should a larger separation be used when frames are averaged?
-                cca = np.sum(part[ic:ic + len(SYNC_WAVEFORM)] * np.conj(SYNC_WAVEFORM))
-                if ic + 56 * 6 + 42 < NPTS:
-                    ccb = np.sum(part[ic + 56 * 6:ic + 56 * 6 + len(SYNC_WAVEFORM)] * np.conj(SYNC_WAVEFORM))
-                    cfac = ccb * np.conj(cca)
-                    f_error_2 = np.atan2(cfac.imag, cfac.real) / (2 * np.pi * 56 * 6 * dt_msk144)
-                else:
-                    ccb = np.sum(part[ic - 88 * 6:ic - 88 * 6 + len(SYNC_WAVEFORM)] * np.conj(SYNC_WAVEFORM))
-                    cfac = ccb * np.conj(cca)
-                    f_error_2 = np.atan2(cfac.imag, cfac.real) / (2 * np.pi * 88 * 6 * dt_msk144)
-
-                # ! Final estimate of the carrier frequency - returned to the calling program
-                freq_est = int(MSK144_CENTER_FREQ + f_error + f_error_2)
-
-                for idf in range(5):  # frequency jitter
-                    if idf == 0:
-                        delta_f = 0
-                    elif idf % 2 == 0:
-                        delta_f = idf
+            # ! we want ic to be the index of the first sample of the frame
+            for ic0 in peaks:  # ic0=peaks[ipk]
+                # ! fine adjustment of sync index
+                # ! bb lag used to place the sampling index at the center of the eye
+                bb = np.zeros(6, dtype=np.complex128)
+                for i in range(6):
+                    cd_b = ic0 + i
+                    if ic0 + 11 + NSPM < NPTS:
+                        bb[i] = np.sum((part[cd_b + 6: cd_b + 6 + NSPM: 6] * np.conj(part[cd_b:cd_b + NSPM:6])) ** 2)
                     else:
-                        delta_f = -(idf + 1)
+                        bb[i] = np.sum((part[cd_b + 6: NPTS: 6] * np.conj(part[cd_b:NPTS - 6:6])) ** 2)
 
-                    # ! Remove fine frequency error
-                    subpart = shift_freq(part, -(f_error_2 + delta_f), sample_rate)
-                    # ! place the beginning of frame at index NSPM+1
-                    subpart = np.roll(subpart, -(ic - NSPM))
+                ibb = np.argmax(np.abs(bb))
 
-                    # ! try each of 7 averaging patterns, hope that one works
-                    for avg_pattern in range(8):
-                        if avg_pattern == 0:
-                            frame = subpart[NSPM: NSPM + NSPM]
-                        elif avg_pattern == 1:
-                            frame = subpart[NSPM - 432: NSPM - 432 + NSPM]
-                            frame = np.roll(frame, 432)  # frame = np.roll(frame, -432)
-                        elif avg_pattern == 2:
-                            frame = subpart[2 * NSPM - 432: 2 * NSPM - 432 + NSPM]
-                            frame = np.roll(frame, 432)  # frame = np.roll(frame, -432)
-                        elif avg_pattern == 3:
-                            frame = subpart[:NSPM]
-                        elif avg_pattern == 4:
-                            frame = subpart[2 * NSPM: 2 * NSPM + NSPM]
-                        elif avg_pattern == 5:
-                            frame = subpart[:NSPM] + subpart[NSPM:NSPM + NSPM]
-                        elif avg_pattern == 6:
-                            frame = subpart[NSPM: NSPM + NSPM] + subpart[2 * NSPM: 2 * NSPM + NSPM]
-                        elif avg_pattern == 7:
-                            frame = subpart[:NSPM] + subpart[NSPM:NSPM + NSPM] + subpart[2 * NSPM:2 * NSPM + NSPM]
+                if ibb <= 2:
+                    ibb -= 1
+                if ibb > 2:
+                    ibb -= 7
 
-                        if x := msk144_decode_fame(frame, kLDPC_iterations):
-                            status, payload, eye_opening, bit_errors = x
+                for id in range(3):
+                    if id == 1:
+                        sign = -1
+                    elif id == 2:
+                        sign = 1
+                    else:
+                        sign = 0
 
-                            df_hv = freq_est - MSK144_CENTER_FREQ
+                    # ! Adjust frame index to place peak of bb at desired lag
+                    ic = ic0 + ibb + sign
 
-                            print("dB:", snr)
-                            print("T:", t0)
-                            print("DF:", df_hv)
-                            print("Averaging pattern:", avg_pattern + 1)
-                            print("Freq:", freq_est)
+                    if ic < 0:
+                        ic = ic + NSPM
 
-                            print("Eye opening:", eye_opening)
-                            print("Bit errors:", bit_errors)
+                    # ! Estimate fine frequency error.
+                    # ! Should a larger separation be used when frames are averaged?
+                    cca = np.sum(part[ic:ic + len(SYNC_WAVEFORM)] * np.conj(SYNC_WAVEFORM))
+                    if ic + 56 * 6 + 42 < NPTS:
+                        ccb = np.sum(part[ic + 56 * 6:ic + 56 * 6 + len(SYNC_WAVEFORM)] * np.conj(SYNC_WAVEFORM))
+                        cfac = ccb * np.conj(cca)
+                        f_error_2 = np.atan2(cfac.imag, cfac.real) / (2 * np.pi * 56 * 6 * dt_msk144)
+                    else:
+                        ccb = np.sum(part[ic - 88 * 6:ic - 88 * 6 + len(SYNC_WAVEFORM)] * np.conj(SYNC_WAVEFORM))
+                        cfac = ccb * np.conj(cca)
+                        f_error_2 = np.atan2(cfac.imag, cfac.real) / (2 * np.pi * 88 * 6 * dt_msk144)
 
-                            msg = message_decode(payload)
-                            print("Msg:", " ".join(s for s in msg if isinstance(s, str)))
-                            print("CRC:", status.crc_extracted)
+                    # ! Final estimate of the carrier frequency - returned to the calling program
+                    freq_est = int(MSK144_CENTER_FREQ + f_error + f_error_2)
 
-                            return
+                    for idf in range(5):  # frequency jitter
+                        if idf == 0:
+                            delta_f = 0
+                        elif idf % 2 == 0:
+                            delta_f = idf
+                        else:
+                            delta_f = -(idf + 1)
 
+                        # ! Remove fine frequency error
+                        subpart = shift_freq(part, -(f_error_2 + delta_f), sample_rate)
+                        # ! place the beginning of frame at index NSPM+1
+                        subpart = np.roll(subpart, -(ic - NSPM))
 
-#                         if nsuccess > 0:
-#                             ndupe=0
-#                             for (int im = 0; im<nmessages; im++)
-#                                 if ( allmessages[im] == msgreceived ) ndupe=1
-#                             ncorrected = 0
-#                             eyeopening = 0.0
-#                             msk144signalquality(c,snr,fest,t0,softbits,msgreceived,s_HisCall,ncorrected,
-#                                                 eyeopening,s_trained_msk144,s_pcoeffs_msk144,false)
-#                             if  ndupe == 0 and nmessages<20 :
-#                                 if f_only_one_color:
-#                                     f_only_one_color = false
-#                                     SetBackColor()
-#                                 allmessages[nmessages]=msgreceived
-#                                 int df_hv = fest-nrxfreq#int df_hv = freq2-nrxfreq+idf1;
-#                                 QStringList list;
-#                                 list <<s_time<<QString("%1").arg(t0,0,'f',1)<<""<<
-#                                 QString("%1").arg((int)snr)<<""<<QString("%1").arg((int)df_hv)
-#                                 <<msgreceived<<QString("%1").arg(iav+1)  //navg +1 za tuk  no ne 0 hv 1.31
-#                                 <<QString("%1").arg(ncorrected)<<QString("%1").arg(eyeopening,0,'f',1)
-#                                 <<QString(ident)+" "+QString("%1").arg((int)fest);
-#                                 if (ss_msk144ms)
-#                                     list.replace(2,str_round_20ms(p_duration));
-#                                     list.replace(4,GetStandardRPT(p_duration,snr));
-#                                 SetDecodetTextMsk2DL(list);//2.46
-#                                 nmessages++;
-#                                 if (s_mousebutton == 0) // && t2!=0.0 1.32 ia is no real 0.0   mousebutton Left=1, Right=3 fullfile=0 rtd=2
-#                                     emit EmitDecLinesPosToDisplay(nmessages,t0,t0,s_time);
-#                             goto c999;
-#         msgreceived=""
-# c999:
-#         if ( nmessages >= 3 )// nai mnogo 3 razli4ni
-#             return
+                        # ! try each of 7 averaging patterns, hope that one works
+                        for avg_pattern in range(8):
+                            if avg_pattern == 0:
+                                frame = subpart[NSPM: NSPM + NSPM]
+                            elif avg_pattern == 1:
+                                frame = subpart[NSPM - 432: NSPM - 432 + NSPM]
+                                frame = np.roll(frame, 432)  # frame = np.roll(frame, -432)
+                            elif avg_pattern == 2:
+                                frame = subpart[2 * NSPM - 432: 2 * NSPM - 432 + NSPM]
+                                frame = np.roll(frame, 432)  # frame = np.roll(frame, -432)
+                            elif avg_pattern == 3:
+                                frame = subpart[:NSPM]
+                            elif avg_pattern == 4:
+                                frame = subpart[2 * NSPM: 2 * NSPM + NSPM]
+                            elif avg_pattern == 5:
+                                frame = subpart[:NSPM] + subpart[NSPM:NSPM + NSPM]
+                            elif avg_pattern == 6:
+                                frame = subpart[NSPM: NSPM + NSPM] + subpart[2 * NSPM: 2 * NSPM + NSPM]
+                            elif avg_pattern == 7:
+                                frame = subpart[:NSPM] + subpart[NSPM:NSPM + NSPM] + subpart[2 * NSPM:2 * NSPM + NSPM]
+
+                            if x := msk144_decode_fame(frame, kLDPC_iterations):
+                                status, payload, eye_opening, bit_errors = x
+
+                                if status.crc_extracted in hashes:
+                                    raise NextCand
+
+                                hashes.add(status.crc_extracted)
+
+                                df_hv = freq_est - MSK144_CENTER_FREQ
+
+                                print("dB:", snr)
+                                print("T:", t0)
+                                print("DF:", df_hv)
+                                print("Averaging pattern:", avg_pattern + 1)
+                                print("Freq:", freq_est)
+
+                                print("Eye opening:", eye_opening)
+                                print("Bit errors:", bit_errors)
+
+                                msg = message_decode(payload)
+                                print("Msg:", " ".join(s for s in msg if isinstance(s, str)))
+                                print("CRC:", status.crc_extracted)
+                                print("-" * 100)
+
+                                raise NextCand
+
+        if len(hashes) >= 3:
+            break
 
 
 def msk144_decode(signal: npt.NDArray[np.float64], s_istart: float, sample_rate: int):
