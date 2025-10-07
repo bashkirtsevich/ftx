@@ -76,13 +76,12 @@ def msk144_decode_fame(frame: npt.NDArray[np.complex128], max_iterations: int):
     ccb = sum(frame[56 * 6: 56 * 6 + len(SYNC_WAVEFORM)] * np.conj(SYNC_WAVEFORM))
     cc = cca + ccb
 
-    phase0 = np.atan2(cc.imag, cc.real)
+    phase_0 = np.atan2(cc.imag, cc.real)
 
     NSPM = 864
 
-    cfac = complex(np.cos(phase0), np.sin(phase0))
-
-    frame *= cfac.conjugate()
+    fac = complex(np.cos(phase_0), np.sin(phase_0))
+    frame *= fac.conjugate()
 
     soft_bits = np.zeros(MSK144_BITS_COUNT, dtype=np.float64)
     hard_bits = np.zeros(MSK144_BITS_COUNT, dtype=np.int64)
@@ -95,39 +94,39 @@ def msk144_decode_fame(frame: npt.NDArray[np.complex128], max_iterations: int):
         soft_bits[1] += frame[i].real * pp_msk144[i]
 
     for i in range(1, 72):
-        sum01 = 0.0
+        sum_01 = 0
         for j in range(12):
-            sum01 += frame[i * 12 - 6 + j].imag * pp_msk144[j]
-        soft_bits[2 * i - 0] = sum01
+            sum_01 += frame[i * 12 - 6 + j].imag * pp_msk144[j]
+        soft_bits[2 * i] = sum_01
 
-        sum01 = 0.0
+        sum_01 = 0
         for j in range(12):
-            sum01 += frame[i * 12 + j].real * pp_msk144[j]
-        soft_bits[2 * i + 1] = sum01
+            sum_01 += frame[i * 12 + j].real * pp_msk144[j]
+        soft_bits[2 * i + 1] = sum_01
 
-        if soft_bits[2 * i] >= 0.0:
+        if soft_bits[2 * i] >= 0:
             hard_bits[2 * i] = 1
 
-        if soft_bits[2 * i + 1] >= 0.0:
+        if soft_bits[2 * i + 1] >= 0:
             hard_bits[2 * i + 1] = 1
 
-    if soft_bits[0] >= 0.0:
+    if soft_bits[0] >= 0:
         hard_bits[0] = 1
 
-    if soft_bits[1] >= 0.0:
+    if soft_bits[1] >= 0:
         hard_bits[1] = 1
 
-    nbadsync1 = 0
-    nbadsync2 = 0
+    bad_sync_1 = 0
+    bad_sync_2 = 0
     for i in range(8):
-        nbadsync1 += (2 * hard_bits[i] - 1) * sync_words[i]
-        nbadsync2 += ((2 * hard_bits[i + 57 - 1] - 1) * sync_words[i])
+        bad_sync_1 += (2 * hard_bits[i] - 1) * sync_words[i]
+        bad_sync_2 += ((2 * hard_bits[i + 57 - 1] - 1) * sync_words[i])
 
-    nbadsync1 = (8 - nbadsync1) // 2
-    nbadsync2 = (8 - nbadsync2) // 2
+    bad_sync_1 = (8 - bad_sync_1) // 2
+    bad_sync_2 = (8 - bad_sync_2) // 2
 
-    nbadsync = nbadsync1 + nbadsync2
-    if nbadsync > 4:
+    bad_sync = bad_sync_1 + bad_sync_2
+    if bad_sync > 4:
         return
 
     sav = 0.0
@@ -140,7 +139,7 @@ def msk144_decode_fame(frame: npt.NDArray[np.complex128], max_iterations: int):
     s2av /= MSK144_BITS_COUNT
 
     ssig = np.sqrt(s2av - (sav * sav))
-    if ssig == 0.0:
+    if ssig == 0:
         ssig = 1.0
 
     for i in range(MSK144_BITS_COUNT):
@@ -173,8 +172,8 @@ def msk144_decode_fame(frame: npt.NDArray[np.complex128], max_iterations: int):
         else:
             msg_bits[j] = (msg_bits[i] + 1) % 2 if j % 2 == 1 else msg_bits[i]
 
-    eye_top = 1.0
-    eye_bot = -1.0
+    eye_top = 1
+    eye_bot = -1
     for i in range(MSK144_BITS_COUNT):
         if msg_bits[i] == 1:
             eye_top = min(soft_bits[i], eye_top)
