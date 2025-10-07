@@ -409,7 +409,7 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
                     f_error_2 = np.atan2(cfac.imag, cfac.real) / (2 * np.pi * 88 * 6 * dt_msk144)
 
                 # ! Final estimate of the carrier frequency - returned to the calling program
-                fest = int(rx_freq + f_error + f_error_2)
+                freq_est = int(rx_freq + f_error + f_error_2)
 
                 for idf in range(5):  # frequency jitter
                     if idf == 0:
@@ -424,39 +424,40 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
                     # ! place the beginning of frame at index NSPM+1
                     subpart = np.roll(subpart, -(ic - NSPM))
 
-                    for iav in range(8):  # ! Hopefully we can eliminate some of these after looking at more examples
-                        if iav == 0:
+                    # ! try each of 7 averaging patterns, hope that one works
+                    for avg_pattern in range(8):
+                        if avg_pattern == 0:
                             frame = subpart[NSPM: NSPM + NSPM]
-                        elif iav == 1:
+                        elif avg_pattern == 1:
                             frame = subpart[NSPM - 432: NSPM - 432 + NSPM]
                             frame = np.roll(frame, 432)  # frame = np.roll(frame, -432)
-                        elif iav == 2:
+                        elif avg_pattern == 2:
                             frame = subpart[2 * NSPM - 432: 2 * NSPM - 432 + NSPM]
                             frame = np.roll(frame, 432)  # frame = np.roll(frame, -432)
-                        elif iav == 3:
+                        elif avg_pattern == 3:
                             frame = subpart[:NSPM]
-                        elif iav == 4:
+                        elif avg_pattern == 4:
                             frame = subpart[2 * NSPM: 2 * NSPM + NSPM]
-                        elif iav == 5:
+                        elif avg_pattern == 5:
                             frame = subpart[:NSPM] + subpart[NSPM:NSPM + NSPM]
-                        elif iav == 6:
+                        elif avg_pattern == 6:
                             frame = subpart[NSPM: NSPM + NSPM] + subpart[2 * NSPM: 2 * NSPM + NSPM]
-                        elif iav == 7:
+                        elif avg_pattern == 7:
                             frame = subpart[:NSPM] + subpart[NSPM:NSPM + NSPM] + subpart[2 * NSPM:2 * NSPM + NSPM]
 
                         if x := msk144_decode_fame(frame, kLDPC_iterations):
                             status, payload, eye_opening, bit_errors = x
 
-                            df_hv = fest - rx_freq
+                            df_hv = freq_est - rx_freq
 
                             print("dB:", snr)
                             print("T:", t0)
                             print("DF:", df_hv)
-                            print("Navig:", iav + 1)
-                            print("Freq:", fest)
+                            print("Averaging pattern:", avg_pattern + 1)
+                            print("Freq:", freq_est)
 
-                            print("eye_opening:", eye_opening)
-                            print("bit_errors:", bit_errors)
+                            print("Eye opening:", eye_opening)
+                            print("Bit errors:", bit_errors)
 
                             msg = message_decode(payload)
                             print("Msg:", " ".join(s for s in msg if isinstance(s, str)))
