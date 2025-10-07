@@ -502,13 +502,13 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
 def msk144_decode(signal: npt.NDArray[np.float64], s_istart: float, sample_rate: int):
     npts = min(len(signal), 30 * sample_rate)
 
-    wave = signal[:npts]
+    part = signal[:npts]
 
-    rms = np.sqrt(np.mean(wave ** 2))
-    if rms == 0.0 or np.isnan(rms):
-        rms = 1.0
+    rms = np.sqrt(np.mean(part ** 2))
+    if rms == 0 or np.isnan(rms):
+        rms = 1
 
-    dat = wave / (rms / 2)
+    dat = part / (rms / 2)
 
     n = int(np.log(npts) / np.log(2) + 1)
 
