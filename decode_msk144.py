@@ -225,54 +225,54 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
 
     steps_real = 0
     for step in range(n_steps):
-        ns = n_step_size * step
-        ne = ns + NSPM
+        part_start = n_step_size * step
+        part_end = part_start + NSPM
 
-        if ne > n:
+        if part_end > n:
             break
 
-        ctmp = signal[ns: ne]
+        part = signal[part_start: part_end]
 
         # Coarse carrier frequency sync - seek tones at 2000 Hz and 4000 Hz in
         # squared signal spectrum.
         # search range for coarse frequency error is +/- 100 Hz
-        ctmp = ctmp ** 2
-        ctmp[:12] = ctmp[:12] * rcw_msk144
-        ctmp[NSPM - 12:NSPM] = ctmp[NSPM - 12:NSPM] * rcw_msk144[::-1]  # Looks like window smooth function
+        part = part ** 2
+        part[:12] = part[:12] * rcw_msk144
+        part[NSPM - 12:NSPM] = part[NSPM - 12:NSPM] * rcw_msk144[::-1]  # Looks like window smooth function
 
-        ctmp = np.fft.fft(ctmp, NFFT)
-        tone_spec = np.abs(ctmp) ** 2
+        spec = np.fft.fft(part, NFFT)
+        amps = np.abs(spec) ** 2
 
-        # MAD: Find index with max value in tone_spec[ihlo_msk144:ihhi_msk144]
+        # MAD: Find index with max value in amps[ihlo_msk144:ihhi_msk144]
         ##########
-        h_peak = ihlo_msk144 + np.argmax(tone_spec[ihlo_msk144:ihhi_msk144])
+        h_peak = ihlo_msk144 + np.argmax(amps[ihlo_msk144:ihhi_msk144])
 
-        delta_h = -((ctmp[h_peak - 1] - ctmp[h_peak + 1]) / (
-                2 * ctmp[h_peak] - ctmp[h_peak - 1] - ctmp[h_peak + 1])).real
-        mag_h = tone_spec[h_peak]
+        delta_hi = -((spec[h_peak - 1] - spec[h_peak + 1]) / (
+                2 * spec[h_peak] - spec[h_peak - 1] - spec[h_peak + 1])).real
+        mag_hi = amps[h_peak]
 
-        ahavp = (np.sum(tone_spec[ihlo_msk144:ihhi_msk144]) - mag_h) / (ihhi_msk144 - ihlo_msk144)
-        trath = mag_h / (ahavp + 0.01)
+        ahavp = (np.sum(amps[ihlo_msk144:ihhi_msk144]) - mag_hi) / (ihhi_msk144 - ihlo_msk144)
+        trath = mag_hi / (ahavp + 0.01)
         ##########
-        l_peak = illo_msk144 + np.argmax(tone_spec[illo_msk144:ilhi_msk144])
+        l_peak = illo_msk144 + np.argmax(amps[illo_msk144:ilhi_msk144])
 
-        delta_l = -((ctmp[l_peak - 1] - ctmp[l_peak + 1]) / (
-                2 * ctmp[l_peak] - ctmp[l_peak - 1] - ctmp[l_peak + 1])).real
-        mag_l = tone_spec[l_peak]
+        delta_lo = -((spec[l_peak - 1] - spec[l_peak + 1]) / (
+                2 * spec[l_peak] - spec[l_peak - 1] - spec[l_peak + 1])).real
+        mag_lo = amps[l_peak]
 
-        alavp = (np.sum(tone_spec[illo_msk144:ilhi_msk144]) - mag_l) / (ilhi_msk144 - illo_msk144)
-        tratl = mag_l / (alavp + 0.01)
+        alavp = (np.sum(amps[illo_msk144:ilhi_msk144]) - mag_lo) / (ilhi_msk144 - illo_msk144)
+        tratl = mag_lo / (alavp + 0.01)
         ##########
 
-        freq_err_h = (h_peak + delta_h - i4000_msk144) * df / 2
-        freq_err_l = (l_peak + delta_l - i2000_msk144) * df / 2
+        freq_err_h = (h_peak + delta_hi - i4000_msk144) * df / 2
+        freq_err_l = (l_peak + delta_lo - i2000_msk144) * df / 2
 
-        if mag_h >= mag_l:
+        if mag_hi >= mag_lo:
             f_error = freq_err_h
         else:
             f_error = freq_err_l
 
-        detmet[step] = max(mag_h, mag_l)
+        detmet[step] = max(mag_hi, mag_lo)
         detmet2[step] = max(trath, tratl)
         detfer[step] = f_error
 
@@ -280,15 +280,14 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
 
     indices = np.argsort(detmet[:steps_real])
 
-    xmed = detmet[indices[steps_real // 4]]
-    if xmed == 0.0:
-        xmed = 1.0
+    xmedian = detmet[indices[steps_real // 4]]
+    if xmedian == 0.0:
+        xmedian = 1.0
 
-    detmet[:steps_real] = detmet[:steps_real] / xmed
+    detmet[:steps_real] = detmet[:steps_real] / xmedian
 
     count_cand = 0
     for ip in range(max_cand):
-        # use something like the "clean" algorithm to find candidates
         il = np.argmax(detmet[:steps_real])
 
         if detmet[il] < 3.5:
@@ -337,7 +336,6 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
             imid = n - NPTS // 2
 
         t0 = times[ip] + dt_msk144 * (start)
-        c_dd = 0
 
         part = signal[imid - NPTS // 2: imid + NPTS // 2]
 
@@ -346,14 +344,14 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
         snr = max(-4.0, min(24.0, snr))
 
         # ! remove coarse freq error - should now be within a few Hz
-        cdat = shift_freq(part, -(rx_freq + f_error), sample_rate)
+        part = shift_freq(part, -(rx_freq + f_error), sample_rate)
 
         cc1 = np.zeros(NPTS, dtype=np.complex128)
         cc2 = np.zeros(NPTS, dtype=np.complex128)
 
         for i in range(NPTS - (56 * 6 + 42)):
-            cc1[i] = sum(cdat[i: i + len(SYNC_WAVEFORM)] * np.conj(SYNC_WAVEFORM))
-            cc2[i] = sum(cdat[i + 56 * 6: i + 56 * 6 + len(SYNC_WAVEFORM)] * np.conj(SYNC_WAVEFORM))
+            cc1[i] = sum(part[i: i + len(SYNC_WAVEFORM)] * np.conj(SYNC_WAVEFORM))
+            cc2[i] = sum(part[i + 56 * 6: i + 56 * 6 + len(SYNC_WAVEFORM)] * np.conj(SYNC_WAVEFORM))
 
         dd = abs(cc1) * abs(cc2)
 
@@ -373,9 +371,9 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
             for i in range(6):
                 cd_b = ic0 + i
                 if ic0 + 11 + NSPM < NPTS:
-                    bb[i] = np.sum((cdat[cd_b + 6: cd_b + 6 + NSPM: 6] * np.conj(cdat[cd_b:cd_b + NSPM:6])) ** 2)
+                    bb[i] = np.sum((part[cd_b + 6: cd_b + 6 + NSPM: 6] * np.conj(part[cd_b:cd_b + NSPM:6])) ** 2)
                 else:
-                    bb[i] = np.sum((cdat[cd_b + 6: NPTS: 6] * np.conj(cdat[cd_b:NPTS - 6:6])) ** 2)
+                    bb[i] = np.sum((part[cd_b + 6: NPTS: 6] * np.conj(part[cd_b:NPTS - 6:6])) ** 2)
 
             ibb = np.argmax(np.abs(bb))
 
@@ -400,13 +398,13 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
 
                 # ! Estimate fine frequency error.
                 # ! Should a larger separation be used when frames are averaged?
-                cca = np.sum(cdat[ic:ic + len(SYNC_WAVEFORM)] * np.conj(SYNC_WAVEFORM))
+                cca = np.sum(part[ic:ic + len(SYNC_WAVEFORM)] * np.conj(SYNC_WAVEFORM))
                 if ic + 56 * 6 + 42 < NPTS:
-                    ccb = np.sum(cdat[ic + 56 * 6:ic + 56 * 6 + len(SYNC_WAVEFORM)] * np.conj(SYNC_WAVEFORM))
+                    ccb = np.sum(part[ic + 56 * 6:ic + 56 * 6 + len(SYNC_WAVEFORM)] * np.conj(SYNC_WAVEFORM))
                     cfac = ccb * np.conj(cca)
                     ferr2 = np.atan2(cfac.imag, cfac.real) / (2 * np.pi * 56 * 6 * dt_msk144)
                 else:
-                    ccb = np.sum(cdat[ic - 88 * 6:ic - 88 * 6 + len(SYNC_WAVEFORM)] * np.conj(SYNC_WAVEFORM))
+                    ccb = np.sum(part[ic - 88 * 6:ic - 88 * 6 + len(SYNC_WAVEFORM)] * np.conj(SYNC_WAVEFORM))
                     cfac = ccb * np.conj(cca)
                     ferr2 = np.atan2(cfac.imag, cfac.real) / (2 * np.pi * 88 * 6 * dt_msk144)
 
@@ -422,7 +420,7 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
                         delta_f = -(idf + 1.0)
 
                     # ! Remove fine frequency error
-                    cdat2 = shift_freq(cdat, -(ferr2 + delta_f), sample_rate)
+                    cdat2 = shift_freq(part, -(ferr2 + delta_f), sample_rate)
                     # ! place the beginning of frame at index NSPM+1
                     cdat2 = np.roll(cdat2, -(ic - NSPM))
 
