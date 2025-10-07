@@ -50,6 +50,12 @@ sync_Q = np.array([
 
 SYNC_WAVEFORM = np.array([complex(sync_I[i], sync_Q[i]) for i in range(42)])
 
+NSPM = 864
+NPTS = 3 * NSPM
+NFFT = 864
+
+MSK144_CENTER_FREQ = 1500
+
 
 def pack_bits(bit_array: npt.NDArray[np.uint8], num_bits: int) -> typing.ByteString:
     # Packs a string of bits each represented as a zero/non-zero byte in plain[],
@@ -77,8 +83,6 @@ def msk144_decode_fame(frame: npt.NDArray[np.complex128], max_iterations: int):
     cc = cca + ccb
 
     phase_0 = np.atan2(cc.imag, cc.real)
-
-    NSPM = 864
 
     fac = complex(np.cos(phase_0), np.sin(phase_0))
     frame *= fac.conjugate()
@@ -189,12 +193,6 @@ def msk144_decode_fame(frame: npt.NDArray[np.complex128], max_iterations: int):
 
 def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate: int,
                   max_cand: int = 16, tolerance: int = 150):
-    NSPM = 864
-    NPTS = 3 * NSPM
-    NFFT = 864
-
-    rx_freq = 1500
-
     # ! define half-sine pulse and raised-cosine edge window
     dt_msk144 = 1 / sample_rate
 
@@ -203,8 +201,8 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
     n_step_size = 216
     n_steps = (n - NPTS) // n_step_size
 
-    nfhi = 2 * (rx_freq + 500)
-    nflo = 2 * (rx_freq - 500)
+    nfhi = 2 * (MSK144_CENTER_FREQ + 500)
+    nflo = 2 * (MSK144_CENTER_FREQ - 500)
 
     ihlo_msk144 = int((nfhi - 2 * tolerance) / df)
     ihhi_msk144 = int((nfhi + 2 * tolerance) / df)
@@ -344,7 +342,7 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
         snr = max(-4.0, min(24.0, snr))
 
         # ! remove coarse freq error - should now be within a few Hz
-        part = shift_freq(part, -(rx_freq + f_error), sample_rate)
+        part = shift_freq(part, -(MSK144_CENTER_FREQ + f_error), sample_rate)
 
         cc1 = np.zeros(NPTS, dtype=np.complex128)
         cc2 = np.zeros(NPTS, dtype=np.complex128)
@@ -409,7 +407,7 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
                     f_error_2 = np.atan2(cfac.imag, cfac.real) / (2 * np.pi * 88 * 6 * dt_msk144)
 
                 # ! Final estimate of the carrier frequency - returned to the calling program
-                freq_est = int(rx_freq + f_error + f_error_2)
+                freq_est = int(MSK144_CENTER_FREQ + f_error + f_error_2)
 
                 for idf in range(5):  # frequency jitter
                     if idf == 0:
@@ -448,7 +446,7 @@ def detect_msk144(signal: np.typing.ArrayLike, n: int, start: float, sample_rate
                         if x := msk144_decode_fame(frame, kLDPC_iterations):
                             status, payload, eye_opening, bit_errors = x
 
-                            df_hv = freq_est - rx_freq
+                            df_hv = freq_est - MSK144_CENTER_FREQ
 
                             print("dB:", snr)
                             print("T:", t0)
