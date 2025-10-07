@@ -168,8 +168,8 @@ def msk144_decode_fame(frame: npt.NDArray[np.complex128]):
     crc_extracted = mskx_extract_crc(payload)
 
     tones = list(msk144_encode(payload))
-    msg_bits = np.zeros(len(tones))
-    for i in range(len(tones) - 1):
+    msg_bits = np.zeros(MSK144_BITS_COUNT)
+    for i in range(MSK144_BITS_COUNT - 1):
         j = i + 1
         if tones[i] == 0:
             msg_bits[j] = msg_bits[i] if j % 2 == 1 else (msg_bits[i] + 1) % 2
@@ -178,15 +178,13 @@ def msk144_decode_fame(frame: npt.NDArray[np.complex128]):
 
     eye_top = 1.0
     eye_bot = -1.0
-    bit_errors = 0
     for i in range(len(msg_bits)):
         if msg_bits[i] == 1:
             eye_top = min(soft_bits[i], eye_top)
         else:
             eye_bot = max(soft_bits[i], eye_bot)
 
-        if hard_bits[i] != msg_bits[i]:
-            bit_errors += 1
+    bit_errors = np.count_nonzero(hard_bits != msg_bits)
 
     eye_opening = eye_top - eye_bot
     print("eye_opening:", eye_opening)
