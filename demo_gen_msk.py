@@ -52,7 +52,7 @@ def main():
 
     # Gen wav file
     amplitude = np.iinfo(np.int16).max
-    wave = np.concat([signal * amplitude] * 10)
+    wave = np.concat([signal * amplitude] * 420)
 
     write("examples/signal.wav", sample_rate // downsampling, wave.astype(np.int16))
 
