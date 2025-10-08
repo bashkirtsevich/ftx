@@ -1,14 +1,10 @@
 import math
 import typing
-from collections import namedtuple
 from copy import copy
 from dataclasses import dataclass
-from functools import cache
 from itertools import cycle
 
 import numpy as np
-from numba import jit
-from numpy import typing as npt
 
 from consts.ftx import *
 from crc.ftx import ftx_extract_crc, ftx_check_crc
@@ -16,11 +12,7 @@ from encode import ft4_encode, ft8_encode
 from ldpc import bp_decode
 from message import message_decode
 from osd import osd_decode
-
-kMin_score = 5  # Minimum sync score threshold for candidates
-kMax_candidates = 140
-kLDPC_iterations = 25
-kMaxLDPCErrors = 32
+from monitor import DecodeStatus, AbstractMonitor
 
 
 @dataclass
@@ -56,35 +48,17 @@ class Candidate:
     score: int = 0  # < Candidate score (non-negative number; higher score means higher likelihood)
 
 
-DecodeStatus = namedtuple("DecodeStatus", ["ldpc_errors", "crc_extracted"])
+class FTXMonitor(AbstractMonitor):
+    MIN_SCORE = 5  # Minimum sync score threshold for candidates
+    MAX_CANDIDATES = 140
+    LDPC_ITERATIONS = 25
+    MAX_LDPC_ERRORS = 32
 
-
-class Monitor:
     # FT4/FT8 monitor object that manages DSP processing of incoming audio data and prepares a waterfall object
     @staticmethod
     def hann_i(i: int, N: int) -> float:
         x = math.sin(math.pi * i / N)
         return x ** 2
-
-    @staticmethod
-    def pack_bits(bit_array: typing.ByteString, num_bits: int) -> typing.ByteString:
-        # Packs a string of bits each represented as a zero/non-zero byte in plain[],
-        # as a string of packed bits starting from the MSB of the first byte of packed[]
-        num_bytes = (num_bits + 7) // 8
-        packed = bytearray(b"\x00" * num_bytes)
-
-        mask = 0x80
-        byte_idx = 0
-        for i in range(num_bits):
-            if bit_array[i]:
-                packed[byte_idx] |= mask
-
-            mask >>= 1
-            if not mask:
-                mask = 0x80
-                byte_idx += 1
-
-        return packed
 
     @staticmethod
     def ftx_normalize_logl(log174: typing.List[float]) -> typing.Generator[float, None, None]:
@@ -426,7 +400,7 @@ class Monitor:
         ldpc_errors, plain174 = bp_decode(log174, max_iterations)
 
         # FIXME: Slow code
-        if ldpc_errors > kMaxLDPCErrors:
+        if ldpc_errors > self.MAX_LDPC_ERRORS:
             return None
 
         if ldpc_errors > 0:
@@ -564,13 +538,13 @@ class Monitor:
 
         return snr_all / self.wf.freq_osr / 2 - 22
 
-    def decode(self, tm_slot_start) -> typing.Generator[typing.Tuple[float, float, float, str], None, None]:
+    def decode(self, tm_slot_start: float) -> typing.Generator[typing.Tuple[float, float, float, str], None, None]:
         hashes = set()
 
         # Find top candidates by Costas sync score and localize them in time and frequency
         wf = self.wf
 
-        candidate_list = self.ftx_find_candidates(kMax_candidates, kMin_score)
+        candidate_list = self.ftx_find_candidates(self.MAX_CANDIDATES, self.MIN_SCORE)
         # Go over candidates and attempt to decode messages
         for cand in candidate_list:
             # print(f"{i}\t{cand.score}\t{cand.time_offset}\t{cand.freq_offset}\t{cand.time_sub}\t{cand.freq_sub}")
@@ -578,7 +552,7 @@ class Monitor:
             freq_hz = (self.min_bin + cand.freq_offset + cand.freq_sub / wf.freq_osr) / self.symbol_period
             time_sec = (cand.time_offset + cand.time_sub / wf.time_osr) * self.symbol_period - 0.65
 
-            if not (x := self.ftx_decode_candidate(cand, kLDPC_iterations)):
+            if not (x := self.ftx_decode_candidate(cand, self.LDPC_ITERATIONS)):
                 continue
 
             status, message, snr = x
@@ -591,57 +565,3 @@ class Monitor:
             call_to_rx, call_de_rx, extra_rx = message_decode(message)
 
             yield snr, time_sec, freq_hz, " ".join([call_to_rx, call_de_rx or "", extra_rx or ""])
-
-
-@cache
-@jit(nopython=True)
-def msk_filter_response(n_fft: int, sample_rate: int) -> npt.NDArray[np.float64]:
-    t = 1 / 2000
-    beta = 0.1
-    df = sample_rate / n_fft
-
-    nh = (n_fft // 2) + 1
-
-    response = np.full(nh, 1, dtype=np.float64)
-    for i in range(nh):
-        f = abs(df * i - 1500)
-
-        if (1 + beta) / (2 * t) >= f > (1 - beta) / (2 * t):
-            response[i] = response[i] * 0.5 * (1 + np.cos((np.pi * t / beta) * (f - (1 - beta) / (2 * t))))
-
-        elif f > (1 + beta) / (2 * t):
-            response[i] = 0.0
-
-    return response
-
-
-def fourier_bpf(signal: npt.NDArray[np.float64], n_fft: int,
-                response: npt.NDArray[np.float64]) -> npt.NDArray[np.complex128]:
-    # Time domain -> Freq domain
-    freq_d = np.fft.fft(signal, n=n_fft)
-
-    # Frequency attenuation
-    freq_d[:len(response)] = freq_d[:len(response)] * response
-    freq_d[0] = 0.5 * freq_d[0]
-    # Attenuate other
-    freq_d[len(response): n_fft] = complex(0, 0)
-
-    # Freq domain -> Time domain
-    time_d = np.fft.ifft(freq_d, n=n_fft)
-
-    return time_d
-
-
-@jit(nopython=True)
-def shift_freq(complex_signal: npt.NDArray[np.complex128], freq: float, sample_rate: int) -> npt.NDArray[np.complex128]:
-    phi = 2 * np.pi * freq / sample_rate
-    step = complex(np.cos(phi), np.sin(phi))
-
-    phasor = complex(1, 1)
-    signal = np.zeros(len(complex_signal), dtype=np.complex128)
-
-    for i, cs_val in enumerate(complex_signal):
-        phasor *= step
-        signal[i] = phasor * cs_val
-
-    return signal

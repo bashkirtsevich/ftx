@@ -1,5 +1,37 @@
 import numpy as np
 
+MSK144_BITS_COUNT = 144
+
+MSK144_CENTER_FREQ = 1500
+
+MSK144_SYNC = [0, 1, 1, 1, 0, 0, 1, 0]  # 0x72 in binary
+
+SAMPLES_PER_WORD = np.sin([i * np.pi / 12 for i in range(12)])
+
+SMOOTH_WINDOW = (1 - np.cos([i * np.pi / 12 for i in range(12)])) / 2
+
+SYNC_WORDS = np.array([2 * s8 - 1 for s8 in MSK144_SYNC])
+
+SYNC_I = np.array([
+    sample * SYNC_WORDS[j * 2 + 1]
+    for j in range(4)
+    for sample in SAMPLES_PER_WORD
+])
+
+SYNC_Q = np.array([
+    pp * SYNC_WORDS[j * 2]
+    for j in range(4)
+    for pp in (SAMPLES_PER_WORD[6:] if j == 0 else SAMPLES_PER_WORD)
+])
+
+SYNC_WAVEFORM = np.array([complex(SYNC_I[i], SYNC_Q[i]) for i in range(42)])
+SYNC_WAVEFORM_LEN = len(SYNC_WAVEFORM)
+SYNC_WAVEFORM_CONJ = np.conj(SYNC_WAVEFORM)
+
+NSPM = 864
+NPTS = 3 * NSPM
+NFFT = 864
+
 # Define MSKX LDPC params
 MSKX_LDPC_K = 90
 MSKX_LDPC_M = 38

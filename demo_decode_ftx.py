@@ -4,7 +4,7 @@ import numpy as np
 from scipy.io.wavfile import read
 
 from consts.ftx import FTX_PROTOCOL_FT8, FTX_PROTOCOL_FT4
-from decode import Monitor
+from decode_ftx import FTXMonitor
 
 kFreq_osr = 2  # Frequency oversampling rate (bin subdivision)
 kTime_osr = 4  # Time oversampling rate (symbol subdivision)
@@ -24,7 +24,7 @@ def main():
 
     protocol = FTX_PROTOCOL_FT4 if is_ft4 else FTX_PROTOCOL_FT8
 
-    mon = Monitor(
+    mon = FTXMonitor(
         f_min=200,
         f_max=3000,
         sample_rate=sample_rate,
