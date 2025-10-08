@@ -1,11 +1,12 @@
 import numpy as np
+import numpy.typing as npt
 import typing
 
 
 def msk_gen_signal(
         tones: typing.List[int], sample_rate: int,
         carrier_freq: int = 1000, delta_freq: int = 1000,
-        sampling_factor: int = 1, sampling_rate_coef: int = 4):
+        sampling_factor: int = 1, sampling_rate_coef: int = 4) -> npt.NDArray[np.float64]:
     dt = 1.0 / (sampling_factor * sample_rate)
     samples_per_symbol = 6 * sampling_rate_coef
 

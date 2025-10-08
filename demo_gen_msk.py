@@ -2,6 +2,7 @@ import typing
 
 import numpy as np
 from scipy.io.wavfile import write
+from scipy.signal import decimate
 
 from encode import msk144_encode
 from message import message_encode, message_encode_free
@@ -35,20 +36,25 @@ def gen_msg_tones(call_to: str, call_de: str, extra: str = "") -> typing.List[in
 
 
 def main():
+    tones = gen_msg_tones("CQ", "R9FEU", "LO87")
+
+    # Gen base signal
     sample_rate = 48000
-
-    print("Gen tones")
-    # tones = gen_free_text_tones(f"0123456789AB)
-    # tones = gen_msg_tones("CQ", "R1ABC", "AA00")
-    tones = gen_free_text_tones("R9FEU 73")
-
-    print("Gen signal")
     signal = gen_signal(tones, sample_rate=sample_rate)
 
+    # Adjust volume
+    volume = 0.5
+    signal *= volume
+
+    # Downsample
+    downsampling = 4
+    signal = decimate(signal, downsampling)
+
+    # Gen wav file
     amplitude = np.iinfo(np.int16).max
     wave = np.concat([signal * amplitude] * 10)
 
-    write("examples/signal.wav", sample_rate, wave.astype(np.int16))
+    write("examples/signal.wav", sample_rate // downsampling, wave.astype(np.int16))
 
 
 if __name__ == '__main__':
