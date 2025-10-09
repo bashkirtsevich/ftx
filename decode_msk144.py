@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from crc.mskx import mskx_check_crc, mskx_extract_crc
 from encode import msk144_encode
-from ldpc_mskx import bp_decode
+from ldpc.mskx import bp_decode
 from consts.mskx import *
 import typing
 

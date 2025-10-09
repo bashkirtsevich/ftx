@@ -4,7 +4,7 @@ from functools import partial, cmp_to_key
 
 from consts.ftx import *
 from crc.ftx import ftx_check_crc
-from ldpc import ldpc_encode
+from ldpc.ftx import ldpc_encode
 
 
 # Performs Gauss-Jordan elimination on a binary matrix to find its inverse.
