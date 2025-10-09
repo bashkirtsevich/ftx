@@ -65,7 +65,8 @@ class MSK144Monitor(AbstractMonitor):
         freq_d = np.fft.fft(signal, n=n_fft)
 
         # Frequency attenuation
-        freq_d[:len(response)] = freq_d[:len(response)] * response
+        response_len = len(response)
+        freq_d[:response_len] = freq_d[:response_len] * response
         freq_d[0] = 0.5 * freq_d[0]
         # Attenuate other
         freq_d[len(response): n_fft] = complex(0, 0)
