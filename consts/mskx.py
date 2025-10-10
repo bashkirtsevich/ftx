@@ -10,7 +10,7 @@ SAMPLES_PER_WORD = np.sin([i * np.pi / 12 for i in range(12)])
 
 SMOOTH_WINDOW = (1 - np.cos([i * np.pi / 12 for i in range(12)])) / 2
 
-SYNC_WORDS = np.array([2 * s8 - 1 for s8 in MSK144_SYNC])
+SYNC_WORDS = np.array([2 * b - 1 for b in MSK144_SYNC])
 
 SYNC_I = np.array([
     sample * SYNC_WORDS[j * 2 + 1]
