@@ -289,11 +289,11 @@ class MSK144Monitor(AbstractMonitor):
 
         indices = np.argsort(det_amp[:steps_real])
 
-        xmedian = det_amp[indices[steps_real // 4]]
-        if xmedian == 0:
-            xmedian = 1
+        amp_median = det_amp[indices[steps_real // 4]]
+        if amp_median == 0:
+            amp_median = 1
 
-        det_amp[:steps_real] /= xmedian
+        det_amp[:steps_real] /= amp_median
 
         time_arr = np.zeros(max_cand, dtype=np.float64)
         freq_arr = np.zeros(max_cand, dtype=np.float64)
