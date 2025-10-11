@@ -48,7 +48,7 @@ class MSK144Monitor(AbstractMonitor):
 
         response = np.full(nh, 1, dtype=np.float64)
         for i in range(nh):
-            f = abs(df * i - MSK144_CENTER_FREQ)
+            f = abs(df * i - MSK144_FREQ_CENTER)
 
             if (1 + beta) / (2 * t) >= f > (1 - beta) / (2 * t):
                 response[i] = response[i] * 0.5 * (1 + np.cos((np.pi * t / beta) * (f - (1 - beta) / (2 * t))))
@@ -214,14 +214,13 @@ class MSK144Monitor(AbstractMonitor):
                        max_cand: int = 16, tolerance: int = 150) -> typing.Generator[LogItem, None, None]:
         # ! define half-sine pulse and raised-cosine edge window
         dt = 1 / self.sample_rate
-
         df = self.sample_rate / MSK144_NFFT
 
         step_size = 216
         steps_count = (signal_len - MSK144_NPTS) // step_size
 
-        freq_hi = 2 * (MSK144_CENTER_FREQ + 500)
-        freq_lo = 2 * (MSK144_CENTER_FREQ - 500)
+        freq_hi = MSK144_FREQ_HI * 2
+        freq_lo = MSK144_FREQ_LO * 2
 
         ih_lo = int((freq_hi - 2 * tolerance) / df)
         ih_hi = int((freq_hi + 2 * tolerance) / df)
@@ -231,10 +230,6 @@ class MSK144Monitor(AbstractMonitor):
 
         freq_2000hz = int(freq_lo / df)
         freq_4000hz = int(freq_hi / df)
-
-        time_arr = np.zeros(max_cand, dtype=np.float64)
-        freq_arr = np.zeros(max_cand, dtype=np.float64)
-        snr_arr = np.zeros(max_cand, dtype=np.float64)
 
         detmet = np.zeros(steps_count)
         detmet2 = np.zeros(steps_count)
@@ -255,7 +250,7 @@ class MSK144Monitor(AbstractMonitor):
             # search range for coarse frequency error is +/- 100 Hz
             part = part ** 2
             part[:12] = part[:12] * SMOOTH_WINDOW
-            part[MSK144_NSPM - 12:MSK144_NSPM] = part[MSK144_NSPM - 12:MSK144_NSPM] * SMOOTH_WINDOW[::-1]  # Looks like window smooth function
+            part[MSK144_NSPM - 12:MSK144_NSPM] = part[MSK144_NSPM - 12:MSK144_NSPM] * SMOOTH_WINDOW[::-1]
 
             spec = np.fft.fft(part, MSK144_NFFT)
             amps = np.abs(spec) ** 2
@@ -300,6 +295,10 @@ class MSK144Monitor(AbstractMonitor):
             xmedian = 1
 
         detmet[:steps_real] = detmet[:steps_real] / xmedian
+
+        time_arr = np.zeros(max_cand, dtype=np.float64)
+        freq_arr = np.zeros(max_cand, dtype=np.float64)
+        snr_arr = np.zeros(max_cand, dtype=np.float64)
 
         count_cand = 0
         for ip in range(max_cand):
@@ -362,7 +361,7 @@ class MSK144Monitor(AbstractMonitor):
                 snr = max(-4.0, min(24.0, snr))
 
                 # ! remove coarse freq error - should now be within a few Hz
-                part = self.shift_freq(part, -(MSK144_CENTER_FREQ + f_error), self.sample_rate)
+                part = self.shift_freq(part, -(MSK144_FREQ_CENTER + f_error), self.sample_rate)
 
                 cc1 = np.zeros(MSK144_NPTS, dtype=np.complex128)
                 cc2 = np.zeros(MSK144_NPTS, dtype=np.complex128)
@@ -390,9 +389,11 @@ class MSK144Monitor(AbstractMonitor):
                         cd_b = ic0 + i
                         if ic0 + 11 + MSK144_NSPM < MSK144_NPTS:
                             bb[i] = np.sum(
-                                (part[cd_b + 6: cd_b + 6 + MSK144_NSPM: 6] * np.conj(part[cd_b:cd_b + MSK144_NSPM:6])) ** 2)
+                                (part[cd_b + 6: cd_b + 6 + MSK144_NSPM: 6] * np.conj(
+                                    part[cd_b:cd_b + MSK144_NSPM:6])) ** 2)
                         else:
-                            bb[i] = np.sum((part[cd_b + 6: MSK144_NPTS: 6] * np.conj(part[cd_b:MSK144_NPTS - 6:6])) ** 2)
+                            bb[i] = np.sum(
+                                (part[cd_b + 6: MSK144_NPTS: 6] * np.conj(part[cd_b:MSK144_NPTS - 6:6])) ** 2)
 
                     ibb = np.argmax(np.abs(bb))
 
@@ -428,7 +429,7 @@ class MSK144Monitor(AbstractMonitor):
                             f_error_2 = np.atan2(cfac.imag, cfac.real) / (2 * np.pi * 88 * 6 * dt)
 
                         # ! Final estimate of the carrier frequency - returned to the calling program
-                        freq_est = int(MSK144_CENTER_FREQ + f_error + f_error_2)
+                        freq_est = int(MSK144_FREQ_CENTER + f_error + f_error_2)
 
                         for idf in range(5):  # frequency jitter
                             if idf == 0:
@@ -460,10 +461,12 @@ class MSK144Monitor(AbstractMonitor):
                                 elif avg_pattern == 5:
                                     frame = subpart[:MSK144_NSPM] + subpart[MSK144_NSPM:MSK144_NSPM + MSK144_NSPM]
                                 elif avg_pattern == 6:
-                                    frame = subpart[MSK144_NSPM: MSK144_NSPM + MSK144_NSPM] + subpart[2 * MSK144_NSPM: 2 * MSK144_NSPM + MSK144_NSPM]
+                                    frame = subpart[MSK144_NSPM: MSK144_NSPM + MSK144_NSPM] + subpart[
+                                                                                              2 * MSK144_NSPM: 2 * MSK144_NSPM + MSK144_NSPM]
                                 elif avg_pattern == 7:
-                                    frame = subpart[:MSK144_NSPM] + subpart[MSK144_NSPM:MSK144_NSPM + MSK144_NSPM] + subpart[
-                                                                                                                     2 * MSK144_NSPM: 2 * MSK144_NSPM + MSK144_NSPM]
+                                    frame = subpart[:MSK144_NSPM] + subpart[
+                                                                    MSK144_NSPM:MSK144_NSPM + MSK144_NSPM] + subpart[
+                                                                                                             2 * MSK144_NSPM: 2 * MSK144_NSPM + MSK144_NSPM]
 
                                 if x := self.decode_fame(frame, self.LDPC_ITERATIONS):
                                     status, payload, eye_opening, bit_errors = x
@@ -473,7 +476,7 @@ class MSK144Monitor(AbstractMonitor):
 
                                     hashes.add(status.crc_extracted)
 
-                                    df_hv = freq_est - MSK144_CENTER_FREQ
+                                    df_hv = freq_est - MSK144_FREQ_CENTER
 
                                     log_item = LogItem(
                                         snr=snr,
