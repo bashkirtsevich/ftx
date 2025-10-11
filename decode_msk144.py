@@ -210,42 +210,42 @@ class MSK144Monitor(AbstractMonitor):
 
         return DecodeStatus(ldpc_errors, crc_extracted), payload, eye_opening, bit_errors
 
-    def detect_signals(self, signal: np.typing.ArrayLike, n: int, start: float,
+    def detect_signals(self, signal: npt.NDArray[np.complex128], signal_len: int, start: float,
                        max_cand: int = 16, tolerance: int = 150) -> typing.Generator[LogItem, None, None]:
         # ! define half-sine pulse and raised-cosine edge window
         dt = 1 / self.sample_rate
 
         df = self.sample_rate / NFFT
 
-        n_step_size = 216
-        n_steps = (n - NPTS) // n_step_size
+        step_size = 216
+        steps_count = (signal_len - NPTS) // step_size
 
-        n_freq_hi = 2 * (MSK144_CENTER_FREQ + 500)
-        n_freq_lo = 2 * (MSK144_CENTER_FREQ - 500)
+        freq_hi = 2 * (MSK144_CENTER_FREQ + 500)
+        freq_lo = 2 * (MSK144_CENTER_FREQ - 500)
 
-        ih_lo = int((n_freq_hi - 2 * tolerance) / df)
-        ih_hi = int((n_freq_hi + 2 * tolerance) / df)
+        ih_lo = int((freq_hi - 2 * tolerance) / df)
+        ih_hi = int((freq_hi + 2 * tolerance) / df)
 
-        il_lo = int((n_freq_lo - 2 * tolerance) / df)
-        il_hi = int((n_freq_lo + 2 * tolerance) / df)
+        il_lo = int((freq_lo - 2 * tolerance) / df)
+        il_hi = int((freq_lo + 2 * tolerance) / df)
 
-        i_2000 = int(n_freq_lo / df)
-        i_4000 = int(n_freq_hi / df)
+        freq_2000hz = int(freq_lo / df)
+        freq_4000hz = int(freq_hi / df)
 
-        times = np.zeros(max_cand, dtype=np.float64)
-        freq_errs = np.zeros(max_cand, dtype=np.float64)
-        snrs = np.zeros(max_cand, dtype=np.float64)
+        time_arr = np.zeros(max_cand, dtype=np.float64)
+        freq_arr = np.zeros(max_cand, dtype=np.float64)
+        snr_arr = np.zeros(max_cand, dtype=np.float64)
 
-        detmet = np.zeros(n_steps)
-        detmet2 = np.zeros(n_steps)
-        detfer = np.full(n_steps, -999.99)
+        detmet = np.zeros(steps_count)
+        detmet2 = np.zeros(steps_count)
+        detfer = np.full(steps_count, -999.99)
 
         steps_real = 0
-        for step in range(n_steps):
-            part_start = n_step_size * step
+        for step in range(steps_count):
+            part_start = step_size * step
             part_end = part_start + NSPM
 
-            if part_end > n:
+            if part_end > signal_len:
                 break
 
             part = signal[part_start: part_end]
@@ -279,8 +279,8 @@ class MSK144Monitor(AbstractMonitor):
             alavp = (np.sum(amps[il_lo:il_hi]) - mag_lo) / (il_hi - il_lo)
             tratl = mag_lo / (alavp + 0.01)
             # Errors
-            freq_err_h = (h_peak + delta_hi - i_4000) * df / 2
-            freq_err_l = (l_peak + delta_lo - i_2000) * df / 2
+            freq_err_h = (h_peak + delta_hi - freq_4000hz) * df / 2
+            freq_err_l = (l_peak + delta_lo - freq_2000hz) * df / 2
 
             if mag_hi >= mag_lo:
                 f_error = freq_err_h
@@ -309,9 +309,9 @@ class MSK144Monitor(AbstractMonitor):
                 break
 
             if abs(detfer[il]) <= tolerance:
-                times[count_cand] = ((il - 0) * n_step_size + NSPM / 2) * dt
-                freq_errs[count_cand] = detfer[il]
-                snrs[count_cand] = 12 * np.log10(detmet[il]) / 2 - 9
+                time_arr[count_cand] = ((il - 0) * step_size + NSPM / 2) * dt
+                freq_arr[count_cand] = detfer[il]
+                snr_arr[count_cand] = 12 * np.log10(detmet[il]) / 2 - 9
 
                 count_cand += 1
 
@@ -329,36 +329,36 @@ class MSK144Monitor(AbstractMonitor):
                     break
 
                 if abs(detfer[il]) <= tolerance:
-                    times[count_cand] = ((il - 0) * n_step_size + NSPM / 2) * dt
-                    freq_errs[count_cand] = detfer[il]
-                    snrs[count_cand] = 12 * np.log10(detmet2[il]) / 2 - 9
+                    time_arr[count_cand] = ((il - 0) * step_size + NSPM / 2) * dt
+                    freq_arr[count_cand] = detfer[il]
+                    snr_arr[count_cand] = 12 * np.log10(detmet2[il]) / 2 - 9
 
                     count_cand += 1
 
                 detmet2[il] = 0
 
         if count_cand > 0:
-            indices = np.argsort(times[:count_cand])
+            indices = np.argsort(time_arr[:count_cand])
 
         # ! Try to sync/demod/decode each candidate.
         hashes = set()
         for iip in range(count_cand):
             with suppress(NextCand):
                 ip = indices[iip]
-                imid = int(times[ip] * self.sample_rate)
+                imid = int(time_arr[ip] * self.sample_rate)
 
                 if imid < NPTS / 2:
                     imid = NPTS // 2
 
-                if imid > n - NPTS / 2:
-                    imid = n - NPTS // 2
+                if imid > signal_len - NPTS / 2:
+                    imid = signal_len - NPTS // 2
 
-                t0 = times[ip] + dt * (start)
+                t0 = time_arr[ip] + dt * (start)
 
                 part = signal[imid - NPTS // 2: imid + NPTS // 2]
 
-                f_error = freq_errs[ip]
-                snr = 2 * int(snrs[ip] / 2)
+                f_error = freq_arr[ip]
+                snr = 2 * int(snr_arr[ip] / 2)
                 snr = max(-4.0, min(24.0, snr))
 
                 # ! remove coarse freq error - should now be within a few Hz
@@ -494,9 +494,9 @@ class MSK144Monitor(AbstractMonitor):
                 break
 
     def decode(self, tm_slot_start: float) -> typing.Generator[LogItem, None, None]:
-        npts = min(len(self.signal), 30 * self.sample_rate)
+        signal_len = min(len(self.signal), 30 * self.sample_rate)
 
-        signal_part = self.signal[:npts]
+        signal_part = self.signal[:signal_len]
 
         rms = np.sqrt(np.mean(signal_part ** 2))
         if rms == 0 or np.isnan(rms):
@@ -504,13 +504,13 @@ class MSK144Monitor(AbstractMonitor):
 
         part_norm = signal_part / (rms / 2)
 
-        n = int(np.log(npts) / np.log(2) + 1)
+        n = int(np.log(signal_len) / np.log(2) + 1)
         nfft = int(min(2 ** n, 1024 ** 2))
 
         filter_response = self.filter_response(nfft, self.sample_rate)
         part_filtered = self.fourier_bpf(part_norm, nfft, filter_response)
 
-        yield from self.detect_signals(part_filtered, npts, tm_slot_start)
+        yield from self.detect_signals(part_filtered, signal_len, tm_slot_start)
 
     def monitor_process(self, frame: npt.NDArray):
         wave = frame * 0.000390625
