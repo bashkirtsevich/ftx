@@ -233,7 +233,7 @@ class MSK144Monitor(AbstractMonitor):
 
         det_amp = np.zeros(steps_count)
         det_snr = np.zeros(steps_count)
-        det_freq_err = np.full(steps_count, -999.99)
+        det_f_err = np.full(steps_count, -999.99)
 
         steps_real = 0
         for step in range(steps_count):
@@ -276,14 +276,14 @@ class MSK144Monitor(AbstractMonitor):
             snr_lo = amp_lo / (amp_avg_lo + 0.01)
 
             # Errors
-            freq_err_hi = (peak_hi + delta_hi - f_4Khz) * df / 2
-            freq_err_lo = (peak_lo + delta_lo - f_2Khz) * df / 2
+            f_err_hi = (peak_hi + delta_hi - f_4Khz) * df / 2
+            f_err_lo = (peak_lo + delta_lo - f_2Khz) * df / 2
 
-            f_error = freq_err_hi if amp_hi >= amp_lo else freq_err_lo
+            f_err = f_err_hi if amp_hi >= amp_lo else f_err_lo
 
             det_amp[step] = max(amp_hi, amp_lo)
             det_snr[step] = max(snr_hi, snr_lo)
-            det_freq_err[step] = f_error
+            det_f_err[step] = f_err
 
             steps_real += 1
 
@@ -306,9 +306,9 @@ class MSK144Monitor(AbstractMonitor):
             if det_amp[il] < 3.5:
                 break
 
-            if abs(det_freq_err[il]) <= tolerance:
+            if abs(det_f_err[il]) <= tolerance:
                 time_arr[count_cand] = ((il - 0) * step_size + MSK144_NSPM / 2) * dt
-                freq_arr[count_cand] = det_freq_err[il]
+                freq_arr[count_cand] = det_f_err[il]
                 snr_arr[count_cand] = 12 * np.log10(det_amp[il]) / 2 - 9
 
                 count_cand += 1
@@ -326,9 +326,9 @@ class MSK144Monitor(AbstractMonitor):
                 if det_snr[il] < 12.0:
                     break
 
-                if abs(det_freq_err[il]) <= tolerance:
+                if abs(det_f_err[il]) <= tolerance:
                     time_arr[count_cand] = ((il - 0) * step_size + MSK144_NSPM / 2) * dt
-                    freq_arr[count_cand] = det_freq_err[il]
+                    freq_arr[count_cand] = det_f_err[il]
                     snr_arr[count_cand] = 12 * np.log10(det_snr[il]) / 2 - 9
 
                     count_cand += 1
@@ -355,12 +355,12 @@ class MSK144Monitor(AbstractMonitor):
 
                 part = signal[imid - MSK144_NPTS // 2: imid + MSK144_NPTS // 2]
 
-                f_error = freq_arr[ip]
+                f_err = freq_arr[ip]
                 snr = 2 * int(snr_arr[ip] / 2)
                 snr = max(-4.0, min(24.0, snr))
 
                 # ! remove coarse freq error - should now be within a few Hz
-                part = self.shift_freq(part, -(MSK144_FREQ_CENTER + f_error), self.sample_rate)
+                part = self.shift_freq(part, -(MSK144_FREQ_CENTER + f_err), self.sample_rate)
 
                 cc1 = np.zeros(MSK144_NPTS, dtype=np.complex128)
                 cc2 = np.zeros(MSK144_NPTS, dtype=np.complex128)
@@ -428,7 +428,7 @@ class MSK144Monitor(AbstractMonitor):
                             f_error_2 = np.atan2(cfac.imag, cfac.real) / (2 * np.pi * 88 * 6 * dt)
 
                         # ! Final estimate of the carrier frequency - returned to the calling program
-                        freq_est = int(MSK144_FREQ_CENTER + f_error + f_error_2)
+                        freq_est = int(MSK144_FREQ_CENTER + f_err + f_error_2)
 
                         for idf in range(5):  # frequency jitter
                             if idf == 0:
