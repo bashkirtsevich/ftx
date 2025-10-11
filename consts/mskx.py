@@ -2,6 +2,10 @@ import numpy as np
 
 MSK144_BITS_COUNT = 144
 
+MSK144_NSPM = 864
+MSK144_NPTS = 3 * MSK144_NSPM
+MSK144_NFFT = 864
+
 MSK144_CENTER_FREQ = 1500
 
 MSK144_SYNC = [0, 1, 1, 1, 0, 0, 1, 0]  # 0x72 in binary
@@ -27,10 +31,6 @@ SYNC_Q = np.array([
 SYNC_WAVEFORM = np.array([complex(SYNC_I[i], SYNC_Q[i]) for i in range(42)])
 SYNC_WAVEFORM_LEN = len(SYNC_WAVEFORM)
 SYNC_WAVEFORM_CONJ = np.conj(SYNC_WAVEFORM)
-
-NSPM = 864
-NPTS = 3 * NSPM
-NFFT = 864
 
 # Define MSKX LDPC params
 MSKX_LDPC_K = 90

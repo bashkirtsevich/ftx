@@ -113,7 +113,7 @@ class MSK144Monitor(AbstractMonitor):
 
         for i in range(6):
             soft_bits[0] += frame[i].imag * SAMPLES_PER_WORD[i + 6]
-            soft_bits[0] += frame[i + (NSPM - 5 - 1)].imag * SAMPLES_PER_WORD[i]
+            soft_bits[0] += frame[i + (MSK144_NSPM - 5 - 1)].imag * SAMPLES_PER_WORD[i]
 
         for i in range(12):
             soft_bits[1] += frame[i].real * SAMPLES_PER_WORD[i]
@@ -215,10 +215,10 @@ class MSK144Monitor(AbstractMonitor):
         # ! define half-sine pulse and raised-cosine edge window
         dt = 1 / self.sample_rate
 
-        df = self.sample_rate / NFFT
+        df = self.sample_rate / MSK144_NFFT
 
         step_size = 216
-        steps_count = (signal_len - NPTS) // step_size
+        steps_count = (signal_len - MSK144_NPTS) // step_size
 
         freq_hi = 2 * (MSK144_CENTER_FREQ + 500)
         freq_lo = 2 * (MSK144_CENTER_FREQ - 500)
@@ -243,7 +243,7 @@ class MSK144Monitor(AbstractMonitor):
         steps_real = 0
         for step in range(steps_count):
             part_start = step_size * step
-            part_end = part_start + NSPM
+            part_end = part_start + MSK144_NSPM
 
             if part_end > signal_len:
                 break
@@ -255,9 +255,9 @@ class MSK144Monitor(AbstractMonitor):
             # search range for coarse frequency error is +/- 100 Hz
             part = part ** 2
             part[:12] = part[:12] * SMOOTH_WINDOW
-            part[NSPM - 12:NSPM] = part[NSPM - 12:NSPM] * SMOOTH_WINDOW[::-1]  # Looks like window smooth function
+            part[MSK144_NSPM - 12:MSK144_NSPM] = part[MSK144_NSPM - 12:MSK144_NSPM] * SMOOTH_WINDOW[::-1]  # Looks like window smooth function
 
-            spec = np.fft.fft(part, NFFT)
+            spec = np.fft.fft(part, MSK144_NFFT)
             amps = np.abs(spec) ** 2
 
             # Hi freq
@@ -309,7 +309,7 @@ class MSK144Monitor(AbstractMonitor):
                 break
 
             if abs(detfer[il]) <= tolerance:
-                time_arr[count_cand] = ((il - 0) * step_size + NSPM / 2) * dt
+                time_arr[count_cand] = ((il - 0) * step_size + MSK144_NSPM / 2) * dt
                 freq_arr[count_cand] = detfer[il]
                 snr_arr[count_cand] = 12 * np.log10(detmet[il]) / 2 - 9
 
@@ -329,7 +329,7 @@ class MSK144Monitor(AbstractMonitor):
                     break
 
                 if abs(detfer[il]) <= tolerance:
-                    time_arr[count_cand] = ((il - 0) * step_size + NSPM / 2) * dt
+                    time_arr[count_cand] = ((il - 0) * step_size + MSK144_NSPM / 2) * dt
                     freq_arr[count_cand] = detfer[il]
                     snr_arr[count_cand] = 12 * np.log10(detmet2[il]) / 2 - 9
 
@@ -347,15 +347,15 @@ class MSK144Monitor(AbstractMonitor):
                 ip = indices[iip]
                 imid = int(time_arr[ip] * self.sample_rate)
 
-                if imid < NPTS / 2:
-                    imid = NPTS // 2
+                if imid < MSK144_NPTS / 2:
+                    imid = MSK144_NPTS // 2
 
-                if imid > signal_len - NPTS / 2:
-                    imid = signal_len - NPTS // 2
+                if imid > signal_len - MSK144_NPTS / 2:
+                    imid = signal_len - MSK144_NPTS // 2
 
                 t0 = time_arr[ip] + dt * (start)
 
-                part = signal[imid - NPTS // 2: imid + NPTS // 2]
+                part = signal[imid - MSK144_NPTS // 2: imid + MSK144_NPTS // 2]
 
                 f_error = freq_arr[ip]
                 snr = 2 * int(snr_arr[ip] / 2)
@@ -364,10 +364,10 @@ class MSK144Monitor(AbstractMonitor):
                 # ! remove coarse freq error - should now be within a few Hz
                 part = self.shift_freq(part, -(MSK144_CENTER_FREQ + f_error), self.sample_rate)
 
-                cc1 = np.zeros(NPTS, dtype=np.complex128)
-                cc2 = np.zeros(NPTS, dtype=np.complex128)
+                cc1 = np.zeros(MSK144_NPTS, dtype=np.complex128)
+                cc2 = np.zeros(MSK144_NPTS, dtype=np.complex128)
 
-                for i in range(NPTS - (56 * 6 + 42)):
+                for i in range(MSK144_NPTS - (56 * 6 + 42)):
                     cc1[i] = sum(part[i: i + SYNC_WAVEFORM_LEN] * SYNC_WAVEFORM_CONJ)
                     cc2[i] = sum(part[i + 56 * 6: i + 56 * 6 + SYNC_WAVEFORM_LEN] * SYNC_WAVEFORM_CONJ)
 
@@ -378,7 +378,7 @@ class MSK144Monitor(AbstractMonitor):
                 for ipk in range(6):
                     # HV Good work cc ic1 no dd and ic2
                     ic2 = np.argmax(dd)
-                    dd[max(0, ic2 - 7): min(NPTS - 56 * 6 - 42, ic2 + 7)] = 0.0
+                    dd[max(0, ic2 - 7): min(MSK144_NPTS - 56 * 6 - 42, ic2 + 7)] = 0.0
                     peaks.append(ic2)
 
                 # ! we want ic to be the index of the first sample of the frame
@@ -388,11 +388,11 @@ class MSK144Monitor(AbstractMonitor):
                     bb = np.zeros(6, dtype=np.complex128)
                     for i in range(6):
                         cd_b = ic0 + i
-                        if ic0 + 11 + NSPM < NPTS:
+                        if ic0 + 11 + MSK144_NSPM < MSK144_NPTS:
                             bb[i] = np.sum(
-                                (part[cd_b + 6: cd_b + 6 + NSPM: 6] * np.conj(part[cd_b:cd_b + NSPM:6])) ** 2)
+                                (part[cd_b + 6: cd_b + 6 + MSK144_NSPM: 6] * np.conj(part[cd_b:cd_b + MSK144_NSPM:6])) ** 2)
                         else:
-                            bb[i] = np.sum((part[cd_b + 6: NPTS: 6] * np.conj(part[cd_b:NPTS - 6:6])) ** 2)
+                            bb[i] = np.sum((part[cd_b + 6: MSK144_NPTS: 6] * np.conj(part[cd_b:MSK144_NPTS - 6:6])) ** 2)
 
                     ibb = np.argmax(np.abs(bb))
 
@@ -413,12 +413,12 @@ class MSK144Monitor(AbstractMonitor):
                         ic = ic0 + ibb + sign
 
                         if ic < 0:
-                            ic = ic + NSPM
+                            ic = ic + MSK144_NSPM
 
                         # ! Estimate fine frequency error.
                         # ! Should a larger separation be used when frames are averaged?
                         cca = np.sum(part[ic:ic + SYNC_WAVEFORM_LEN] * SYNC_WAVEFORM_CONJ)
-                        if ic + 56 * 6 + 42 < NPTS:
+                        if ic + 56 * 6 + 42 < MSK144_NPTS:
                             ccb = np.sum(part[ic + 56 * 6:ic + 56 * 6 + SYNC_WAVEFORM_LEN] * SYNC_WAVEFORM_CONJ)
                             cfac = ccb * np.conj(cca)
                             f_error_2 = np.atan2(cfac.imag, cfac.real) / (2 * np.pi * 56 * 6 * dt)
@@ -441,29 +441,29 @@ class MSK144Monitor(AbstractMonitor):
                             # ! Remove fine frequency error
                             subpart = self.shift_freq(part, -(f_error_2 + delta_f), self.sample_rate)
                             # ! place the beginning of frame at index NSPM+1
-                            subpart = np.roll(subpart, -(ic - NSPM))
+                            subpart = np.roll(subpart, -(ic - MSK144_NSPM))
 
                             # ! try each of 7 averaging patterns, hope that one works
                             for avg_pattern in range(8):
                                 if avg_pattern == 0:
-                                    frame = subpart[NSPM: NSPM + NSPM]
+                                    frame = subpart[MSK144_NSPM: MSK144_NSPM + MSK144_NSPM]
                                 elif avg_pattern == 1:
-                                    frame = subpart[NSPM - 432: NSPM - 432 + NSPM]
+                                    frame = subpart[MSK144_NSPM - 432: MSK144_NSPM - 432 + MSK144_NSPM]
                                     frame = np.roll(frame, 432)  # frame = np.roll(frame, -432)
                                 elif avg_pattern == 2:
-                                    frame = subpart[2 * NSPM - 432: 2 * NSPM - 432 + NSPM]
+                                    frame = subpart[2 * MSK144_NSPM - 432: 2 * MSK144_NSPM - 432 + MSK144_NSPM]
                                     frame = np.roll(frame, 432)  # frame = np.roll(frame, -432)
                                 elif avg_pattern == 3:
-                                    frame = subpart[:NSPM]
+                                    frame = subpart[:MSK144_NSPM]
                                 elif avg_pattern == 4:
-                                    frame = subpart[2 * NSPM: 2 * NSPM + NSPM]
+                                    frame = subpart[2 * MSK144_NSPM: 2 * MSK144_NSPM + MSK144_NSPM]
                                 elif avg_pattern == 5:
-                                    frame = subpart[:NSPM] + subpart[NSPM:NSPM + NSPM]
+                                    frame = subpart[:MSK144_NSPM] + subpart[MSK144_NSPM:MSK144_NSPM + MSK144_NSPM]
                                 elif avg_pattern == 6:
-                                    frame = subpart[NSPM: NSPM + NSPM] + subpart[2 * NSPM: 2 * NSPM + NSPM]
+                                    frame = subpart[MSK144_NSPM: MSK144_NSPM + MSK144_NSPM] + subpart[2 * MSK144_NSPM: 2 * MSK144_NSPM + MSK144_NSPM]
                                 elif avg_pattern == 7:
-                                    frame = subpart[:NSPM] + subpart[NSPM:NSPM + NSPM] + subpart[
-                                                                                         2 * NSPM: 2 * NSPM + NSPM]
+                                    frame = subpart[:MSK144_NSPM] + subpart[MSK144_NSPM:MSK144_NSPM + MSK144_NSPM] + subpart[
+                                                                                                                     2 * MSK144_NSPM: 2 * MSK144_NSPM + MSK144_NSPM]
 
                                 if x := self.decode_fame(frame, self.LDPC_ITERATIONS):
                                     status, payload, eye_opening, bit_errors = x
