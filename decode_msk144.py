@@ -228,7 +228,7 @@ class MSK144Monitor(AbstractMonitor):
         f_2Khz = int(f_lo / df)
         f_4Khz = int(f_hi / df)
 
-        step_size = 216
+        step_size = MSK144_NSPM // 4
         steps_count = (signal_len - MSK144_NPTS) // step_size
 
         det_amp = np.zeros(steps_count)
