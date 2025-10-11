@@ -66,7 +66,7 @@ class MSK144Monitor(AbstractMonitor):
 
         # Frequency attenuation
         response_len = len(response)
-        freq_d[:response_len] = freq_d[:response_len] * response
+        freq_d[:response_len] *= response
         freq_d[0] = 0.5 * freq_d[0]
         # Attenuate other
         freq_d[len(response): n_fft] = complex(0, 0)
@@ -293,7 +293,7 @@ class MSK144Monitor(AbstractMonitor):
         if xmedian == 0:
             xmedian = 1
 
-        det_amp[:steps_real] = det_amp[:steps_real] / xmedian
+        det_amp[:steps_real] /= xmedian
 
         time_arr = np.zeros(max_cand, dtype=np.float64)
         freq_arr = np.zeros(max_cand, dtype=np.float64)
