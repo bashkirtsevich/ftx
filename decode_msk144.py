@@ -216,20 +216,20 @@ class MSK144Monitor(AbstractMonitor):
         dt = 1 / self.sample_rate
         df = self.sample_rate / MSK144_NFFT
 
+        f_hi = MSK144_FREQ_HI * 2
+        f_lo = MSK144_FREQ_LO * 2
+
+        f_hi_id_top = int((f_hi + 2 * tolerance) / df)
+        f_hi_id_bot = int((f_hi - 2 * tolerance) / df)
+
+        f_lo_id_top = int((f_lo + 2 * tolerance) / df)
+        f_lo_id_bot = int((f_lo - 2 * tolerance) / df)
+
+        f_2Khz = int(f_lo / df)
+        f_4Khz = int(f_hi / df)
+
         step_size = 216
         steps_count = (signal_len - MSK144_NPTS) // step_size
-
-        freq_hi = MSK144_FREQ_HI * 2
-        freq_lo = MSK144_FREQ_LO * 2
-
-        ih_lo = int((freq_hi - 2 * tolerance) / df)
-        ih_hi = int((freq_hi + 2 * tolerance) / df)
-
-        il_lo = int((freq_lo - 2 * tolerance) / df)
-        il_hi = int((freq_lo + 2 * tolerance) / df)
-
-        freq_2000hz = int(freq_lo / df)
-        freq_4000hz = int(freq_hi / df)
 
         det_amp = np.zeros(steps_count)
         det_snr = np.zeros(steps_count)
@@ -256,28 +256,28 @@ class MSK144Monitor(AbstractMonitor):
             amps = np.abs(spec) ** 2  # Amplitudes
 
             # Hi freq
-            peak_hi = ih_lo + np.argmax(amps[ih_lo:ih_hi])
+            peak_hi = f_hi_id_bot + np.argmax(amps[f_hi_id_bot:f_hi_id_top])
 
             delta_hi = -((spec[peak_hi - 1] - spec[peak_hi + 1]) / (
                     2 * spec[peak_hi] - spec[peak_hi - 1] - spec[peak_hi + 1])).real
             amp_hi = amps[peak_hi]
 
-            amp_avg_hi = (np.sum(amps[ih_lo:ih_hi]) - amp_hi) / (ih_hi - ih_lo)
+            amp_avg_hi = (np.sum(amps[f_hi_id_bot:f_hi_id_top]) - amp_hi) / (f_hi_id_top - f_hi_id_bot)
             snr_hi = amp_hi / (amp_avg_hi + 0.01)
 
             # Low freq
-            peak_lo = il_lo + np.argmax(amps[il_lo:il_hi])
+            peak_lo = f_lo_id_bot + np.argmax(amps[f_lo_id_bot:f_lo_id_top])
 
             delta_lo = -((spec[peak_lo - 1] - spec[peak_lo + 1]) / (
                     2 * spec[peak_lo] - spec[peak_lo - 1] - spec[peak_lo + 1])).real
             amp_lo = amps[peak_lo]
 
-            amp_avg_lo = (np.sum(amps[il_lo:il_hi]) - amp_lo) / (il_hi - il_lo)
+            amp_avg_lo = (np.sum(amps[f_lo_id_bot:f_lo_id_top]) - amp_lo) / (f_lo_id_top - f_lo_id_bot)
             snr_lo = amp_lo / (amp_avg_lo + 0.01)
 
             # Errors
-            freq_err_hi = (peak_hi + delta_hi - freq_4000hz) * df / 2
-            freq_err_lo = (peak_lo + delta_lo - freq_2000hz) * df / 2
+            freq_err_hi = (peak_hi + delta_hi - f_4Khz) * df / 2
+            freq_err_lo = (peak_lo + delta_lo - f_2Khz) * df / 2
 
             f_error = freq_err_hi if amp_hi >= amp_lo else freq_err_lo
 
