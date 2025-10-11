@@ -12,22 +12,25 @@ MSK144_FREQ_LO = MSK144_FREQ_CENTER - 500
 
 MSK144_SYNC = [0, 1, 1, 1, 0, 0, 1, 0]  # 0x72 in binary
 
-SAMPLES_PER_WORD = np.sin([i * np.pi / 12 for i in range(12)])
+SAMPLES_PER_WORD = 12
+SAMPLES_PER_HALF_WORD = SAMPLES_PER_WORD // 2
+WORD_SAMPLES = np.sin([i * np.pi / SAMPLES_PER_WORD for i in range(SAMPLES_PER_WORD)])
 
-SMOOTH_WINDOW = (1 - np.cos([i * np.pi / 12 for i in range(12)])) / 2
+SMOOTH_WINDOW_LEN = SAMPLES_PER_WORD
+SMOOTH_WINDOW = (1 - np.cos([i * np.pi / SMOOTH_WINDOW_LEN for i in range(SMOOTH_WINDOW_LEN)])) / 2
 
 SYNC_WORDS = np.array([2 * b - 1 for b in MSK144_SYNC])
 
 SYNC_I = np.array([
     sample * SYNC_WORDS[j * 2 + 1]
     for j in range(4)
-    for sample in SAMPLES_PER_WORD
+    for sample in WORD_SAMPLES
 ])
 
 SYNC_Q = np.array([
     pp * SYNC_WORDS[j * 2]
     for j in range(4)
-    for pp in (SAMPLES_PER_WORD[6:] if j == 0 else SAMPLES_PER_WORD)
+    for pp in (WORD_SAMPLES[SAMPLES_PER_HALF_WORD:] if j == 0 else WORD_SAMPLES)
 ])
 
 SYNC_WAVEFORM = np.array([complex(SYNC_I[i], SYNC_Q[i]) for i in range(42)])

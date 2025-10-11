@@ -112,21 +112,21 @@ class MSK144Monitor(AbstractMonitor):
         hard_bits = np.zeros(MSK144_BITS_COUNT, dtype=np.int64)
 
         for i in range(6):
-            soft_bits[0] += frame[i].imag * SAMPLES_PER_WORD[i + 6]
-            soft_bits[0] += frame[i + (MSK144_NSPM - 5 - 1)].imag * SAMPLES_PER_WORD[i]
+            soft_bits[0] += frame[i].imag * WORD_SAMPLES[i + 6]
+            soft_bits[0] += frame[i + (MSK144_NSPM - 5 - 1)].imag * WORD_SAMPLES[i]
 
         for i in range(12):
-            soft_bits[1] += frame[i].real * SAMPLES_PER_WORD[i]
+            soft_bits[1] += frame[i].real * WORD_SAMPLES[i]
 
         for i in range(1, 72):
             sum_01 = 0
             for j in range(12):
-                sum_01 += frame[i * 12 - 6 + j].imag * SAMPLES_PER_WORD[j]
+                sum_01 += frame[i * 12 - 6 + j].imag * WORD_SAMPLES[j]
             soft_bits[2 * i] = sum_01
 
             sum_01 = 0
             for j in range(12):
-                sum_01 += frame[i * 12 + j].real * SAMPLES_PER_WORD[j]
+                sum_01 += frame[i * 12 + j].real * WORD_SAMPLES[j]
             soft_bits[2 * i + 1] = sum_01
 
             if soft_bits[2 * i] >= 0:
@@ -249,8 +249,8 @@ class MSK144Monitor(AbstractMonitor):
             # squared signal spectrum.
             # search range for coarse frequency error is +/- 100 Hz
             part = part ** 2
-            part[:12] = part[:12] * SMOOTH_WINDOW
-            part[MSK144_NSPM - 12:MSK144_NSPM] = part[MSK144_NSPM - 12:MSK144_NSPM] * SMOOTH_WINDOW[::-1]
+            part[:SMOOTH_WINDOW_LEN] *= SMOOTH_WINDOW
+            part[MSK144_NSPM - SMOOTH_WINDOW_LEN:MSK144_NSPM] *= SMOOTH_WINDOW[::-1]
 
             spec = np.fft.fft(part, MSK144_NFFT)  # Spectrum
             amps = np.abs(spec) ** 2  # Amplitudes
