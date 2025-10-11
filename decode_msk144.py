@@ -69,7 +69,7 @@ class MSK144Monitor(AbstractMonitor):
         freq_d[:response_len] *= response
         freq_d[0] = 0.5 * freq_d[0]
         # Attenuate other
-        freq_d[len(response): n_fft] = complex(0, 0)
+        freq_d[response_len: n_fft] = complex(0, 0)
 
         # Freq domain -> Time domain
         time_d = np.fft.ifft(freq_d, n=n_fft)
