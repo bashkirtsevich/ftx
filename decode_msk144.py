@@ -231,9 +231,9 @@ class MSK144Monitor(AbstractMonitor):
         freq_2000hz = int(freq_lo / df)
         freq_4000hz = int(freq_hi / df)
 
-        detmet = np.zeros(steps_count)
-        detmet2 = np.zeros(steps_count)
-        detfer = np.full(steps_count, -999.99)
+        det_amp = np.zeros(steps_count)
+        det_snr = np.zeros(steps_count)
+        det_freq_err = np.full(steps_count, -999.99)
 
         steps_real = 0
         for step in range(steps_count):
@@ -252,49 +252,48 @@ class MSK144Monitor(AbstractMonitor):
             part[:12] = part[:12] * SMOOTH_WINDOW
             part[MSK144_NSPM - 12:MSK144_NSPM] = part[MSK144_NSPM - 12:MSK144_NSPM] * SMOOTH_WINDOW[::-1]
 
-            spec = np.fft.fft(part, MSK144_NFFT)
-            amps = np.abs(spec) ** 2
+            spec = np.fft.fft(part, MSK144_NFFT)  # Spectrum
+            amps = np.abs(spec) ** 2  # Amplitudes
 
             # Hi freq
-            h_peak = ih_lo + np.argmax(amps[ih_lo:ih_hi])
+            peak_hi = ih_lo + np.argmax(amps[ih_lo:ih_hi])
 
-            delta_hi = -((spec[h_peak - 1] - spec[h_peak + 1]) / (
-                    2 * spec[h_peak] - spec[h_peak - 1] - spec[h_peak + 1])).real
-            mag_hi = amps[h_peak]
+            delta_hi = -((spec[peak_hi - 1] - spec[peak_hi + 1]) / (
+                    2 * spec[peak_hi] - spec[peak_hi - 1] - spec[peak_hi + 1])).real
+            amp_hi = amps[peak_hi]
 
-            ahavp = (np.sum(amps[ih_lo:ih_hi]) - mag_hi) / (ih_hi - ih_lo)
-            trath = mag_hi / (ahavp + 0.01)
+            amp_avg_hi = (np.sum(amps[ih_lo:ih_hi]) - amp_hi) / (ih_hi - ih_lo)
+            snr_hi = amp_hi / (amp_avg_hi + 0.01)
+
             # Low freq
-            l_peak = il_lo + np.argmax(amps[il_lo:il_hi])
+            peak_lo = il_lo + np.argmax(amps[il_lo:il_hi])
 
-            delta_lo = -((spec[l_peak - 1] - spec[l_peak + 1]) / (
-                    2 * spec[l_peak] - spec[l_peak - 1] - spec[l_peak + 1])).real
-            mag_lo = amps[l_peak]
+            delta_lo = -((spec[peak_lo - 1] - spec[peak_lo + 1]) / (
+                    2 * spec[peak_lo] - spec[peak_lo - 1] - spec[peak_lo + 1])).real
+            amp_lo = amps[peak_lo]
 
-            alavp = (np.sum(amps[il_lo:il_hi]) - mag_lo) / (il_hi - il_lo)
-            tratl = mag_lo / (alavp + 0.01)
+            amp_avg_lo = (np.sum(amps[il_lo:il_hi]) - amp_lo) / (il_hi - il_lo)
+            snr_lo = amp_lo / (amp_avg_lo + 0.01)
+
             # Errors
-            freq_err_h = (h_peak + delta_hi - freq_4000hz) * df / 2
-            freq_err_l = (l_peak + delta_lo - freq_2000hz) * df / 2
+            freq_err_hi = (peak_hi + delta_hi - freq_4000hz) * df / 2
+            freq_err_lo = (peak_lo + delta_lo - freq_2000hz) * df / 2
 
-            if mag_hi >= mag_lo:
-                f_error = freq_err_h
-            else:
-                f_error = freq_err_l
+            f_error = freq_err_hi if amp_hi >= amp_lo else freq_err_lo
 
-            detmet[step] = max(mag_hi, mag_lo)
-            detmet2[step] = max(trath, tratl)
-            detfer[step] = f_error
+            det_amp[step] = max(amp_hi, amp_lo)
+            det_snr[step] = max(snr_hi, snr_lo)
+            det_freq_err[step] = f_error
 
             steps_real += 1
 
-        indices = np.argsort(detmet[:steps_real])
+        indices = np.argsort(det_amp[:steps_real])
 
-        xmedian = detmet[indices[steps_real // 4]]
+        xmedian = det_amp[indices[steps_real // 4]]
         if xmedian == 0:
             xmedian = 1
 
-        detmet[:steps_real] = detmet[:steps_real] / xmedian
+        det_amp[:steps_real] = det_amp[:steps_real] / xmedian
 
         time_arr = np.zeros(max_cand, dtype=np.float64)
         freq_arr = np.zeros(max_cand, dtype=np.float64)
@@ -302,19 +301,19 @@ class MSK144Monitor(AbstractMonitor):
 
         count_cand = 0
         for ip in range(max_cand):
-            il = np.argmax(detmet[:steps_real])
+            il = np.argmax(det_amp[:steps_real])
 
-            if detmet[il] < 3.5:
+            if det_amp[il] < 3.5:
                 break
 
-            if abs(detfer[il]) <= tolerance:
+            if abs(det_freq_err[il]) <= tolerance:
                 time_arr[count_cand] = ((il - 0) * step_size + MSK144_NSPM / 2) * dt
-                freq_arr[count_cand] = detfer[il]
-                snr_arr[count_cand] = 12 * np.log10(detmet[il]) / 2 - 9
+                freq_arr[count_cand] = det_freq_err[il]
+                snr_arr[count_cand] = 12 * np.log10(det_amp[il]) / 2 - 9
 
                 count_cand += 1
 
-            detmet[il] = 0
+            det_amp[il] = 0
 
         if count_cand < 3:  # for Tropo/ES
             for ip in range(max_cand - count_cand):
@@ -322,19 +321,19 @@ class MSK144Monitor(AbstractMonitor):
                     break
 
                 # Find candidates
-                il = np.argmax(detmet2[:steps_real])
+                il = np.argmax(det_snr[:steps_real])
 
-                if detmet2[il] < 12.0:
+                if det_snr[il] < 12.0:
                     break
 
-                if abs(detfer[il]) <= tolerance:
+                if abs(det_freq_err[il]) <= tolerance:
                     time_arr[count_cand] = ((il - 0) * step_size + MSK144_NSPM / 2) * dt
-                    freq_arr[count_cand] = detfer[il]
-                    snr_arr[count_cand] = 12 * np.log10(detmet2[il]) / 2 - 9
+                    freq_arr[count_cand] = det_freq_err[il]
+                    snr_arr[count_cand] = 12 * np.log10(det_snr[il]) / 2 - 9
 
                     count_cand += 1
 
-                detmet2[il] = 0
+                det_snr[il] = 0
 
         if count_cand > 0:
             indices = np.argsort(time_arr[:count_cand])
