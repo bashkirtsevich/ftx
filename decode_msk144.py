@@ -423,14 +423,14 @@ class MSK144Monitor(AbstractMonitor):
                         if ic + 56 * 6 + 42 < MSK144_NPTS:
                             ccb = np.sum(part[ic + 56 * 6:ic + 56 * 6 + SYNC_WAVEFORM_LEN] * SYNC_WAVEFORM_CONJ)
                             cfac = ccb * np.conj(cca)
-                            f_error_2 = np.atan2(cfac.imag, cfac.real) / (2 * np.pi * 56 * 6 * dt)
+                            f_err_2 = np.atan2(cfac.imag, cfac.real) / (2 * np.pi * 56 * 6 * dt)
                         else:
                             ccb = np.sum(part[ic - 88 * 6:ic - 88 * 6 + SYNC_WAVEFORM_LEN] * SYNC_WAVEFORM_CONJ)
                             cfac = ccb * np.conj(cca)
-                            f_error_2 = np.atan2(cfac.imag, cfac.real) / (2 * np.pi * 88 * 6 * dt)
+                            f_err_2 = np.atan2(cfac.imag, cfac.real) / (2 * np.pi * 88 * 6 * dt)
 
                         # ! Final estimate of the carrier frequency - returned to the calling program
-                        freq_est = int(MSK144_FREQ_CENTER + f_err + f_error_2)
+                        freq_est = int(MSK144_FREQ_CENTER + f_err + f_err_2)
 
                         for idf in range(5):  # frequency jitter
                             if idf == 0:
@@ -441,7 +441,7 @@ class MSK144Monitor(AbstractMonitor):
                                 delta_f = -(idf + 1)
 
                             # ! Remove fine frequency error
-                            subpart = self.shift_freq(part, -(f_error_2 + delta_f), self.sample_rate)
+                            subpart = self.shift_freq(part, -(f_err_2 + delta_f), self.sample_rate)
                             # ! place the beginning of frame at index NSPM+1
                             subpart = np.roll(subpart, -(ic - MSK144_NSPM))
 
