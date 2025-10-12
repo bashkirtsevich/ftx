@@ -300,7 +300,7 @@ class MSK144Monitor(AbstractMonitor):
         snr_arr = np.zeros(max_cand, dtype=np.float64)
 
         count_cand = 0
-        for ip in range(max_cand):
+        for cand_idx in range(max_cand):
             il = np.argmax(det_amp[:steps_real])
 
             if det_amp[il] < 3.5:
@@ -316,8 +316,8 @@ class MSK144Monitor(AbstractMonitor):
             det_amp[il] = 0
 
         if count_cand < 3:  # for Tropo/ES
-            for ip in range(max_cand - count_cand):
-                if ip >= max_cand - count_cand:
+            for cand_idx in range(max_cand - count_cand):
+                if cand_idx >= max_cand - count_cand:
                     break
 
                 # Find candidates
@@ -340,66 +340,68 @@ class MSK144Monitor(AbstractMonitor):
 
         # ! Try to sync/demod/decode each candidate.
         hashes = set()
-        for iip in range(count_cand):
+        for cand in range(count_cand):
             with suppress(NextCand):
-                ip = indices[iip]
-                imid = int(time_arr[ip] * self.sample_rate)
+                cand_idx = indices[cand]
+                frame_mid = int(time_arr[cand_idx] * self.sample_rate)
 
-                if imid < MSK144_NPTS / 2:
-                    imid = MSK144_NPTS // 2
+                if frame_mid < MSK144_NPTS / 2:
+                    frame_mid = MSK144_NPTS // 2
 
-                if imid > signal_len - MSK144_NPTS / 2:
-                    imid = signal_len - MSK144_NPTS // 2
+                if frame_mid > signal_len - MSK144_NPTS / 2:
+                    frame_mid = signal_len - MSK144_NPTS // 2
 
-                t0 = time_arr[ip] + dt * (start)
+                t0 = time_arr[cand_idx] + dt * (start)
 
-                part = signal[imid - MSK144_NPTS // 2: imid + MSK144_NPTS // 2]
+                part = signal[frame_mid - MSK144_NPTS // 2: frame_mid + MSK144_NPTS // 2]
 
-                f_err = freq_arr[ip]
-                snr = 2 * int(snr_arr[ip] / 2)
+                f_err = freq_arr[cand_idx]
+                snr = 2 * int(snr_arr[cand_idx] / 2)
                 snr = max(-4.0, min(24.0, snr))
 
                 # ! remove coarse freq error - should now be within a few Hz
                 part = self.shift_freq(part, -(MSK144_FREQ_CENTER + f_err), self.sample_rate)
 
-                cc1 = np.zeros(MSK144_NPTS, dtype=np.complex128)
-                cc2 = np.zeros(MSK144_NPTS, dtype=np.complex128)
+                sync1 = np.zeros(MSK144_NPTS, dtype=np.complex128)
+                sync2 = np.zeros(MSK144_NPTS, dtype=np.complex128)
 
                 for i in range(MSK144_NPTS - (56 * 6 + 42)):
-                    cc1[i] = sum(part[i: i + SYNC_WAVEFORM_LEN] * SYNC_WAVEFORM_CONJ)
-                    cc2[i] = sum(part[i + 56 * 6: i + 56 * 6 + SYNC_WAVEFORM_LEN] * SYNC_WAVEFORM_CONJ)
+                    sync1[i] = sum(part[i: i + SYNC_WAVEFORM_LEN] * SYNC_WAVEFORM_CONJ)
+                    sync2[i] = sum(part[i + 56 * 6: i + 56 * 6 + SYNC_WAVEFORM_LEN] * SYNC_WAVEFORM_CONJ)
 
-                dd = abs(cc1) * abs(cc2)
+                sync_corr = abs(sync1) * abs(sync2)
 
                 # ! Find 6 largest peaks
                 peaks = []
-                for ipk in range(6):
-                    # HV Good work cc ic1 no dd and ic2
-                    ic2 = np.argmax(dd)
-                    dd[max(0, ic2 - 7): min(MSK144_NPTS - 56 * 6 - 42, ic2 + 7)] = 0.0
-                    peaks.append(ic2)
+                for i in range(6):
+                    # HV Good work cc ic1 no sync_corr and peak
+                    peak = np.argmax(sync_corr)
+                    sync_corr[max(0, peak - 7): min(MSK144_NPTS - 56 * 6 - 42, peak + 7)] = 0.0
+                    peaks.append(peak)
 
                 # ! we want ic to be the index of the first sample of the frame
-                for ic0 in peaks:  # ic0=peaks[ipk]
+                for peak in peaks:  # peak=peaks[i]
                     # ! fine adjustment of sync index
-                    # ! bb lag used to place the sampling index at the center of the eye
-                    bb = np.zeros(6, dtype=np.complex128)
+                    # ! peak_corr lag used to place the sampling index at the center of the eye
+                    peak_corr = np.zeros(6, dtype=np.complex128)
                     for i in range(6):
-                        cd_b = ic0 + i
-                        if ic0 + 11 + MSK144_NSPM < MSK144_NPTS:
-                            bb[i] = np.sum(
-                                (part[cd_b + 6: cd_b + 6 + MSK144_NSPM: 6] * np.conj(
-                                    part[cd_b:cd_b + MSK144_NSPM:6])) ** 2)
+                        j = peak + i
+
+                        if peak + 11 + MSK144_NSPM < MSK144_NPTS:
+                            s1 = slice(j + 6, j + 6 + MSK144_NSPM, 6)
+                            s2 = slice(j, j + MSK144_NSPM, 6)
                         else:
-                            bb[i] = np.sum(
-                                (part[cd_b + 6: MSK144_NPTS: 6] * np.conj(part[cd_b:MSK144_NPTS - 6:6])) ** 2)
+                            s1 = slice(j + 6, MSK144_NPTS, 6)
+                            s2 = slice(j, MSK144_NPTS - 6, 6)
 
-                    ibb = np.argmax(np.abs(bb))
+                        peak_corr[i] = np.sum((part[s1] * np.conj(part[s2])) ** 2)
 
-                    if ibb <= 2:
-                        ibb -= 1
-                    if ibb > 2:
-                        ibb -= 7
+                    peak_corr_idx = np.argmax(np.abs(peak_corr))
+
+                    if peak_corr_idx <= 2:
+                        peak_corr_idx -= 1
+                    if peak_corr_idx > 2:
+                        peak_corr_idx -= 7
 
                     for id in range(3):
                         if id == 1:
@@ -409,8 +411,8 @@ class MSK144Monitor(AbstractMonitor):
                         else:
                             sign = 0
 
-                        # ! Adjust frame index to place peak of bb at desired lag
-                        ic = ic0 + ibb + sign
+                        # ! Adjust frame index to place i of peak_corr at desired lag
+                        ic = peak + peak_corr_idx + sign
 
                         if ic < 0:
                             ic = ic + MSK144_NSPM
