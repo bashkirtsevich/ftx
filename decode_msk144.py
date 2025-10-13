@@ -142,12 +142,12 @@ class MSK144Monitor(AbstractMonitor):
 
         bad_sync_1 = 0
         bad_sync_2 = 0
-        for i in range(8):
-            bad_sync_1 += (2 * hard_bits[i] - 1) * SYNC_WORDS[i]
-            bad_sync_2 += ((2 * hard_bits[i + 57 - 1] - 1) * SYNC_WORDS[i])
+        for i, sw in enumerate(SYNC_WORDS):
+            bad_sync_1 += (2 * hard_bits[i] - 1) * sw
+            bad_sync_2 += ((2 * hard_bits[i + 57 - 1] - 1) * sw)
 
-        bad_sync_1 = (8 - bad_sync_1) // 2
-        bad_sync_2 = (8 - bad_sync_2) // 2
+        bad_sync_1 = (MSK144_SYNC_LEN - bad_sync_1) // 2
+        bad_sync_2 = (MSK144_SYNC_LEN - bad_sync_2) // 2
 
         bad_sync = bad_sync_1 + bad_sync_2
         if bad_sync > 4:
