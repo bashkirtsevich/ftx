@@ -96,17 +96,16 @@ class MSK144Monitor(AbstractMonitor):
         self.sample_rate = sample_rate
         self.signal = np.zeros(0, dtype=np.float64)
 
-    # DecodeStatus(ldpc_errors, crc_extracted), payload, eye_opening, bit_errors
     def decode_fame(self, frame: npt.NDArray[np.complex128],
                     max_iterations: int) -> typing.Optional[typing.Tuple[DecodeStatus, typing.ByteString, float, int]]:
-        cca = sum(frame[:SYNC_WAVEFORM_LEN] * SYNC_WAVEFORM_CONJ)
-        ccb = sum(frame[56 * 6: 56 * 6 + SYNC_WAVEFORM_LEN] * SYNC_WAVEFORM_CONJ)
-        cc = cca + ccb
+        sync_corr_1 = sum(frame[:SYNC_WAVEFORM_LEN] * SYNC_WAVEFORM_CONJ)
+        sync_corr_2 = sum(frame[56 * 6: 56 * 6 + SYNC_WAVEFORM_LEN] * SYNC_WAVEFORM_CONJ)
+        sync_corr = sync_corr_1 + sync_corr_2
 
-        phase_0 = np.atan2(cc.imag, cc.real)
+        phase_0 = np.atan2(sync_corr.imag, sync_corr.real)
+        corr_factor = complex(np.cos(phase_0), np.sin(phase_0))
 
-        fac = complex(np.cos(phase_0), np.sin(phase_0))
-        frame *= fac.conjugate()
+        frame *= corr_factor.conjugate()
 
         soft_bits = np.zeros(MSK144_BITS_COUNT, dtype=np.float64)
         hard_bits = np.zeros(MSK144_BITS_COUNT, dtype=np.int64)
@@ -119,15 +118,15 @@ class MSK144Monitor(AbstractMonitor):
             soft_bits[1] += frame[i].real * WORD_SAMPLES[i]
 
         for i in range(1, 72):
-            sum_01 = 0
+            soft_sum = 0
             for j in range(12):
-                sum_01 += frame[i * 12 - 6 + j].imag * WORD_SAMPLES[j]
-            soft_bits[2 * i] = sum_01
+                soft_sum += frame[i * 12 - 6 + j].imag * WORD_SAMPLES[j]
+            soft_bits[2 * i] = soft_sum
 
-            sum_01 = 0
+            soft_sum = 0
             for j in range(12):
-                sum_01 += frame[i * 12 + j].real * WORD_SAMPLES[j]
-            soft_bits[2 * i + 1] = sum_01
+                soft_sum += frame[i * 12 + j].real * WORD_SAMPLES[j]
+            soft_bits[2 * i + 1] = soft_sum
 
             if soft_bits[2 * i] >= 0:
                 hard_bits[2 * i] = 1
@@ -154,28 +153,15 @@ class MSK144Monitor(AbstractMonitor):
         if bad_sync > 4:
             return
 
-        sav = 0.0
-        s2av = 0.0
-        for i in range(MSK144_BITS_COUNT):
-            sav += soft_bits[i]
-            s2av += soft_bits[i] * soft_bits[i]
-
-        sav /= MSK144_BITS_COUNT
-        s2av /= MSK144_BITS_COUNT
-
-        ssig = np.sqrt(s2av - (sav * sav))
-        if ssig == 0:
-            ssig = 1
-
-        for i in range(MSK144_BITS_COUNT):
-            soft_bits[i] = soft_bits[i] / ssig
+        soft_bits_std = np.std(soft_bits)
+        soft_bits /= soft_bits_std
 
         sigma = 0.60
 
-        lratio = np.concat([soft_bits[8: 9 + 47], soft_bits[64: 65 + 80 - 1]])
-        llr = 2 * lratio / (sigma * sigma)
+        soft_bits_128 = np.concat([soft_bits[8: 9 + 47], soft_bits[64: 65 + 80 - 1]])
+        log128 = 2 * soft_bits_128 / sigma ** 2
 
-        ldpc_errors, plain128 = bp_decode(llr, max_iterations)
+        ldpc_errors, plain128 = bp_decode(log128, max_iterations)
 
         if ldpc_errors > self.MAX_LDPC_ERRORS:
             return None
