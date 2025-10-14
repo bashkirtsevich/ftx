@@ -51,7 +51,7 @@ class MSK144Monitor(AbstractMonitor):
             f = abs(df * i - MSK144_FREQ_CENTER)
 
             if (1 + beta) / (2 * t) >= f > (1 - beta) / (2 * t):
-                response[i] = response[i] * 0.5 * (1 + np.cos((np.pi * t / beta) * (f - (1 - beta) / (2 * t))))
+                response[i] = 0.5 * (1 + np.cos((np.pi * t / beta) * (f - (1 - beta) / (2 * t))))
 
             elif f > (1 + beta) / (2 * t):
                 response[i] = 0
