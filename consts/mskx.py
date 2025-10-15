@@ -18,6 +18,7 @@ SAMPLES_PER_HALF_WORD = SAMPLES_PER_WORD // 2
 WORD_SAMPLES = np.sin([i * np.pi / SAMPLES_PER_WORD for i in range(SAMPLES_PER_WORD)])
 
 SMOOTH_WINDOW_LEN = SAMPLES_PER_WORD
+# FIXME: Use np.hanning(SMOOTH_WINDOW_LEN * 2)[:SMOOTH_WINDOW_LEN]
 SMOOTH_WINDOW = (1 - np.cos([i * np.pi / SMOOTH_WINDOW_LEN for i in range(SMOOTH_WINDOW_LEN)])) / 2
 
 SYNC_WORDS = np.array([2 * b - 1 for b in MSK144_SYNC])
