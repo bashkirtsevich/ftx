@@ -9,6 +9,9 @@
 
 import typing
 
+import numpy as np
+import numpy.typing as ntp
+
 from consts.ftx import FTX_LDPC_K
 from consts.ftx import FTX_LDPC_M
 from consts.ftx import FTX_LDPC_N
@@ -16,6 +19,7 @@ from consts.ftx import GEN_SYS
 from consts.ftx import FTX_LDPC_MN
 from consts.ftx import FTX_LDPC_NM
 from consts.ftx import FTX_LDPC_NUM_ROWS
+from .bp_decoder import belief_propagation
 
 from .tanh import fast_tanh, fast_atanh
 
@@ -123,51 +127,12 @@ def ldpc_encode(plain: typing.ByteString) -> typing.ByteString:
     return codeword
 
 
-def bp_decode(codeword: typing.List[float], max_iters: int) -> typing.Tuple[int, typing.ByteString]:
-    min_errors = FTX_LDPC_M
-
-    # initialize message data
-    tov = [[0.0] * 3 for _ in range(FTX_LDPC_N)]
-    toc = [[0.0] * 7 for _ in range(FTX_LDPC_M)]
-
-    plain = bytearray(b"\x00" * FTX_LDPC_N)
-
-    for _ in range(max_iters):
-        # Do a hard decision guess (tov=0 in iter 0)
-        plain_sum = 0
-        for n in range(FTX_LDPC_N):
-            plain[n] = int((codeword[n] + tov[n][0] + tov[n][1] + tov[n][2]) > 0)
-            plain_sum += plain[n]
-
-        if plain_sum == 0:
-            min_errors = FTX_LDPC_M
-            break  # message converged to all-zeros, which is prohibited
-
-        # Check to see if we have a codeword (check before we do any iter)
-        if (errors := ldpc_check(plain)) < min_errors:
-            min_errors = errors  # we have a better guess - update the result
-
-            if errors == 0:
-                break  # Found a perfect answer
-
-        # Send messages from bits to check nodes
-        for m in range(FTX_LDPC_M):
-            for n_idx in range(FTX_LDPC_NUM_ROWS[m]):
-                n = FTX_LDPC_NM[m][n_idx] - 1
-                Tnm = codeword[n]
-                for m_idx in range(3):
-                    if (FTX_LDPC_MN[n][m_idx] - 1) != m:
-                        Tnm += tov[n][m_idx]
-                toc[m][n_idx] = fast_tanh(-Tnm / 2)
-
-        # send messages from check nodes to variable nodes
-        for n in range(FTX_LDPC_N):
-            for m_idx in range(3):
-                m = FTX_LDPC_MN[n][m_idx] - 1
-                Tmn = 1.0
-                for n_idx in range(FTX_LDPC_NUM_ROWS[m]):
-                    if (FTX_LDPC_NM[m][n_idx] - 1) != n:
-                        Tmn *= toc[m][n_idx]
-                tov[n][m_idx] = -2 * fast_atanh(Tmn)
-
-    return min_errors, plain
+def bp_decode(codeword: ntp.NDArray[np.float64], max_iters: int) -> typing.Tuple[int, ntp.NDArray[np.uint8]]:
+    return belief_propagation(
+        codeword, max_iters,
+        ldpc_n=FTX_LDPC_N, ldpc_m=FTX_LDPC_M,
+        n_v=3, m_c=7,
+        ldpc_num_rows=FTX_LDPC_NUM_ROWS,
+        ldpc_nm=FTX_LDPC_NM,
+        ldpc_mn=FTX_LDPC_MN,
+    )

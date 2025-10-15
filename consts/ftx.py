@@ -1,3 +1,5 @@
+import numpy as np
+
 FTX_PROTOCOL_FT4 = 1
 FTX_PROTOCOL_FT8 = 2
 
@@ -116,7 +118,7 @@ FT4_XOR_SEQUENCE = [
 ]
 
 # Parity generator matrix for FTX (174,91) LDPC code, stored in bitpacked format (MSB first)
-FTX_LDPC_GENERATOR = [
+FTX_LDPC_GENERATOR = np.array([
     [0x83, 0x29, 0xce, 0x11, 0xbf, 0x31, 0xea, 0xf5, 0x09, 0xf2, 0x7f, 0xc0],
     [0x76, 0x1c, 0x26, 0x4e, 0x25, 0xc2, 0x59, 0x33, 0x54, 0x93, 0x13, 0x20],
     [0xdc, 0x26, 0x59, 0x02, 0xfb, 0x27, 0x7c, 0x64, 0x10, 0xa1, 0xbd, 0xc0],
@@ -200,14 +202,14 @@ FTX_LDPC_GENERATOR = [
     [0x7b, 0xb3, 0x8b, 0x2f, 0x01, 0x86, 0xd4, 0x66, 0x43, 0xae, 0x96, 0x20],
     [0x26, 0x44, 0xeb, 0xad, 0xeb, 0x44, 0xb9, 0x46, 0x7d, 0x1f, 0x42, 0xc0],
     [0x60, 0x8c, 0xc8, 0x57, 0x59, 0x4b, 0xfb, 0xb5, 0x5d, 0x69, 0x60, 0x00]
-]
+])
 
 # Parity generator matrix for MSKX LDPC code, stored in bitpacked format (MSB first)
 
 # Each row describes one LDPC parity check.
 # Each number is an index into the codeword (1-origin).
 # The codeword bits mentioned in each row must XOR to zero.
-FTX_LDPC_NM = [
+FTX_LDPC_NM = np.array([
     [4, 31, 59, 91, 92, 96, 153],
     [5, 32, 60, 93, 115, 146, 0],
     [6, 24, 61, 94, 122, 151, 0],
@@ -291,12 +293,12 @@ FTX_LDPC_NM = [
     [18, 42, 79, 144, 146, 152, 0],
     [25, 38, 65, 99, 122, 160, 0],
     [17, 42, 75, 129, 170, 172, 0],
-]
+])
 
 # Each row corresponds to a codeword bit.
 # The numbers indicate which three LDPC parity checks (rows in Nm) refer to the codeword bit.
 # 1-origin.
-FTX_LDPC_MN = [
+FTX_LDPC_MN = np.array([
     [16, 45, 73],
     [25, 51, 62],
     [33, 58, 78],
@@ -471,16 +473,16 @@ FTX_LDPC_MN = [
     [49, 75, 83],
     [20, 44, 48],
     [42, 49, 57],
-]
+])
 
-FTX_LDPC_NUM_ROWS = [
+FTX_LDPC_NUM_ROWS = np.array([
     7, 6, 6, 6, 7, 6, 7, 6, 6, 7, 6, 6, 7, 7, 6, 6,
     6, 7, 6, 7, 6, 7, 6, 6, 6, 7, 6, 6, 6, 7, 6, 6,
     6, 6, 7, 6, 6, 6, 7, 7, 6, 6, 6, 6, 7, 7, 6, 6,
     6, 6, 7, 6, 6, 6, 7, 6, 6, 6, 6, 7, 6, 6, 6, 7,
     6, 6, 6, 7, 7, 6, 6, 7, 6, 6, 6, 6, 6, 6, 6, 7,
     6, 6, 6
-]
+])
 
 FTX_TOKEN_CODE = {
     "DE": 0,
