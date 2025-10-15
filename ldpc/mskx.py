@@ -11,7 +11,6 @@ import typing
 
 import numpy as np
 import numpy.typing as ntp
-from consts.mskx import MSKX_LDPC_K
 from consts.mskx import MSKX_LDPC_M
 from consts.mskx import MSKX_LDPC_N
 from consts.mskx import MSK144_LDPC_MN
@@ -31,9 +30,9 @@ def ldpc_check(codeword: ntp.NDArray[np.uint8]) -> int:
     """
     errors = 0
 
-    for m in range(MSKX_LDPC_M):
+    for m in np.arange(MSKX_LDPC_M):
         x = 0
-        for i in range(MSK144_LDPC_NUM_ROWS[m]):
+        for i in np.arange(MSK144_LDPC_NUM_ROWS[m]):
             x ^= codeword[MSK144_LDPC_NM[m][i] - 1]
 
         if x:
@@ -42,7 +41,7 @@ def ldpc_check(codeword: ntp.NDArray[np.uint8]) -> int:
     return errors
 
 
-# @jit(nopython=True)
+@jit(nopython=True)
 def bp_decode(codeword: ntp.NDArray[np.float64], max_iters: int) -> typing.Tuple[int, ntp.NDArray[np.uint8]]:
     min_errors = MSKX_LDPC_M
 
@@ -52,10 +51,10 @@ def bp_decode(codeword: ntp.NDArray[np.float64], max_iters: int) -> typing.Tuple
 
     plain = np.zeros(MSKX_LDPC_N, dtype=np.uint8)
 
-    for _ in range(max_iters):
+    for _ in np.arange(max_iters):
         # Do a hard decision guess (tov=0 in iter 0)
         plain_sum = 0
-        for n in range(MSKX_LDPC_N):
+        for n in np.arange(MSKX_LDPC_N):
             plain[n] = int((codeword[n] + tov[n][0] + tov[n][1] + tov[n][2]) > 0)
             plain_sum += plain[n]
 
@@ -64,28 +63,29 @@ def bp_decode(codeword: ntp.NDArray[np.float64], max_iters: int) -> typing.Tuple
             break  # message converged to all-zeros, which is prohibited
 
         # Check to see if we have a codeword (check before we do any iter)
-        if (errors := ldpc_check(plain)) < min_errors:
+        errors = ldpc_check(plain)
+        if errors < min_errors:
             min_errors = errors  # we have a better guess - update the result
 
             if errors == 0:
                 break  # Found a perfect answer
 
         # Send messages from bits to check nodes
-        for m in range(MSKX_LDPC_M):
-            for n_idx in range(MSK144_LDPC_NUM_ROWS[m]):
+        for m in np.arange(MSKX_LDPC_M):
+            for n_idx in np.arange(MSK144_LDPC_NUM_ROWS[m]):
                 n = MSK144_LDPC_NM[m][n_idx] - 1
                 Tnm = codeword[n]
-                for m_idx in range(3):
+                for m_idx in np.arange(3):
                     if (MSK144_LDPC_MN[n][m_idx] - 1) != m:
                         Tnm += tov[n][m_idx]
                 toc[m][n_idx] = fast_tanh(-Tnm / 2)
 
         # send messages from check nodes to variable nodes
-        for n in range(MSKX_LDPC_N):
-            for m_idx in range(3):
+        for n in np.arange(MSKX_LDPC_N):
+            for m_idx in np.arange(3):
                 m = MSK144_LDPC_MN[n][m_idx] - 1
                 Tmn = 1.0
-                for n_idx in range(MSK144_LDPC_NUM_ROWS[m]):
+                for n_idx in np.arange(MSK144_LDPC_NUM_ROWS[m]):
                     if (MSK144_LDPC_NM[m][n_idx] - 1) != n:
                         Tmn *= toc[m][n_idx]
                 tov[n][m_idx] = -2 * fast_atanh(Tmn)

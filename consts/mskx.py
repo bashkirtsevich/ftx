@@ -46,7 +46,7 @@ MSKX_LDPC_N = MSKX_LDPC_K + MSKX_LDPC_M
 MSKX_LDPC_N_BYTES = ((MSKX_LDPC_N + 7) // 8)
 MSKX_LDPC_K_BYTES = ((MSKX_LDPC_K + 7) // 8)
 
-MSK40_LDPC_MN = [
+MSK40_LDPC_MN = np.array([
     [1, 6, 13],
     [2, 3, 14],
     [4, 8, 15],
@@ -79,9 +79,9 @@ MSK40_LDPC_MN = [
     [4, 6, 14],
     [1, 5, 15],
     [8, 9, 16],
-]
+])
 
-MSK40_LDPC_NM = [
+MSK40_LDPC_NM = np.array([
     [1, 7, 12, 18, 21, 27, 31],
     [2, 8, 13, 18, 24, 28, 1],
     [2, 9, 14, 19, 23, 29, 1],
@@ -98,14 +98,14 @@ MSK40_LDPC_NM = [
     [2, 11, 15, 17, 21, 30, 1],
     [3, 6, 14, 16, 24, 31, 1],
     [5, 7, 17, 23, 24, 32, 1],
-]
+])
 
-MSK40_LDPC_NUM_ROWS = [
+MSK40_LDPC_NUM_ROWS = np.array([
     4, 1, 2, 3, 0, 8, 6, 10, 13, 28, 20, 23, 17, 15, 27, 25,
     16, 12, 18, 19, 7, 21, 22, 11, 24, 5, 26, 14, 9, 29, 30, 31
-]
+])
 
-MSK144_LDPC_GENERATOR = [
+MSK144_LDPC_GENERATOR = np.array([
     [0xa0, 0x8e, 0xa8, 0x08, 0x79, 0x05, 0x0a, 0x5e, 0x94, 0xda, 0x99, 0x40],
     [0x59, 0xf3, 0xb4, 0x80, 0x40, 0xca, 0x08, 0x9c, 0x81, 0xee, 0x88, 0x00],
     [0xe4, 0x07, 0x02, 0x62, 0x80, 0x2e, 0x31, 0xb7, 0xb1, 0x7d, 0x3d, 0xc0],
@@ -144,9 +144,9 @@ MSK144_LDPC_GENERATOR = [
     [0x4a, 0x3e, 0x9b, 0x7d, 0x08, 0xb6, 0x80, 0x7f, 0x86, 0x19, 0xfa, 0xc0],
     [0x45, 0xe8, 0x03, 0x0f, 0x68, 0x99, 0x7b, 0xb6, 0x85, 0x44, 0x42, 0x40],
     [0x7e, 0x79, 0x36, 0x2c, 0x16, 0x77, 0x3e, 0xfc, 0x64, 0x82, 0xe3, 0x00],
-]
+])
 
-MSK144_LDPC_MN = [
+MSK144_LDPC_MN = np.array([
     [21, 34, 36],
     [1, 8, 28],
     [2, 9, 37],
@@ -275,7 +275,7 @@ MSK144_LDPC_MN = [
     [11, 14, 28],
     [33, 36, 38],
     [8, 10, 35]
-]
+])
 
 MSK144_LDPC_NM = np.array([
     [2, 15, 27, 40, 53, 65, 77, 91, 94, 115, 0],
