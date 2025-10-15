@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from itertools import cycle
 
 import numpy as np
+import numpy.typing as npt
 
 from consts.ftx import *
 from crc.ftx import ftx_extract_crc, ftx_check_crc
@@ -59,25 +60,6 @@ class FTXMonitor(AbstractMonitor):
     def hann_i(i: int, N: int) -> float:
         x = math.sin(math.pi * i / N)
         return x ** 2
-
-    @staticmethod
-    def ftx_normalize_logl(log174: typing.List[float]) -> typing.Generator[float, None, None]:
-        # FIXME: Optimize
-        # Compute the variance of log174
-        sum = 0
-        sum2 = 0
-        for it in log174:
-            sum += it
-            sum2 += it ** 2
-
-        inv_n = 1.0 / FTX_LDPC_N
-        variance = (sum2 - (sum * sum * inv_n)) * inv_n
-
-        # Normalize log174 distribution and scale it with experimentally found coefficient
-        norm_factor = math.sqrt(24.0 / variance)
-
-        for it in log174:
-            yield it * norm_factor
 
     def __init__(self, f_min: int, f_max: int, sample_rate: int, time_osr: int, freq_osr: int, protocol):
         # symbol_period;    ///< FT4/FT8 symbol period in seconds
@@ -396,7 +378,15 @@ class FTXMonitor(AbstractMonitor):
         else:
             log174 = self.ft8_extract_likelihood(cand)
 
-        log174 = list(self.ftx_normalize_logl(log174))
+        log174 = np.array(log174, dtype=np.float64)
+
+        # Compute the variance of log174
+        variance = np.var(log174)
+        # Normalize log174 distribution and scale it with experimentally found coefficient
+        norm_factor = math.sqrt(24.0 / variance)
+
+        log174 *= norm_factor
+
         ldpc_errors, plain174 = bp_decode(log174, max_iterations)
 
         # FIXME: Slow code
