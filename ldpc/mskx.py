@@ -18,8 +18,6 @@ from consts.mskx import MSK144_LDPC_NM
 from consts.mskx import MSK144_LDPC_NUM_ROWS
 from numba import jit
 
-from .tanh import fast_tanh, fast_atanh
-
 
 @jit(nopython=True)
 def ldpc_check(codeword: ntp.NDArray[np.uint8]) -> int:
@@ -78,7 +76,7 @@ def bp_decode(codeword: ntp.NDArray[np.float64], max_iters: int) -> typing.Tuple
                 for m_idx in np.arange(3):
                     if (MSK144_LDPC_MN[n][m_idx] - 1) != m:
                         Tnm += tov[n][m_idx]
-                toc[m][n_idx] = fast_tanh(-Tnm / 2)
+                toc[m][n_idx] = np.tanh(-Tnm / 2)
 
         # send messages from check nodes to variable nodes
         for n in np.arange(MSKX_LDPC_N):
@@ -88,6 +86,6 @@ def bp_decode(codeword: ntp.NDArray[np.float64], max_iters: int) -> typing.Tuple
                 for n_idx in np.arange(MSK144_LDPC_NUM_ROWS[m]):
                     if (MSK144_LDPC_NM[m][n_idx] - 1) != n:
                         Tmn *= toc[m][n_idx]
-                tov[n][m_idx] = -2 * fast_atanh(Tmn)
+                tov[n][m_idx] = -2 * np.atanh(Tmn)
 
     return min_errors, plain
