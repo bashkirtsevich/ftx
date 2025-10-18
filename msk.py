@@ -23,7 +23,7 @@ def msk_gen_signal(
         phases = np.fromiter(
             (np.fmod(phase_delta * i + phase, 2 * np.pi)
              for i in range(samples_per_symbol)),
-            dtype=np.float32
+            dtype=np.float64
         )
 
         signal[t_start:t_end] = np.sin(phases)
