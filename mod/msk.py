@@ -1,10 +1,9 @@
 import numpy as np
 import numpy.typing as npt
-import typing
 
 
 def synth_msk(
-        tones: typing.List[int], sample_rate: int,
+        tones: npt.NDArray[np.int64], sample_rate: int,
         carrier_freq: int = 1000, delta_freq: int = 1000,
         sampling_factor: int = 1, sampling_rate_coef: int = 4) -> npt.NDArray[np.float64]:
     dt = 1.0 / (sampling_factor * sample_rate)
@@ -12,8 +11,8 @@ def synth_msk(
 
     phase = 0.0
 
-    signal = np.zeros(len(tones) * samples_per_symbol)
-    for i, tone in enumerate(tones):
+    signal = np.zeros(tones.shape[0] * samples_per_symbol)
+    for i, tone in np.ndenumerate(tones):
         freq = carrier_freq + tone * delta_freq
         phase_delta = 2 * np.pi * freq * dt
 
