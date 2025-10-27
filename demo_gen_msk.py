@@ -6,11 +6,11 @@ from scipy.signal import decimate
 
 from encode import msk144_encode
 from message import message_encode, message_encode_free
-from mod import msk_gen_signal
+from mod import synth_msk
 
 
 def gen_signal(tones: typing.List[int], sample_rate: int):
-    signal = msk_gen_signal(tones, sample_rate=sample_rate)
+    signal = synth_msk(tones, sample_rate=sample_rate)
 
     return signal
 

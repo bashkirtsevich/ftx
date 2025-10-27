@@ -3,7 +3,7 @@ import numpy.typing as npt
 import typing
 
 
-def msk_gen_signal(
+def synth_msk(
         tones: typing.List[int], sample_rate: int,
         carrier_freq: int = 1000, delta_freq: int = 1000,
         sampling_factor: int = 1, sampling_rate_coef: int = 4) -> npt.NDArray[np.float64]:
