@@ -1,9 +1,6 @@
 import math
 import typing
 
-FT8_SYMBOL_BT = 2.0  # < symbol smoothing filter bandwidth factor (BT)
-FT4_SYMBOL_BT = 1.0  # < symbol smoothing filter bandwidth factor (BT)
-
 GFSK_K = math.pi * math.sqrt(2 / math.log(2))  # pi * sqrt(2 / log(2)) = 5.336446
 
 

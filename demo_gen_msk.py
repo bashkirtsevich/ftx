@@ -6,7 +6,7 @@ from scipy.signal import decimate
 
 from encode import msk144_encode
 from message import message_encode, message_encode_free
-from msk import msk_gen_signal
+from mod import msk_gen_signal
 
 
 def gen_signal(tones: typing.List[int], sample_rate: int):

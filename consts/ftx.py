@@ -84,6 +84,10 @@ FTX_TIME_RANGE = {
     FTX_PROTOCOL_FT8: FT8_TIME_RANGE,
 }
 
+# GFSK smooth params
+FT8_SYMBOL_BT = 2.0  # < symbol smoothing filter bandwidth factor (BT)
+FT4_SYMBOL_BT = 1.0  # < symbol smoothing filter bandwidth factor (BT)
+
 # Define FTX LDPC parameters
 FTX_LDPC_K = 91
 FTX_LDPC_M = 83
