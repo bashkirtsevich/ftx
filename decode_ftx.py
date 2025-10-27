@@ -4,12 +4,9 @@ from copy import copy
 from dataclasses import dataclass
 from itertools import cycle
 
-import numpy as np
-import numpy.typing as npt
-
 from consts.ftx import *
 from crc.ftx import ftx_extract_crc, ftx_check_crc
-from encode import ft4_encode, ft8_encode
+from encoders import ft4_encode, ft8_encode
 from ldpc.ftx import bp_decode
 from message import message_decode
 from osd import osd_decode

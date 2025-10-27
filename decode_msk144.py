@@ -1,4 +1,3 @@
-import numpy as np
 import numpy.typing as npt
 from contextlib import suppress
 from functools import cache
@@ -6,7 +5,7 @@ from numba import jit
 from dataclasses import dataclass
 
 from crc.mskx import mskx_check_crc, mskx_extract_crc
-from encode import msk144_encode
+from encoders import msk144_encode
 from ldpc.mskx import bp_decode
 from consts.mskx import *
 import typing

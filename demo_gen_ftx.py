@@ -3,7 +3,7 @@ import typing
 from scipy.io.wavfile import write
 
 from consts.ftx import *
-from encode import ft8_encode, ft4_encode
+from encoders import ft8_encode, ft4_encode
 from mod import synth_gfsk
 from message import message_encode, message_encode_free
 
