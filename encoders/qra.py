@@ -60,6 +60,7 @@ def q65_encode_msg(msg: npt.NDArray[np.int64]) -> npt.NDArray[np.int64]:
 
 def q65_6bit_encode(bits: npt.NDArray[np.uint8]) -> npt.NDArray[np.int64]:
     n_chunks = bits.shape[0] // 6
+    bits = bits[:n_chunks * 6]
     chunks_reshaped = bits.reshape((n_chunks, 6))
     values = chunks_reshaped.dot(1 << np.arange(5, -1, -1))
     return values.tolist()
