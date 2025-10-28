@@ -13,6 +13,8 @@ def synth_msk(
 
     signal = np.zeros(tones.shape[0] * samples_per_symbol)
     for i, tone in np.ndenumerate(tones):
+        idx, *_ = i
+
         freq = carrier_freq + tone * delta_freq
         phase_delta = 2 * np.pi * freq * dt
 
@@ -22,7 +24,7 @@ def synth_msk(
             dtype=np.float64
         )
 
-        t_start = i * samples_per_symbol
+        t_start = idx * samples_per_symbol
         t_end = t_start + samples_per_symbol
 
         signal[t_start:t_end] = np.sin(phases)

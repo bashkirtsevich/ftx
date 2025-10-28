@@ -1,5 +1,8 @@
 import typing
 
+import numpy as np
+import numpy.typing as npt
+
 from consts.mskx import MSKX_LDPC_K_BYTES
 from consts.mskx import MSKX_LDPC_N_BYTES
 from consts.mskx import MSKX_LDPC_K
@@ -42,7 +45,7 @@ def mskx_encode(message: typing.ByteString) -> typing.ByteString:
     return codeword
 
 
-def msk144_encode(payload: typing.ByteString) -> typing.Generator[int, None, None]:
+def msk144_encode(payload: typing.ByteString) -> npt.NDArray[np.int64]:
     a96 = mskx_add_crc(payload)
     codeword = mskx_encode(a96)
 
@@ -59,5 +62,4 @@ def msk144_encode(payload: typing.ByteString) -> typing.Generator[int, None, Non
         tones[2 * i - 0] = (signs[2 * i + 1] * signs[2 * i - 0] + 1) // 2
         tones[2 * i + 1] = -(signs[2 * i + 1] * signs[2 * i + 2] - 1) // 2
 
-    for tone in tones:
-        yield -tone + 1
+    return np.fromiter((-tone + 1 for tone in tones), dtype=np.int64)

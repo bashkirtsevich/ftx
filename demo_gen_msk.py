@@ -1,6 +1,8 @@
 import typing
 
 import numpy as np
+import numpy.typing as npt
+
 from scipy.io.wavfile import write
 from scipy.signal import decimate
 
@@ -9,29 +11,24 @@ from message import message_encode, message_encode_free
 from mod import synth_msk
 
 
-def gen_signal(tones: typing.List[int], sample_rate: int):
+def gen_signal(tones: npt.NDArray[np.int64], sample_rate: int):
     signal = synth_msk(tones, sample_rate=sample_rate)
 
     return signal
 
 
-def gen_msk144_tones(payload: typing.ByteString) -> typing.List[int]:
+def gen_msk144_tones(payload: typing.ByteString) -> npt.NDArray[np.int64]:
     tones = msk144_encode(payload)
-
-    tones = list(tones)
-
     return tones
 
 
-def gen_free_text_tones(msg: str) -> typing.List[int]:
+def gen_free_text_tones(msg: str) -> npt.NDArray[np.int64]:
     payload = message_encode_free(msg)
-
     return gen_msk144_tones(payload)
 
 
-def gen_msg_tones(call_to: str, call_de: str, extra: str = "") -> typing.List[int]:
+def gen_msg_tones(call_to: str, call_de: str, extra: str = "") -> npt.NDArray[np.int64]:
     payload = message_encode(call_to, call_de, extra)
-
     return gen_msk144_tones(payload)
 
 
