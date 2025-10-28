@@ -51,7 +51,7 @@ def main():
     tones = gen_msg_tones("CQ", "R1ABC", "AA00", is_ft4=is_ft4)
 
     print("Gen signal")
-    signal = gen_signal(tones, 1000, sample_rate=sample_rate, is_ft4=is_ft4)
+    signal = gen_signal(tones, frequency=1000, sample_rate=sample_rate, is_ft4=is_ft4)
 
     symbol_period = FT4_SYMBOL_PERIOD if is_ft4 else FT8_SYMBOL_PERIOD
 
