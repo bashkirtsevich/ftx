@@ -12,8 +12,8 @@ from mod import synth_fsk
 
 
 def gen_signal(tones: npt.NDArray[np.int64], sample_rate: int,
-               period: typing.Optional[typing.Literal[30, 60, 120, 300]],
-               f0: float, q65_type: typing.Literal[1, 2, 3, 4]):
+               f0: float, q65_type: typing.Literal[1, 2, 3, 4],
+               period: typing.Optional[typing.Literal[30, 60, 120, 300]] = None):
     if period == 30:
         nsps = 3600
     elif period == 60:
@@ -55,7 +55,7 @@ def main():
     tones = gen_msg_tones("CQ", "R9FEU", "LO87")
 
     sample_rate = 48000
-    signal = gen_signal(tones, sample_rate, period=30, f0=1000, q65_type=1)
+    signal = gen_signal(tones, sample_rate, f0=1000, q65_type=1, period=30)
 
     # Adjust volume
     volume = 0.5
