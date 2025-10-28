@@ -1,5 +1,7 @@
 import numpy as np
 
+Q65_SYNC = np.array([1, 9, 12, 13, 15, 22, 23, 26, 27, 33, 35, 38, 46, 50, 55, 60, 62, 66, 69, 74, 76, 85])
+
 QRATYPE_NORMAL = 0x00  # normal code
 QRATYPE_CRC = 0x01  # code with crc - last information symbol is a CRC-6
 QRATYPE_CRCPUNCTURED = 0x02  # the CRC-6 symbol is punctured (not sent along the channel)
