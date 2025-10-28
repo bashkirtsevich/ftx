@@ -9,6 +9,7 @@ from consts.mskx import MSKX_LDPC_K
 from consts.mskx import MSKX_LDPC_M
 from consts.mskx import MSK144_LDPC_GENERATOR
 from consts.mskx import MSKX_LDPC_N
+from consts.mskx import MSK144_SYNC_INT
 from crc.mskx import mskx_add_crc
 from encoders.ftx import parity8
 
@@ -49,15 +50,14 @@ def msk144_encode(payload: typing.ByteString) -> npt.NDArray[np.int64]:
     a96 = mskx_add_crc(payload)
     codeword = mskx_encode(a96)
 
-    sync = b"\x72"  # 0,1,1,1,0,0,1,0
-    envelope = sync + codeword[0:6] + sync + codeword[6:16]
+    envelope = MSK144_SYNC_INT + codeword[0:6] + MSK144_SYNC_INT + codeword[6:16]
 
     MSK144_BITS = MSKX_LDPC_N + 16
 
     signs = [2 * ((envelope[i // 8] >> (7 - (i % 8))) & 1) - 1
              for i in range(MSK144_BITS)] + [0]  # FIXME: + [0] -- is a shit!
 
-    tones = [0 for _ in range(MSK144_BITS)]
+    tones = np.zeros(MSK144_BITS)
     for i in range(MSK144_BITS // 2):
         tones[2 * i - 0] = (signs[2 * i + 1] * signs[2 * i - 0] + 1) // 2
         tones[2 * i + 1] = -(signs[2 * i + 1] * signs[2 * i + 2] - 1) // 2
