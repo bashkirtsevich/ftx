@@ -11,7 +11,7 @@ from message import message_encode, message_encode_free
 from mod import synth_msk
 
 
-def gen_signal(tones: npt.NDArray[np.int64], sample_rate: int):
+def gen_signal(tones: npt.NDArray[np.int64], sample_rate: int) -> npt.NDArray[np.float64]:
     signal = synth_msk(tones, sample_rate=sample_rate)
 
     return signal

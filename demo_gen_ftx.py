@@ -1,5 +1,8 @@
 import typing
 
+import numpy as np
+import numpy.typing as npt
+
 from scipy.io.wavfile import write
 
 from consts.ftx import *
@@ -8,13 +11,14 @@ from mod import synth_gfsk
 from message import message_encode, message_encode_free
 
 
-def gen_signal(tones: typing.List[int], frequency: int, sample_rate: int, is_ft4: bool):
+def gen_signal(tones: typing.List[int], frequency: int, sample_rate: int, is_ft4: bool) -> npt.NDArray[np.float64]:
     symbol_period = FT4_SYMBOL_PERIOD if is_ft4 else FT8_SYMBOL_PERIOD
     symbol_bt = FT4_SYMBOL_BT if is_ft4 else FT8_SYMBOL_BT
 
     num_tones = FT4_NN if is_ft4 else FT8_NN
 
-    signal = np.fromiter(synth_gfsk(tones, num_tones, frequency, symbol_bt, symbol_period, sample_rate), dtype=float)
+    signal = np.fromiter(synth_gfsk(tones, num_tones, frequency, symbol_bt, symbol_period, sample_rate),
+                         dtype=np.float64)
 
     return signal
 

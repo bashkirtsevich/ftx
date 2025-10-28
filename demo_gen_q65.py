@@ -13,7 +13,7 @@ from mod import synth_fsk
 
 def gen_signal(tones: npt.NDArray[np.int64], sample_rate: int,
                f0: float, q65_type: typing.Literal[1, 2, 3, 4],
-               period: typing.Optional[typing.Literal[30, 60, 120, 300]] = None):
+               period: typing.Optional[typing.Literal[30, 60, 120, 300]] = None) -> npt.NDArray[np.float64]:
     if period == 30:
         nsps = 3600
     elif period == 60:
