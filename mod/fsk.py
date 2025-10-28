@@ -5,7 +5,7 @@ import numpy.typing as npt
 def synth_fsk(
         tones: npt.NDArray[np.int64], sample_rate: int,
         samples_per_symbol: int,
-        freq_shift: float, bandwidth: int) -> npt.NDArray[np.float64]:
+        f0: float, bandwidth: int) -> npt.NDArray[np.float64]:
     dt = 1.0 / sample_rate
 
     phase = 0.0
@@ -13,8 +13,8 @@ def synth_fsk(
     signal = np.zeros(tones.shape[0] * samples_per_symbol, dtype=np.float64)
     for i, tone in np.ndenumerate(tones):
         idx, *_ = i
-        
-        freq = freq_shift + bandwidth * tone
+
+        freq = f0 + bandwidth * tone
         phase_delta = 2 * np.pi * freq * dt
 
         phases = np.fromiter(
