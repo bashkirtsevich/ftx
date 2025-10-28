@@ -12,6 +12,8 @@ def synth_fsk(
 
     signal = np.zeros(tones.shape[0] * samples_per_symbol, dtype=np.float64)
     for i, tone in np.ndenumerate(tones):
+        idx, *_ = i
+        
         freq = freq_shift + bandwidth * tone
         phase_delta = 2 * np.pi * freq * dt
 
@@ -21,7 +23,7 @@ def synth_fsk(
             dtype=np.float64
         )
 
-        t_start = i * samples_per_symbol
+        t_start = idx * samples_per_symbol
         t_end = t_start + samples_per_symbol
 
         signal[t_start:t_end] = np.sin(phases)
