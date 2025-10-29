@@ -73,10 +73,10 @@ class FTXMonitor(AbstractMonitor):
         self.block_size = int(sample_rate * symbol_period)  # samples corresponding to one FSK symbol
         self.subblock_size = int(self.block_size / time_osr)
         self.nfft = self.block_size * freq_osr
-        self.fft_norm = 2.0 / self.nfft
-        # const int len_window = 1.8f * me->block_size; // hand-picked and optimized
 
-        self.window = self.fft_norm * np.hanning(self.nfft)
+        fft_norm = 2.0 / self.nfft
+        self.window = fft_norm * np.hanning(self.nfft)
+
         self.last_frame = np.zeros(self.nfft, dtype=np.float64)  # [0.0] * self.nfft
 
         # Allocate enough blocks to fit the entire FT8/FT4 slot in memory
@@ -85,9 +85,8 @@ class FTXMonitor(AbstractMonitor):
         # Keep only FFT bins in the specified frequency range (f_min/f_max)
         self.min_bin = int(f_min * symbol_period)
         self.max_bin = int(f_max * symbol_period + 1)
-        num_bins = self.max_bin - self.min_bin
 
-        # max_blocks: int, num_bins: int, time_osr: int, freq_osr: int, protocol
+        num_bins = self.max_bin - self.min_bin
         self.wf = Waterfall(max_blocks=max_blocks, num_bins=num_bins, time_osr=time_osr, freq_osr=freq_osr,
                             protocol=protocol)
 
