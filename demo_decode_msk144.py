@@ -2,7 +2,7 @@ import time
 
 from scipy.io.wavfile import read
 
-from decode_msk144 import MSK144Monitor
+from decoders import MSK144Monitor
 from message import message_decode
 
 
