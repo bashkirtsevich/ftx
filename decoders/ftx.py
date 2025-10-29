@@ -367,8 +367,6 @@ class FTXMonitor(AbstractMonitor):
         else:
             log174 = self.ft8_extract_likelihood(cand)
 
-        log174 = np.array(log174, dtype=np.float64)
-
         # Compute the variance of log174
         variance = np.var(log174, dtype=np.float64)
         # Normalize log174 distribution and scale it with experimentally found coefficient
