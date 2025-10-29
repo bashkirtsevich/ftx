@@ -2,12 +2,11 @@ import re
 import typing
 from functools import reduce
 
-from consts.ftx import CALLSIGN_HASHTABLE_SIZE, FTX_RESPONSE_EXTRAS_CODE, FTX_MAX_GRID_4, FTX_RESPONSE_EXTRAS_STR
+from consts.ftx import FTX_RESPONSE_EXTRAS_CODE, FTX_MAX_GRID_4, FTX_RESPONSE_EXTRAS_STR
 from consts.ftx import FTX_TOKEN_CODE
 from consts.ftx import FTX_TOKEN_STR
-from consts.ftx import FTX_CALLSIGN_HASH_10_BITS
-from consts.ftx import FTX_CALLSIGN_HASH_12_BITS
-from consts.ftx import FTX_CALLSIGN_HASH_22_BITS
+from consts.msg import FTX_CALLSIGN_HASH_10_BITS, FTX_CALLSIGN_HASH_12_BITS, FTX_CALLSIGN_HASH_22_BITS, \
+    CALLSIGN_HASHTABLE_SIZE
 from exceptions import MSGInvalidCallsign, MSGInvalidReport
 from exceptions import MSGPackCallsignError
 from text import FTX_BASECALL_SUFFIX_FMT
