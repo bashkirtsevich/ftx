@@ -1,4 +1,3 @@
-import math
 import typing
 from copy import copy
 from dataclasses import dataclass
@@ -55,7 +54,7 @@ class FTXMonitor(AbstractMonitor):
     # FT4/FT8 monitor object that manages DSP processing of incoming audio data and prepares a waterfall object
     @staticmethod
     def hann_i(i: int, N: int) -> float:
-        x = math.sin(math.pi * i / N)
+        x = np.sin(np.pi * i / N)
         return x ** 2
 
     def __init__(self, f_min: int, f_max: int, sample_rate: int, time_osr: int, freq_osr: int, protocol):
@@ -127,7 +126,7 @@ class FTXMonitor(AbstractMonitor):
                 for bin in range(self.min_bin, self.max_bin):
                     src_bin = (bin * self.wf.freq_osr) + freq_sub
                     mag2 = freqdata[src_bin].imag ** 2 + freqdata[src_bin].real ** 2
-                    db = 10.0 * math.log10(1E-12 + mag2)
+                    db = 10.0 * np.log10(1E-12 + mag2)
 
                     # Scale decibels to unsigned 8-bit range and clamp the value
                     # Range 0-240 covers -120..0 dB in 0.5 dB steps
@@ -380,7 +379,7 @@ class FTXMonitor(AbstractMonitor):
         # Compute the variance of log174
         variance = np.var(log174)
         # Normalize log174 distribution and scale it with experimentally found coefficient
-        norm_factor = math.sqrt(24.0 / variance)
+        norm_factor = np.sqrt(24.0 / variance)
 
         log174 *= norm_factor
 
