@@ -7,17 +7,17 @@ from consts.ftx import FTX_TOKEN_CODE
 from consts.ftx import FTX_TOKEN_STR
 from consts.msg import MSG_CALLSIGN_HASH_10_BITS, MSG_CALLSIGN_HASH_12_BITS, MSG_CALLSIGN_HASH_22_BITS, \
     CALLSIGN_HASHTABLE_SIZE
-from exceptions import MSGInvalidCallsign, MSGInvalidReport
-from exceptions import MSGPackCallsignError
-from text import FTX_BASECALL_SUFFIX_FMT
-from text import FTX_GRID_CHAR_MAP
-from text import FTX_BASECALL_CHAR_MAP
-from text import FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH
-from text import FTX_CHAR_TABLE_LETTERS_SPACE
-from text import charn
-from text import endswith_any
-from text import nchar
-from tools import dword, qword
+from .exceptions import MSGInvalidCallsign, MSGInvalidReport
+from .exceptions import MSGPackCallsignError
+from .text import FTX_BASECALL_SUFFIX_FMT
+from .text import FTX_GRID_CHAR_MAP
+from .text import FTX_BASECALL_CHAR_MAP
+from .text import FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH
+from .text import FTX_CHAR_TABLE_LETTERS_SPACE
+from .text import charn
+from .text import endswith_any
+from .text import nchar
+from .tools import dword, qword
 
 NTOKENS = 2063592
 MAX22 = 4194304

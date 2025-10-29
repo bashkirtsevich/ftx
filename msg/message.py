@@ -7,16 +7,16 @@ from consts.msg import MSG_CALLSIGN_HASH_12_BITS, MSG_MESSAGE_TYPE_FREE_TEXT, MS
     MSG_MESSAGE_FREE_TEXT_LEN, MSG_MESSAGE_TELEMETRY_LEN
 from consts.ftx import FTX_EXTRAS_CODE
 from consts.ftx import FTX_EXTRAS_STR
-from exceptions import MSGErrorCallSignTo, MSGErrorTooLong, MSGErrorInvalidChar, MSGException
-from exceptions import MSGErrorCallSignDe
-from exceptions import MSGErrorGrid
-from exceptions import MSGErrorMsgType
-from exceptions import MSGErrorSuffix
-from pack import pack_callsign, save_callsign, pack_extra, pack58, unpack_callsign, unpack_extra, lookup_callsign, \
+from .exceptions import MSGErrorCallSignTo, MSGErrorTooLong, MSGErrorInvalidChar, MSGException
+from .exceptions import MSGErrorCallSignDe
+from .exceptions import MSGErrorGrid
+from .exceptions import MSGErrorMsgType
+from .exceptions import MSGErrorSuffix
+from .pack import pack_callsign, save_callsign, pack_extra, pack58, unpack_callsign, unpack_extra, lookup_callsign, \
     unpack58, \
     pack_basecall
-from text import FTX_CHAR_TABLE_FULL, charn, nchar, endswith_any
-from tools import byte, dword
+from .text import FTX_CHAR_TABLE_FULL, charn, nchar, endswith_any
+from .tools import byte, dword
 
 
 def message_encode(call_to: str, call_de: str, extra: str = "") -> typing.ByteString:
