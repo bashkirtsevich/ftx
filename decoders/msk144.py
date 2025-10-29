@@ -10,7 +10,7 @@ from ldpc.mskx import bp_decode
 from consts.mskx import *
 import typing
 
-from monitor import DecodeStatus, AbstractMonitor
+from .monitor import DecodeStatus, AbstractMonitor
 
 
 @dataclass

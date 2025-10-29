@@ -9,7 +9,7 @@ from encoders import ft4_encode, ft8_encode
 from ldpc.ftx import bp_decode
 from msg.message import message_decode
 from ldpc.osd import osd_decode
-from monitor import DecodeStatus, AbstractMonitor
+from .monitor import DecodeStatus, AbstractMonitor
 
 
 @dataclass
