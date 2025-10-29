@@ -1,8 +1,8 @@
 import typing
 
-from consts.ftx import FTX_LDPC_K_BYTES, FTX_LDPC_M, FTX_LDPC_K
+from consts.ftx import FTX_LDPC_K_BYTES, FTX_LDPC_K
 from .crc import compute_crc
-from tools import byte
+from msg.tools import byte
 
 # FIXME: Replace to "consts"
 FTX_CRC_POLYNOMIAL = 0x2757

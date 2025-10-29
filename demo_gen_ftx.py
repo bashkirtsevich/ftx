@@ -1,6 +1,5 @@
 import typing
 
-import numpy as np
 import numpy.typing as npt
 
 from scipy.io.wavfile import write
@@ -8,7 +7,7 @@ from scipy.io.wavfile import write
 from consts.ftx import *
 from encoders import ft8_encode, ft4_encode
 from mod import synth_gfsk
-from message import message_encode, message_encode_free
+from msg.message import message_encode, message_encode_free
 
 
 def gen_signal(tones: typing.List[int], frequency: int, sample_rate: int, is_ft4: bool) -> npt.NDArray[np.float64]:

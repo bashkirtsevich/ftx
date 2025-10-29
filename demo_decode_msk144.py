@@ -3,7 +3,7 @@ import time
 from scipy.io.wavfile import read
 
 from decoders import MSK144Monitor
-from message import message_decode
+from msg.message import message_decode
 
 
 def main():

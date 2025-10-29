@@ -1,4 +1,4 @@
-from message import message_encode, message_decode
+from msg.message import message_encode, message_decode
 
 
 def test_std_msg(call_to_tx, call_de_tx, extra_tx):

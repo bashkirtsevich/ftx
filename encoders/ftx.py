@@ -13,7 +13,7 @@ from consts.ftx import FT8_COSTAS_PATTERN
 from consts.ftx import FT8_GRAY_MAP
 from consts.ftx import FTX_LDPC_GENERATOR
 from crc.ftx import ftx_add_crc
-from tools import byte
+from msg.tools import byte
 
 
 def parity8(x: int) -> int:

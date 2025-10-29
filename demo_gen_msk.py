@@ -7,7 +7,7 @@ from scipy.io.wavfile import write
 from scipy.signal import decimate
 
 from encoders import msk144_encode
-from message import message_encode, message_encode_free
+from msg.message import message_encode, message_encode_free
 from mod import synth_msk
 
 

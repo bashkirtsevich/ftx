@@ -1,10 +1,9 @@
 import typing
 
-import numpy as np
 import numpy.typing as npt
 from consts.mskx import *
 from .crc import compute_crc
-from tools import byte
+from msg.tools import byte
 
 # FIXME: Replace to "consts"
 MSKX_CRC_POLYNOMIAL = 0x15D7

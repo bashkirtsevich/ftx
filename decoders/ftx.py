@@ -8,7 +8,7 @@ from consts.ftx import *
 from crc.ftx import ftx_extract_crc, ftx_check_crc
 from encoders import ft4_encode, ft8_encode
 from ldpc.ftx import bp_decode
-from message import message_decode
+from msg.message import message_decode
 from ldpc.osd import osd_decode
 from monitor import DecodeStatus, AbstractMonitor
 
