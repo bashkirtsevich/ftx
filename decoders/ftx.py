@@ -333,10 +333,10 @@ class FTXMonitor(AbstractMonitor):
         # Cleaned up code for the simple case of n_syms==1
         s2 = self.wf.mag[gray_map + mag_idx]
 
-        logl = tuple(
+        logl = np.fromiter((
             np.max(s2[np.array(l)]) - np.max(s2[np.array(r)])
             for l, r in bit_map
-        )
+        ), dtype=np.float64)
 
         return logl
 
