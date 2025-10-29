@@ -370,7 +370,7 @@ class FTXMonitor(AbstractMonitor):
         log174 = np.array(log174, dtype=np.float64)
 
         # Compute the variance of log174
-        variance = np.var(log174)
+        variance = np.var(log174, dtype=np.float64)
         # Normalize log174 distribution and scale it with experimentally found coefficient
         norm_factor = np.sqrt(24.0 / variance)
 
