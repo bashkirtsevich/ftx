@@ -1,10 +1,10 @@
 import typing
 from contextlib import suppress
 
-from consts.msg import FTX_CALLSIGN_HASH_12_BITS, FTX_MESSAGE_TYPE_FREE_TEXT, FTX_MESSAGE_TYPE_DXPEDITION, \
-    FTX_MESSAGE_TYPE_EU_VHF, FTX_MESSAGE_TYPE_ARRL_FD, FTX_MESSAGE_TYPE_TELEMETRY, FTX_MESSAGE_TYPE_STANDARD, \
-    FTX_MESSAGE_TYPE_ARRL_RTTY, FTX_MESSAGE_TYPE_NONSTD_CALL, FTX_MESSAGE_TYPE_WWROF, FTX_MESSAGE_TYPE_UNKNOWN, \
-    FTX_MESSAGE_FREE_TEXT_LEN, FTX_MESSAGE_TELEMETRY_LEN
+from consts.msg import MSG_CALLSIGN_HASH_12_BITS, MSG_MESSAGE_TYPE_FREE_TEXT, MSG_MESSAGE_TYPE_DXPEDITION, \
+    MSG_MESSAGE_TYPE_EU_VHF, MSG_MESSAGE_TYPE_ARRL_FD, MSG_MESSAGE_TYPE_TELEMETRY, MSG_MESSAGE_TYPE_STANDARD, \
+    MSG_MESSAGE_TYPE_ARRL_RTTY, MSG_MESSAGE_TYPE_NONSTD_CALL, MSG_MESSAGE_TYPE_WWROF, MSG_MESSAGE_TYPE_UNKNOWN, \
+    MSG_MESSAGE_FREE_TEXT_LEN, MSG_MESSAGE_TELEMETRY_LEN
 from consts.ftx import FTX_EXTRAS_CODE
 from consts.ftx import FTX_EXTRAS_STR
 from exceptions import MSGErrorCallSignTo, MSGErrorTooLong, MSGErrorInvalidChar, MSGException
@@ -41,15 +41,15 @@ def message_encode(call_to: str, call_de: str, extra: str = "") -> typing.ByteSt
 
 def message_decode(payload: typing.ByteString) -> typing.Tuple[str, typing.Optional[str], typing.Optional[str]]:
     msg_type = message_get_type(payload)
-    if msg_type == FTX_MESSAGE_TYPE_STANDARD:
+    if msg_type == MSG_MESSAGE_TYPE_STANDARD:
         field1, field2, field3 = message_decode_std(payload)
-    elif msg_type == FTX_MESSAGE_TYPE_NONSTD_CALL:
+    elif msg_type == MSG_MESSAGE_TYPE_NONSTD_CALL:
         field1, field2, field3 = message_decode_nonstd(payload)
-    elif msg_type == FTX_MESSAGE_TYPE_FREE_TEXT:
+    elif msg_type == MSG_MESSAGE_TYPE_FREE_TEXT:
         field1 = message_decode_free(payload)
         field2 = None
         field3 = None
-    elif msg_type == FTX_MESSAGE_TYPE_TELEMETRY:
+    elif msg_type == MSG_MESSAGE_TYPE_TELEMETRY:
         field1 = message_decode_telemetry_hex(payload)
         field2 = None
         field3 = None
@@ -68,27 +68,27 @@ def message_get_type(payload: typing.ByteString) -> int:
         # Extract n3 (bits 71..73)
         n3 = ((payload[8] << 2) & 0x04) | ((payload[9] >> 6) & 0x03)
         if n3 == 0:
-            return FTX_MESSAGE_TYPE_FREE_TEXT
+            return MSG_MESSAGE_TYPE_FREE_TEXT
         elif n3 == 1:
-            return FTX_MESSAGE_TYPE_DXPEDITION
+            return MSG_MESSAGE_TYPE_DXPEDITION
         elif n3 == 2:
-            return FTX_MESSAGE_TYPE_EU_VHF
+            return MSG_MESSAGE_TYPE_EU_VHF
         elif n3 < 5:
-            return FTX_MESSAGE_TYPE_ARRL_FD
+            return MSG_MESSAGE_TYPE_ARRL_FD
         elif n3 == 5:
-            return FTX_MESSAGE_TYPE_TELEMETRY
+            return MSG_MESSAGE_TYPE_TELEMETRY
         else:
-            return FTX_MESSAGE_TYPE_UNKNOWN
+            return MSG_MESSAGE_TYPE_UNKNOWN
     elif i3 < 3:
-        return FTX_MESSAGE_TYPE_STANDARD
+        return MSG_MESSAGE_TYPE_STANDARD
     elif i3 == 3:
-        return FTX_MESSAGE_TYPE_ARRL_RTTY
+        return MSG_MESSAGE_TYPE_ARRL_RTTY
     elif i3 == 4:
-        return FTX_MESSAGE_TYPE_NONSTD_CALL
+        return MSG_MESSAGE_TYPE_NONSTD_CALL
     elif i3 == 5:
-        return FTX_MESSAGE_TYPE_WWROF
+        return MSG_MESSAGE_TYPE_WWROF
     else:
-        return FTX_MESSAGE_TYPE_UNKNOWN
+        return MSG_MESSAGE_TYPE_UNKNOWN
 
 
 def message_encode_std(call_to: str, call_de: str, extra: str) -> typing.ByteString:
@@ -197,7 +197,7 @@ def message_decode_nonstd(payload: typing.ByteString) -> typing.Tuple[str, str, 
     call_decoded = unpack58(n58)
 
     # Decode the other call from hash lookup table
-    call_3 = lookup_callsign(FTX_CALLSIGN_HASH_12_BITS, n12)
+    call_3 = lookup_callsign(MSG_CALLSIGN_HASH_12_BITS, n12)
 
     # Possibly flip them around
     call_1 = call_decoded if iflip else call_3
@@ -276,17 +276,17 @@ def message_encode_nonstd(call_to: str, call_de: str, extra: str) -> typing.Byte
 
 
 def message_encode_free(text: str) -> typing.ByteString:
-    if len(text) > FTX_MESSAGE_FREE_TEXT_LEN:
+    if len(text) > MSG_MESSAGE_FREE_TEXT_LEN:
         raise MSGErrorTooLong
 
-    payload = bytearray(b"\x00" * FTX_MESSAGE_TELEMETRY_LEN)
-    text = (" " * (FTX_MESSAGE_FREE_TEXT_LEN - len(text))) + text
+    payload = bytearray(b"\x00" * MSG_MESSAGE_TELEMETRY_LEN)
+    text = (" " * (MSG_MESSAGE_FREE_TEXT_LEN - len(text))) + text
     for c in text:
         if (cid := nchar(c, FTX_CHAR_TABLE_FULL)) == -1:
             raise MSGErrorInvalidChar
 
         rem = cid
-        for i in reversed(range(FTX_MESSAGE_TELEMETRY_LEN)):
+        for i in reversed(range(MSG_MESSAGE_TELEMETRY_LEN)):
             rem += payload[i] * len(FTX_CHAR_TABLE_FULL)
             payload[i] = byte(rem)
             rem >>= 8
@@ -295,7 +295,7 @@ def message_encode_free(text: str) -> typing.ByteString:
 
 
 def message_encode_telemetry(payload: typing.ByteString) -> typing.ByteString:
-    if len(payload) > FTX_MESSAGE_TELEMETRY_LEN:
+    if len(payload) > MSG_MESSAGE_TELEMETRY_LEN:
         raise MSGErrorTooLong
 
     # Shift bits in payload right by 1 bit to right-align the data
@@ -324,10 +324,10 @@ def message_decode_telemetry_hex(data: typing.ByteString) -> str:
 def message_decode_free(data: typing.ByteString) -> str:
     payload = bytearray(message_decode_telemetry(data))
     text = " "
-    for _ in range(FTX_MESSAGE_FREE_TEXT_LEN):
+    for _ in range(MSG_MESSAGE_FREE_TEXT_LEN):
         # Divide the long integer in payload by 42
         rem = 0
-        for i in range(FTX_MESSAGE_TELEMETRY_LEN):
+        for i in range(MSG_MESSAGE_TELEMETRY_LEN):
             rem = (rem << 8) | payload[i]
             payload[i] = byte(rem // len(FTX_CHAR_TABLE_FULL))
             rem = rem % len(FTX_CHAR_TABLE_FULL)

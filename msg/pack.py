@@ -5,7 +5,7 @@ from functools import reduce
 from consts.ftx import FTX_RESPONSE_EXTRAS_CODE, FTX_MAX_GRID_4, FTX_RESPONSE_EXTRAS_STR
 from consts.ftx import FTX_TOKEN_CODE
 from consts.ftx import FTX_TOKEN_STR
-from consts.msg import FTX_CALLSIGN_HASH_10_BITS, FTX_CALLSIGN_HASH_12_BITS, FTX_CALLSIGN_HASH_22_BITS, \
+from consts.msg import MSG_CALLSIGN_HASH_10_BITS, MSG_CALLSIGN_HASH_12_BITS, MSG_CALLSIGN_HASH_22_BITS, \
     CALLSIGN_HASHTABLE_SIZE
 from exceptions import MSGInvalidCallsign, MSGInvalidReport
 from exceptions import MSGPackCallsignError
@@ -49,7 +49,7 @@ def save_callsign(callsign: str) -> typing.Optional[typing.Tuple[int, int, int]]
 
 
 def lookup_hash(hash_type: int, hash: int) -> typing.Optional[str]:
-    hash_shift = 12 if hash_type == FTX_CALLSIGN_HASH_10_BITS else 10 if hash_type == FTX_CALLSIGN_HASH_12_BITS else 0
+    hash_shift = 12 if hash_type == MSG_CALLSIGN_HASH_10_BITS else 10 if hash_type == MSG_CALLSIGN_HASH_12_BITS else 0
     hash10 = (hash >> (12 - hash_shift)) & 0x3FF
     idx_hash = (hash10 * 23) % CALLSIGN_HASHTABLE_SIZE
     # while callsign_hashtable[idx_hash].callsign[0]:
@@ -221,7 +221,7 @@ def unpack_callsign(cs_28: int, flags: bool, suffix: int) -> typing.Optional[str
     cs_28 -= NTOKENS
     if cs_28 < MAX22:
         # This is a 22-bit hash of a result
-        return lookup_callsign(FTX_CALLSIGN_HASH_22_BITS, cs_28)
+        return lookup_callsign(MSG_CALLSIGN_HASH_22_BITS, cs_28)
 
     # Standard callsign
     n = cs_28 - MAX22
