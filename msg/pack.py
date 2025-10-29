@@ -8,8 +8,8 @@ from consts.ftx import FTX_TOKEN_STR
 from consts.ftx import FTX_CALLSIGN_HASH_10_BITS
 from consts.ftx import FTX_CALLSIGN_HASH_12_BITS
 from consts.ftx import FTX_CALLSIGN_HASH_22_BITS
-from exceptions import FTXInvalidCallsign, FTXInvalidReport
-from exceptions import FTXPackCallsignError
+from exceptions import MSGInvalidCallsign, MSGInvalidReport
+from exceptions import MSGPackCallsignError
 from text import FTX_BASECALL_SUFFIX_FMT
 from text import FTX_GRID_CHAR_MAP
 from text import FTX_BASECALL_CHAR_MAP
@@ -114,7 +114,7 @@ def pack_extra(extra: str) -> int:
 
     # Parse report: +dd / -dd / R+dd / R-dd
     if not (report := re.match(r"^(R){0,1}([\+\-]{0,1}[0-9]+)$", extra)):
-        raise FTXInvalidReport
+        raise MSGInvalidReport
 
     r_sign, r_val = report.groups()
     i_report = int(r_val) + 35
@@ -157,7 +157,7 @@ def pack_callsign(callsign: str) -> typing.Tuple[int, int]:
     if (n28 := pack_basecall(callsign[:length_base])) >= 0:
         # Callsign can be encoded as a standard basecall with optional /P or /R suffix
         if save_callsign(callsign) is None:
-            raise FTXInvalidCallsign  # Error (some problem with callsign contents)
+            raise MSGInvalidCallsign  # Error (some problem with callsign contents)
         return dword(NTOKENS + MAX22 + n28), shift  # Standard callsign
 
     if 3 < length <= 11:
@@ -165,12 +165,12 @@ def pack_callsign(callsign: str) -> typing.Tuple[int, int]:
         # LOG(LOG_DEBUG, "Encoding as non-standard callsign\n");
 
         if (x := save_callsign(callsign)) is None:
-            raise FTXInvalidCallsign  # Error (some problem with callsign contents)
+            raise MSGInvalidCallsign  # Error (some problem with callsign contents)
         shift = 0
         n22, _, _ = x
         return dword(NTOKENS + n22), shift  # 22-bit hashed callsign
 
-    raise FTXPackCallsignError
+    raise MSGPackCallsignError
 
 
 def pack58(callsign: str) -> typing.Optional[int]:

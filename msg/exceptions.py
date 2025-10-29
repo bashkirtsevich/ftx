@@ -1,46 +1,46 @@
-class FTXException(Exception):
+class MSGException(Exception):
     pass
 
 
-class FTXErrorCallSignTo(FTXException):
+class MSGErrorCallSignTo(MSGException):
     pass
 
 
-class FTXErrorCallSignDe(FTXException):
+class MSGErrorCallSignDe(MSGException):
     pass
 
 
-class FTXErrorTooLong(FTXException):
+class MSGErrorTooLong(MSGException):
     pass
 
 
-class FTXErrorInvalidChar(FTXException):
+class MSGErrorInvalidChar(MSGException):
     pass
 
 
-class FTXErrorSuffix(FTXException):
+class MSGErrorSuffix(MSGException):
     pass
 
 
-class FTXErrorGrid(FTXException):
+class MSGErrorGrid(MSGException):
     pass
 
 
-class FTXNotImplemented(FTXException):
+class MSGNotImplemented(MSGException):
     pass
 
 
-class FTXInvalidCallsign(FTXException):
+class MSGInvalidCallsign(MSGException):
     pass
 
 
-class FTXInvalidReport(FTXException):
+class MSGInvalidReport(MSGException):
     pass
 
 
-class FTXPackCallsignError(FTXException):
+class MSGPackCallsignError(MSGException):
     pass
 
 
-class FTXErrorMsgType(FTXException):
+class MSGErrorMsgType(MSGException):
     pass

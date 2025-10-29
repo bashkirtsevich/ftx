@@ -16,11 +16,11 @@ from consts.ftx import FTX_MESSAGE_TYPE_STANDARD
 from consts.ftx import FTX_MESSAGE_TYPE_TELEMETRY
 from consts.ftx import FTX_MESSAGE_TYPE_UNKNOWN
 from consts.ftx import FTX_MESSAGE_TYPE_WWROF
-from exceptions import FTXErrorCallSignTo, FTXErrorTooLong, FTXErrorInvalidChar, FTXException
-from exceptions import FTXErrorCallSignDe
-from exceptions import FTXErrorGrid
-from exceptions import FTXErrorMsgType
-from exceptions import FTXErrorSuffix
+from exceptions import MSGErrorCallSignTo, MSGErrorTooLong, MSGErrorInvalidChar, MSGException
+from exceptions import MSGErrorCallSignDe
+from exceptions import MSGErrorGrid
+from exceptions import MSGErrorMsgType
+from exceptions import MSGErrorSuffix
 from pack import pack_callsign, save_callsign, pack_extra, pack58, unpack_callsign, unpack_extra, lookup_callsign, \
     unpack58, \
     pack_basecall
@@ -30,21 +30,21 @@ from tools import byte, dword
 
 def message_encode(call_to: str, call_de: str, extra: str = "") -> typing.ByteString:
     if len(call_to) > 11:
-        raise FTXErrorCallSignTo
+        raise MSGErrorCallSignTo
 
     if len(call_de) > 11:
-        raise FTXErrorCallSignDe
+        raise MSGErrorCallSignDe
 
     if len(extra) > 19:
-        raise FTXErrorGrid
+        raise MSGErrorGrid
 
-    with suppress(FTXException):
+    with suppress(MSGException):
         return message_encode_std(call_to, call_de, extra)
 
-    with suppress(FTXException):
+    with suppress(MSGException):
         return message_encode_nonstd(call_to, call_de, extra)
 
-    with suppress(FTXException):
+    with suppress(MSGException):
         return message_encode_free(call_to)
 
 
@@ -64,7 +64,7 @@ def message_decode(payload: typing.ByteString) -> typing.Tuple[str, typing.Optio
         field3 = None
     else:
         # not handled yet
-        raise FTXErrorMsgType
+        raise MSGErrorMsgType
 
     return field1, field2, field3
 
@@ -103,20 +103,20 @@ def message_get_type(payload: typing.ByteString) -> int:
 def message_encode_std(call_to: str, call_de: str, extra: str) -> typing.ByteString:
     b28_to, sh_to = pack_callsign(call_to)
     if b28_to < 0:
-        raise FTXErrorCallSignTo
+        raise MSGErrorCallSignTo
 
     b28_de, sh_de = pack_callsign(call_de)
     if b28_de < 0:
-        raise FTXErrorCallSignDe
+        raise MSGErrorCallSignDe
 
     suffix = 1  # No suffix or /R
     if any(cs.endswith("/P") for cs in (call_to, call_de)):
         suffix = 2  # Suffix /P for EU VHF contest
         if any(cs.endswith("/R") for cs in (call_to, call_de)):
-            raise FTXErrorSuffix
+            raise MSGErrorSuffix
 
     if call_to == "CQ" and "/" in call_de and not endswith_any(call_de, "/P", "/R"):
-        raise FTXErrorCallSignDe  # nonstandard call: need a type 4 message
+        raise MSGErrorCallSignDe  # nonstandard call: need a type 4 message
 
     b16_extra = pack_extra(extra)
 
@@ -169,13 +169,13 @@ def message_decode_std(payload: typing.ByteString) -> typing.Tuple[str, str, str
     cs_flags = (payload[9] >> 3) & 0x07
 
     if (call_to := unpack_callsign(b29_to >> 1, bool(b29_to & 1), cs_flags)) is None:
-        raise FTXErrorCallSignTo
+        raise MSGErrorCallSignTo
 
     if (call_de := unpack_callsign(b29_de >> 1, bool(b29_de & 1), cs_flags)) is None:
-        raise FTXErrorCallSignDe
+        raise MSGErrorCallSignDe
 
     if (extra := unpack_extra(b16_extra, bool(r_flag & 1))) is None:
-        raise FTXErrorGrid
+        raise MSGErrorGrid
 
     return call_to, call_de, extra
 
@@ -233,14 +233,14 @@ def message_encode_nonstd(call_to: str, call_de: str, extra: str) -> typing.Byte
     len_call_de = len(call_de)
 
     if not icq and len_call_to < 3:
-        raise FTXErrorCallSignTo
+        raise MSGErrorCallSignTo
 
     if len_call_de < 3:
-        raise FTXErrorCallSignDe
+        raise MSGErrorCallSignDe
 
     if icq or pack_basecall(call_to) < 0:
         # CQ with non-std call, should use free text (without hash)
-        raise FTXErrorCallSignTo
+        raise MSGErrorCallSignTo
 
     if not icq:
         # choose which of the callsigns to encode as plain-text (58 bits) or hash (12 bits)
@@ -250,7 +250,7 @@ def message_encode_nonstd(call_to: str, call_de: str, extra: str) -> typing.Byte
         call58 = call_to if iflip else call_de
 
         if (x := save_callsign(call12)) is None:
-            raise FTXErrorCallSignTo
+            raise MSGErrorCallSignTo
 
         _, n12, _ = x
     else:
@@ -259,7 +259,7 @@ def message_encode_nonstd(call_to: str, call_de: str, extra: str) -> typing.Byte
         call58 = call_de
 
     if (n58 := pack58(call58)) is None:
-        raise FTXErrorCallSignDe
+        raise MSGErrorCallSignDe
 
     if icq:
         nrpt = 0
@@ -286,13 +286,13 @@ def message_encode_nonstd(call_to: str, call_de: str, extra: str) -> typing.Byte
 
 def message_encode_free(text: str) -> typing.ByteString:
     if len(text) > FTX_MESSAGE_FREE_TEXT_LEN:
-        raise FTXErrorTooLong
+        raise MSGErrorTooLong
 
     payload = bytearray(b"\x00" * FTX_MESSAGE_TELEMETRY_LEN)
     text = (" " * (FTX_MESSAGE_FREE_TEXT_LEN - len(text))) + text
     for c in text:
         if (cid := nchar(c, FTX_CHAR_TABLE_FULL)) == -1:
-            raise FTXErrorInvalidChar
+            raise MSGErrorInvalidChar
 
         rem = cid
         for i in reversed(range(FTX_MESSAGE_TELEMETRY_LEN)):
@@ -305,7 +305,7 @@ def message_encode_free(text: str) -> typing.ByteString:
 
 def message_encode_telemetry(payload: typing.ByteString) -> typing.ByteString:
     if len(payload) > FTX_MESSAGE_TELEMETRY_LEN:
-        raise FTXErrorTooLong
+        raise MSGErrorTooLong
 
     # Shift bits in payload right by 1 bit to right-align the data
     carry = 0
