@@ -42,7 +42,6 @@ def save_callsign(callsign: str) -> typing.Optional[typing.Tuple[int, int, int]]
     n22 = ((47055833459 * n58) >> (64 - 22)) & 0x3FFFFF
     n12 = n22 >> 10
     n10 = n22 >> 12
-    # LOG(LOG_DEBUG, "save_callsign('%s') = [n22=%d, n12=%d, n10=%d]\n", callsign, n22, n12, n10)
 
     # if (hash_if != NULL)
     #     hash_if->save_hash(callsign, n22)
@@ -64,7 +63,6 @@ def lookup_hash(hash_type: int, hash: int) -> typing.Optional[str]:
 
 def lookup_callsign(hash_type: int, hash: int) -> str:
     c11 = lookup_hash(hash_type, hash)
-    # LOG(LOG_DEBUG, "lookup_callsign(n%s=%d) = '%s'\n", (hash_type == FTX_CALLSIGN_HASH_22_BITS ? "22" : (hash_type == FTX_CALLSIGN_HASH_12_BITS ? "12" : "10")), hash, callsign);
     return f"<{c11 if c11 else '...'}>"
 
 
@@ -92,7 +90,6 @@ def pack_basecall(callsign: str) -> int:
 
         if all(nc >= 0 for nc in n_chars):
             # This is a standard callsign
-            # LOG(LOG_DEBUG, "Encoding basecall [%.6s]\n", cs_6);
             n = reduce(lambda a, it: a * len(it[0]) + it[1], zip(FTX_BASECALL_CHAR_MAP, n_chars), 0)
             return n  # Standard callsign
     return -1
@@ -150,7 +147,6 @@ def pack_callsign(callsign: str) -> typing.Tuple[int, int]:
     # Detect /R and /P suffix for basecall check
     length_base = length
     if endswith_any(callsign, "/P", "/R"):
-        # LOG(LOG_DEBUG, "Suffix /P or /R detected\n");
         shift = 1
         length_base = length - 2
 
@@ -162,7 +158,6 @@ def pack_callsign(callsign: str) -> typing.Tuple[int, int]:
 
     if 3 < length <= 11:
         # Treat this as a nonstandard callsign: compute its 22-bit hash
-        # LOG(LOG_DEBUG, "Encoding as non-standard callsign\n");
 
         if (x := save_callsign(callsign)) is None:
             raise MSGInvalidCallsign  # Error (some problem with callsign contents)
@@ -194,13 +189,11 @@ def pack58(callsign: str) -> typing.Optional[int]:
     if save_callsign(c11) is None:
         return None
 
-    # LOG(LOG_DEBUG, "pack58('%s')=%016llx\n", callsign, *n58);
     # print(f"pack58({callsign}) =", hex(result))
     return result
 
 
 def unpack_callsign(cs_28: int, flags: bool, suffix: int) -> typing.Optional[str]:
-    # LOG(LOG_DEBUG, "unpack28() n28=%d i3=%d\n", n28, i3);
     # Check for special tokens DE, QRZ, CQ, CQ_nnn, CQ_aaaa
     if cs_28 < NTOKENS:
         if cs_28 <= 2:
@@ -298,8 +291,6 @@ def unpack58(n58: int) -> str:
 
     # The decoded string will be right-aligned, so trim all whitespace (also from back just in case)
     callsign = c11.strip()
-
-    # LOG(LOG_DEBUG, "unpack58(%016llx)=%s\n", n58_backup, callsign);
 
     # Save the decoded call in a hash table for later
     # if len(callsign) >= 3:
