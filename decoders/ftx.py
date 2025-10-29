@@ -288,8 +288,8 @@ class FTXMonitor(AbstractMonitor):
 
         return offset
 
-    def ft4_extract_likelihood(self, cand: Candidate) -> typing.List[float]:
-        log174 = [0.0] * FTX_LDPC_N
+    def ft4_extract_likelihood(self, cand: Candidate) -> npt.NDArray[np.float64]:
+        log174 = np.zeros(FTX_LDPC_N, dtype=np.float64)  # [0.0] * FTX_LDPC_N
 
         mag = self.get_cand_mag_idx(cand)  # Pointer to 4 magnitude bins of the first symbol
 
@@ -302,18 +302,13 @@ class FTXMonitor(AbstractMonitor):
 
             # Check for time boundaries
             block = cand.time_offset + sym_idx
-            if block < 0 or block >= self.wf.num_blocks:
-                log174[bit_idx + 0] = 0
-                log174[bit_idx + 1] = 0
-            else:
-                logl_0, logl_1 = self.ft4_extract_symbol(mag + sym_idx * self.wf.block_stride)
-                log174[bit_idx + 0] = logl_0
-                log174[bit_idx + 1] = logl_1
+            if 0 <= block < self.wf.num_blocks:
+                log174[bit_idx:bit_idx + 2] = self.ft4_extract_symbol(mag + sym_idx * self.wf.block_stride)
 
         return log174
 
-    def ft8_extract_likelihood(self, cand: Candidate) -> typing.List[float]:
-        log174 = [0.0] * FTX_LDPC_N
+    def ft8_extract_likelihood(self, cand: Candidate) -> npt.NDArray[np.float64]:
+        log174 = np.zeros(FTX_LDPC_N, dtype=np.float64)  # [0.0] * FTX_LDPC_N
 
         mag = self.get_cand_mag_idx(cand)  # Pointer to 8 magnitude bins of the first symbol
 
@@ -327,19 +322,13 @@ class FTXMonitor(AbstractMonitor):
             # Check for time boundaries
             block = cand.time_offset + sym_idx
 
-            if block < 0 or block >= self.wf.num_blocks:
-                log174[bit_idx + 0] = 0
-                log174[bit_idx + 1] = 0
-                log174[bit_idx + 2] = 0
-            else:
-                logl_0, logl_1, logl_2 = self.ft8_extract_symbol(mag + sym_idx * self.wf.block_stride)
-                log174[bit_idx + 0] = logl_0
-                log174[bit_idx + 1] = logl_1
-                log174[bit_idx + 2] = logl_2
+            if 0 <= block < self.wf.num_blocks:
+                log174[bit_idx:bit_idx + 3] = self.ft8_extract_symbol(mag + sym_idx * self.wf.block_stride)
 
         return log174
 
-    def ftx_extract_symbol(self, gray_map: npt.NDArray[np.int64], mag_idx: int, bit_map: typing.Tuple) -> typing.Tuple:
+    def ftx_extract_symbol(self, gray_map: npt.NDArray[np.int64], mag_idx: int,
+                           bit_map: typing.Tuple) -> npt.NDArray[np.float64]:
         # Compute unnormalized log likelihood log(p(1) / p(0)) of n message bits (1 FSK symbol)
         # Cleaned up code for the simple case of n_syms==1
         s2 = self.wf.mag[gray_map + mag_idx]
@@ -351,7 +340,7 @@ class FTXMonitor(AbstractMonitor):
 
         return logl
 
-    def ft4_extract_symbol(self, mag_idx: int) -> typing.Tuple[float, float]:
+    def ft4_extract_symbol(self, mag_idx: int) -> npt.NDArray[np.float64]:
         bit_map = (
             ((2, 3), (0, 1)),
             ((1, 3), (0, 2)),
@@ -359,7 +348,7 @@ class FTXMonitor(AbstractMonitor):
 
         return self.ftx_extract_symbol(FT4_GRAY_MAP, mag_idx, bit_map)
 
-    def ft8_extract_symbol(self, mag_idx: int) -> typing.Tuple[float, float, float]:
+    def ft8_extract_symbol(self, mag_idx: int) -> npt.NDArray[np.float64]:
         bit_map = (
             ((4, 5, 6, 7), (0, 1, 2, 3)),
             ((2, 3, 6, 7), (0, 1, 4, 5)),
