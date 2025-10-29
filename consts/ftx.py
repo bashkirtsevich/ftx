@@ -82,8 +82,8 @@ FT4_COSTAS_PATTERN = [
 ]
 
 # Gray code map (FTx bits -> channel symbols)
-FT8_GRAY_MAP = [0, 1, 3, 2, 5, 6, 4, 7]
-FT4_GRAY_MAP = [0, 1, 3, 2]
+FT8_GRAY_MAP = np.array([0, 1, 3, 2, 5, 6, 4, 7])
+FT4_GRAY_MAP = np.array([0, 1, 3, 2])
 
 FT4_XOR_SEQUENCE = [
     0x4A,  # 01001010

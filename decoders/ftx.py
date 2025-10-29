@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from itertools import cycle
 
 import numpy as np
+import numpy.typing as npt
 
 from consts.ftx import *
 from crc.ftx import ftx_extract_crc, ftx_check_crc
@@ -27,7 +28,7 @@ class Waterfall:
     time_osr: int  # number of time subdivisions
     freq_osr: int  # number of frequency subdivisions
     protocol: int  # Indicate if using FT4 or FT8
-    mag = typing.List[int]  # FFT magnitudes stored as uint8_t[blocks][time_osr][freq_osr][num_bins]
+    mag = npt.NDArray[np.int64]  # FFT magnitudes stored as uint8_t[blocks][time_osr][freq_osr][num_bins]
     max_blocks: int  # number of blocks (symbols) allocated in the mag array
 
     num_blocks: int = 0  # number of blocks (symbols) stored in the mag array
@@ -35,7 +36,7 @@ class Waterfall:
 
     def __post_init__(self):
         self.block_stride = (self.time_osr * self.freq_osr * self.num_bins)
-        self.mag = [0] * (self.max_blocks * self.time_osr * self.freq_osr * self.num_bins)
+        self.mag = np.zeros(self.max_blocks * self.time_osr * self.freq_osr * self.num_bins, dtype=np.int64)
 
 
 @dataclass
@@ -338,26 +339,34 @@ class FTXMonitor(AbstractMonitor):
 
         return log174
 
-    def ft4_extract_symbol(self, mag_idx: int) -> typing.Tuple[float, float]:
-        # Compute unnormalized log likelihood log(p(1) / p(0)) of 2 message bits (1 FSK symbol)
+    def ftx_extract_symbol(self, gray_map: npt.NDArray[np.int64], mag_idx: int, bit_map: typing.Tuple) -> typing.Tuple:
+        # Compute unnormalized log likelihood log(p(1) / p(0)) of n message bits (1 FSK symbol)
         # Cleaned up code for the simple case of n_syms==1
-        s2 = [self.wf.mag[mag_idx + gc] for gc in FT4_GRAY_MAP]
+        s2 = self.wf.mag[gray_map + mag_idx]
 
-        logl_0 = max(s2[2], s2[3]) - max(s2[0], s2[1])
-        logl_1 = max(s2[1], s2[3]) - max(s2[0], s2[2])
+        logl = tuple(
+            np.max(s2[np.array(l)]) - np.max(s2[np.array(r)])
+            for l, r in bit_map
+        )
 
-        return logl_0, logl_1
+        return logl
+
+    def ft4_extract_symbol(self, mag_idx: int) -> typing.Tuple[float, float]:
+        bit_map = (
+            ((2, 3), (0, 1)),
+            ((1, 3), (0, 2)),
+        )
+
+        return self.ftx_extract_symbol(FT4_GRAY_MAP, mag_idx, bit_map)
 
     def ft8_extract_symbol(self, mag_idx: int) -> typing.Tuple[float, float, float]:
-        # Compute unnormalized log likelihood log(p(1) / p(0)) of 3 message bits (1 FSK symbol)
-        # Cleaned up code for the simple case of n_syms==1
-        s2 = [self.wf.mag[mag_idx + gc] for gc in FT8_GRAY_MAP]
+        bit_map = (
+            ((4, 5, 6, 7), (0, 1, 2, 3)),
+            ((2, 3, 6, 7), (0, 1, 4, 5)),
+            ((1, 3, 5, 7), (0, 2, 4, 6)),
+        )
 
-        logl_0 = max(s2[4], s2[5], s2[6], s2[7]) - max(s2[0], s2[1], s2[2], s2[3])
-        logl_1 = max(s2[2], s2[3], s2[6], s2[7]) - max(s2[0], s2[1], s2[4], s2[5])
-        logl_2 = max(s2[1], s2[3], s2[5], s2[7]) - max(s2[0], s2[2], s2[4], s2[6])
-
-        return logl_0, logl_1, logl_2
+        return self.ftx_extract_symbol(FT8_GRAY_MAP, mag_idx, bit_map)
 
     def ftx_decode_candidate(
             self, cand: Candidate,
