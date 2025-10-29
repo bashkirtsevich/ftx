@@ -3,6 +3,8 @@ from copy import copy
 from dataclasses import dataclass
 from itertools import cycle
 
+import numpy as np
+
 from consts.ftx import *
 from crc.ftx import ftx_extract_crc, ftx_check_crc
 from encoders import ft4_encode, ft8_encode
@@ -51,12 +53,6 @@ class FTXMonitor(AbstractMonitor):
     LDPC_ITERATIONS = 25
     MAX_LDPC_ERRORS = 32
 
-    # FT4/FT8 monitor object that manages DSP processing of incoming audio data and prepares a waterfall object
-    @staticmethod
-    def hann_i(i: int, N: int) -> float:
-        x = np.sin(np.pi * i / N)
-        return x ** 2
-
     def __init__(self, f_min: int, f_max: int, sample_rate: int, time_osr: int, freq_osr: int, protocol):
         # symbol_period;    ///< FT4/FT8 symbol period in seconds
         # min_bin;          ///< First FFT bin in the frequency range (begin)
@@ -80,8 +76,8 @@ class FTXMonitor(AbstractMonitor):
         self.fft_norm = 2.0 / self.nfft
         # const int len_window = 1.8f * me->block_size; // hand-picked and optimized
 
-        self.window = [self.fft_norm * self.hann_i(i, self.nfft) for i in range(self.nfft)]
-        self.last_frame = [0.0] * self.nfft
+        self.window = self.fft_norm * np.hanning(self.nfft)
+        self.last_frame = np.zeros(self.nfft, dtype=np.float64)  # [0.0] * self.nfft
 
         # Allocate enough blocks to fit the entire FT8/FT4 slot in memory
         max_blocks = int(slot_time / symbol_period)
