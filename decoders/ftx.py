@@ -114,14 +114,14 @@ class FTXMonitor(AbstractMonitor):
                 frame_pos += 1
 
             # Do DFT of windowed analysis frame
-            timedata = [self.window[pos] * self.last_frame[pos] for pos in range(self.nfft)]
-            freqdata = np.fft.fft(timedata)[:self.nfft // 2 + 1]
+            time_data = self.last_frame * self.window
+            freq_data = np.fft.fft(time_data)[:self.nfft // 2 + 1]
 
             # Loop over possible frequency OSR offsets
             for freq_sub in range(self.wf.freq_osr):
                 for bin in range(self.min_bin, self.max_bin):
                     src_bin = (bin * self.wf.freq_osr) + freq_sub
-                    mag2 = freqdata[src_bin].imag ** 2 + freqdata[src_bin].real ** 2
+                    mag2 = freq_data[src_bin].imag ** 2 + freq_data[src_bin].real ** 2
                     db = 10.0 * np.log10(1E-12 + mag2)
 
                     # Scale decibels to unsigned 8-bit range and clamp the value
