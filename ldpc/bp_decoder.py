@@ -15,6 +15,11 @@ def ldpc_check(
     errors = 0
 
     for m in np.arange(ldpc_m):
+        # num_rows = ldpc_num_rows[m]
+        # indices = ldpc_nm[m][:num_rows]
+        #
+        # x = np.bitwise_xor.reduce(codeword[indices - 1])
+
         x = 0
         for i in np.arange(ldpc_num_rows[m]):
             x ^= codeword[ldpc_nm[m][i] - 1]
