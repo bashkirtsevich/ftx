@@ -73,13 +73,13 @@ FTX_LDPC_N_BYTES = ((FTX_LDPC_N + 7) // 8)
 FTX_LDPC_K_BYTES = ((FTX_LDPC_K + 7) // 8)
 
 # Costas sync tone pattern
-FT8_COSTAS_PATTERN = [3, 1, 4, 0, 6, 5, 2]
-FT4_COSTAS_PATTERN = [
+FT8_COSTAS_PATTERN = np.array([3, 1, 4, 0, 6, 5, 2])
+FT4_COSTAS_PATTERN = np.array([
     [0, 1, 3, 2],
     [1, 0, 2, 3],
     [2, 3, 1, 0],
     [3, 2, 0, 1]
-]
+])
 
 # Gray code map (FTx bits -> channel symbols)
 FT8_GRAY_MAP = np.array([0, 1, 3, 2, 5, 6, 4, 7])

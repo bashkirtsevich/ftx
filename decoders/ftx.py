@@ -14,6 +14,8 @@ from msg.message import message_decode
 from ldpc.osd import osd_decode
 from .monitor import DecodeStatus, AbstractMonitor
 
+from numba import jit
+
 
 @dataclass
 class Waterfall:
@@ -39,7 +41,7 @@ class Waterfall:
         self.mag = np.zeros(self.max_blocks * self.time_osr * self.freq_osr * self.num_bins, dtype=np.int64)
 
 
-@dataclass
+@dataclass(slots=True)
 class Candidate:
     wf: Waterfall  # < Reference to the waterfall
     time_offset: int  # < Index of the time block
@@ -145,44 +147,53 @@ class FTXMonitor(AbstractMonitor):
 
         return True
 
-    def ft8_sync_score(self, candidate: Candidate) -> int:
-        wf = self.wf
-
+    @staticmethod
+    @jit(nopython=True)
+    def ft8_sync_score(mag: npt.NDArray[np.int64], mag_idx: int,
+                       time_offset: int, num_blocks: int, block_stride: int) -> int:
         score = 0
         num_average = 0
 
-        # Get the pointer to symbol 0 of the candidate
-        mag_cand = candidate.get_mag_idx()
-
         # Compute average score over sync symbols (m+k = 0-7, 36-43, 72-79)
-        for m in range(FT8_NUM_SYNC):
-            for k in range(FT8_LENGTH_SYNC):
-                block = FT8_SYNC_OFFSET * m + k  # relative to the message
-                block_abs = candidate.time_offset + block  # relative to the captured signal
+        for m in np.arange(FT8_NUM_SYNC, dtype=np.int64):
+            block_offset = FT8_SYNC_OFFSET * m
+
+            for i, sm in np.ndenumerate(FT8_COSTAS_PATTERN):  # Index of the expected bin
+                k = i[0]
+
+                block = block_offset + k  # relative to the message
+                block_abs = time_offset + block  # relative to the captured signal
 
                 if block_abs < 0:  # Check for time boundaries
                     continue
 
-                if block_abs >= wf.num_blocks:
+                if block_abs >= num_blocks:
                     break
 
                 # Get the pointer to symbol 'block' of the candidate
-                p8 = mag_cand + block * wf.block_stride
+                p8 = mag_idx + block * block_stride
 
                 # Check only the neighbors of the expected symbol frequency- and time-wise
-                sm = FT8_COSTAS_PATTERN[k]  # Index of the expected bin
                 p8sm = p8 + sm
-                if sm > 0:  # look at one frequency bin lower
-                    score += wf.mag[p8sm] - wf.mag[p8sm - 1]
+
+                # look at one frequency bin lower
+                if sm > 0:
+                    score += mag[p8sm] - mag[p8sm - 1]
                     num_average += 1
-                if sm < 7:  # look at one frequency bin higher
-                    score += wf.mag[p8sm] - wf.mag[p8sm + 1]
+
+                # look at one frequency bin higher
+                if sm < 7:
+                    score += mag[p8sm] - mag[p8sm + 1]
                     num_average += 1
-                if k > 0 and block_abs > 0:  # look one symbol back in time
-                    score += wf.mag[p8sm] - wf.mag[p8sm - wf.block_stride]
+
+                # look one symbol back in time
+                if k > 0 and block_abs > 0:
+                    score += mag[p8sm] - mag[p8sm - block_stride]
                     num_average += 1
-                if k + 1 < FT8_LENGTH_SYNC and block_abs + 1 < wf.num_blocks:  # look one symbol forward in time
-                    score += wf.mag[p8sm] - wf.mag[p8sm + wf.block_stride]
+
+                # look one symbol forward in time
+                if k + 1 < FT8_LENGTH_SYNC and block_abs + 1 < num_blocks:
+                    score += mag[p8sm] - mag[p8sm + block_stride]
                     num_average += 1
 
         if num_average > 0:
@@ -190,50 +201,53 @@ class FTXMonitor(AbstractMonitor):
 
         return score
 
-    def ft4_sync_score(self, candidate: Candidate) -> int:
-        wf = self.wf
+    @staticmethod
+    @jit(nopython=True)
+    def ft4_sync_score(mag: npt.NDArray[np.int64], mag_idx: int,
+                       time_offset: int, num_blocks: int, block_stride: int) -> int:
         score = 0
         num_average = 0
 
         # Get the pointer to symbol 0 of the candidate
-        mag_cand = candidate.get_mag_idx()
-
         # Compute average score over sync symbols (block = 1-4, 34-37, 67-70, 100-103)
-        for m in range(FT4_NUM_SYNC):
-            for k in range(FT4_LENGTH_SYNC):
-                block = 1 + (FT4_SYNC_OFFSET * m) + k
-                block_abs = candidate.time_offset + block
-                # Check for time boundaries
-                if block_abs < 0:
+        for m in np.arange(FT4_NUM_SYNC, dtype=np.int64):
+            block_offset = FT4_SYNC_OFFSET * m + 1
+
+            for k in np.arange(FT4_LENGTH_SYNC, dtype=np.int64):
+                block = block_offset + k
+                block_abs = time_offset + block
+
+                if block_abs < 0:  # Check for time boundaries
                     continue
-                if block_abs >= wf.num_blocks:
+
+                if block_abs >= num_blocks:
                     break
 
                 # Get the pointer to symbol 'block' of the candidate
-                p4 = mag_cand + (block * wf.block_stride)
+                p4 = mag_idx + (block * block_stride)
 
                 sm = FT4_COSTAS_PATTERN[m][k]  # Index of the expected bin
                 p4sm = p4 + sm
 
-                # score += (4 * p4[sm]) - p4[0] - p4[1] - p4[2] - p4[3];
-                # num_average += 4;
-
                 # Check only the neighbors of the expected symbol frequency- and time-wise
                 if sm > 0:
                     # look at one frequency bin lower
-                    score += wf.mag[p4sm] - wf.mag[p4sm - 1]
+                    score += mag[p4sm] - mag[p4sm - 1]
                     num_average += 1
+
                 if sm < 3:
                     # look at one frequency bin higher
-                    score += wf.mag[p4sm] - wf.mag[p4sm + 1]
+                    score += mag[p4sm] - mag[p4sm + 1]
                     num_average += 1
+
                 if k > 0 and block_abs > 0:
                     # look one symbol back in time
-                    score += wf.mag[p4sm] - wf.mag[p4sm - wf.block_stride]
+                    score += mag[p4sm] - mag[p4sm - block_stride]
                     num_average += 1
-                if k + 1 < FT4_LENGTH_SYNC and block_abs + 1 < wf.num_blocks:
+
+                if k + 1 < FT4_LENGTH_SYNC and block_abs + 1 < num_blocks:
                     # look one symbol forward in time
-                    score += wf.mag[p4sm] - wf.mag[p4sm + wf.block_stride]
+                    score += mag[p4sm] - mag[p4sm + block_stride]
                     num_average += 1
 
         if num_average > 0:
@@ -251,7 +265,8 @@ class FTXMonitor(AbstractMonitor):
         else:
             raise ValueError("Invalid protocol")
 
-        return sync_fun(candidate)
+        mag_cand = candidate.get_mag_idx()
+        return sync_fun(wf.mag, mag_cand, candidate.time_offset, wf.num_blocks, wf.block_stride)
 
     def ftx_find_candidates(self, num_candidates: int, min_score: int) -> typing.List[Candidate]:
         wf = self.wf
@@ -373,15 +388,18 @@ class FTXMonitor(AbstractMonitor):
 
         ldpc_errors, plain174 = bp_decode(log174, max_iterations)
 
-        # FIXME: Slow code
-        if ldpc_errors > self.MAX_LDPC_ERRORS:
+        if ldpc_errors > 0:
             return None
 
-        if ldpc_errors > 0:
-            if not (x := osd_decode(log174, 6)):
-                return None
-
-            plain174, got_depth = x
+        # FIXME: Slow code
+        # if ldpc_errors > self.MAX_LDPC_ERRORS:
+        #     return None
+        #
+        # if ldpc_errors > 0:
+        #     if not (x := osd_decode(log174, 6)):
+        #         return None
+        #
+        #     plain174, got_depth = x
         # EOF Slow code block
 
         if not ftx_check_crc(plain174):
