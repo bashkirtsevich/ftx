@@ -64,17 +64,17 @@ class FTXMonitor(AbstractMonitor):
     MAX_LDPC_ERRORS = 32
 
     def __init__(self, f_min: int, f_max: int, sample_rate: int, time_osr: int, freq_osr: int, protocol):
-        # symbol_period;    ///< FT4/FT8 symbol period in seconds
-        # min_bin;          ///< First FFT bin in the frequency range (begin)
-        # max_bin;          ///< First FFT bin outside the frequency range (end)
-        # block_size;       ///< Number of samples per symbol (block)
-        # subblock_size;    ///< Analysis shift size (number of samples)
-        # nfft;             ///< FFT size
-        # fft_norm;         ///< FFT normalization factor
-        # window;           ///< Window function for STFT analysis (nfft samples)
-        # last_frame;       ///< Current STFT analysis frame (nfft samples)
-        # wf;               ///< Waterfall object
-        # max_mag;          ///< Maximum detected magnitude (debug stats)
+        # symbol_period < FT4/FT8 symbol period in seconds
+        # min_bin       < First FFT bin in the frequency range (begin)
+        # max_bin       < First FFT bin outside the frequency range (end)
+        # block_size    < Number of samples per symbol (block)
+        # subblock_size < Analysis shift size (number of samples)
+        # nfft          < FFT size
+        # fft_norm      < FFT normalization factor
+        # window        < Window function for STFT analysis (nfft samples)
+        # last_frame    < Current STFT analysis frame (nfft samples)
+        # wf            < Waterfall object
+        # max_mag       < Maximum detected magnitude (debug stats)
 
         slot_time = FTX_SLOT_TIMES[protocol]
         symbol_period = FTX_SYMBOL_PERIODS[protocol]
@@ -87,7 +87,7 @@ class FTXMonitor(AbstractMonitor):
         fft_norm = 2.0 / self.nfft
         self.window = fft_norm * np.hanning(self.nfft)
 
-        self.last_frame = np.zeros(self.nfft, dtype=np.float64)  # [0.0] * self.nfft
+        self.last_frame = np.zeros(self.nfft, dtype=np.float64)
 
         # Allocate enough blocks to fit the entire FT8/FT4 slot in memory
         max_blocks = int(slot_time / symbol_period)
@@ -188,8 +188,6 @@ class FTXMonitor(AbstractMonitor):
         if num_average > 0:
             score = int(score / num_average)
 
-        # if score != 0:
-        #     print(f"ft8_sync_score score={score}")
         return score
 
     def ft4_sync_score(self, candidate: Candidate) -> int:
@@ -288,7 +286,7 @@ class FTXMonitor(AbstractMonitor):
         return heap[:num_candidates]
 
     def ft4_extract_likelihood(self, cand: Candidate) -> npt.NDArray[np.float64]:
-        log174 = np.zeros(FTX_LDPC_N, dtype=np.float64)  # [0.0] * FTX_LDPC_N
+        log174 = np.zeros(FTX_LDPC_N, dtype=np.float64)
 
         mag = cand.get_mag_idx()  # Pointer to 4 magnitude bins of the first symbol
 
@@ -307,7 +305,7 @@ class FTXMonitor(AbstractMonitor):
         return log174
 
     def ft8_extract_likelihood(self, cand: Candidate) -> npt.NDArray[np.float64]:
-        log174 = np.zeros(FTX_LDPC_N, dtype=np.float64)  # [0.0] * FTX_LDPC_N
+        log174 = np.zeros(FTX_LDPC_N, dtype=np.float64)
 
         mag = cand.get_mag_idx()  # Pointer to 8 magnitude bins of the first symbol
 
@@ -508,9 +506,6 @@ class FTXMonitor(AbstractMonitor):
                 self.wf.mag[wf_el + tone] -= snr * 2 + 240
 
             snr_all += snr
-            # print(
-            #     f"Freq: {candidate.freq_offset} Noise: {noise:.2f}, Signal: {signal:.2f}, SNR: {snr:.2f} score: {candidate.score}"
-            # )
 
         return snr_all / self.wf.freq_osr / 2 - 22
 
@@ -523,8 +518,6 @@ class FTXMonitor(AbstractMonitor):
         candidate_list = self.ftx_find_candidates(self.MAX_CANDIDATES, self.MIN_SCORE)
         # Go over candidates and attempt to decode messages
         for cand in candidate_list:
-            # print(f"{i}\t{cand.score}\t{cand.time_offset}\t{cand.freq_offset}\t{cand.time_sub}\t{cand.freq_sub}")
-            # continue
             freq_hz = (self.min_bin + cand.freq_offset + cand.freq_sub / wf.freq_osr) / self.symbol_period
             time_sec = (cand.time_offset + cand.time_sub / wf.time_osr) * self.symbol_period - 0.65
 
