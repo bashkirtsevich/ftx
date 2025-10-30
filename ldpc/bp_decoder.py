@@ -40,14 +40,10 @@ def belief_propagation(
     tov = np.zeros((ldpc_n, n_v), dtype=np.float64)
     toc = np.zeros((ldpc_m, m_c), dtype=np.float64)
 
-    plain = np.zeros(ldpc_n, dtype=np.uint8)
-
     for _ in np.arange(max_iters):
         # Do a hard decision guess (tov=0 in iter 0)
-        plain_sum = 0
-        for n in np.arange(ldpc_n):
-            plain[n] = int((codeword[n] + tov[n][0] + tov[n][1] + tov[n][2]) > 0)
-            plain_sum += plain[n]
+        plain = (codeword + np.sum(tov, axis=1) > 0).astype(np.uint8)
+        plain_sum = np.sum(plain)
 
         if plain_sum == 0:
             min_errors = ldpc_m
