@@ -41,11 +41,20 @@ class Waterfall:
 
 @dataclass
 class Candidate:
+    wf: Waterfall  # < Reference to the waterfall
     time_offset: int  # < Index of the time block
     freq_offset: int  # < Index of the frequency bin
     time_sub: int  # < Index of the time subdivision used
     freq_sub: int  # < Index of the frequency subdivision used
     score: int = 0  # < Candidate score (non-negative number; higher score means higher likelihood)
+
+    def get_mag_idx(self) -> int:
+        offset = self.time_offset
+        offset = offset * self.wf.time_osr + self.time_sub
+        offset = offset * self.wf.freq_osr + self.freq_sub
+        offset = offset * self.wf.num_bins + self.freq_offset
+
+        return offset
 
 
 class FTXMonitor(AbstractMonitor):
@@ -143,7 +152,7 @@ class FTXMonitor(AbstractMonitor):
         num_average = 0
 
         # Get the pointer to symbol 0 of the candidate
-        mag_cand = self.get_cand_mag_idx(candidate)
+        mag_cand = candidate.get_mag_idx()
 
         # Compute average score over sync symbols (m+k = 0-7, 36-43, 72-79)
         for m in range(FT8_NUM_SYNC):
@@ -189,7 +198,7 @@ class FTXMonitor(AbstractMonitor):
         num_average = 0
 
         # Get the pointer to symbol 0 of the candidate
-        mag_cand = self.get_cand_mag_idx(candidate)
+        mag_cand = candidate.get_mag_idx()
 
         # Compute average score over sync symbols (block = 1-4, 34-37, 67-70, 100-103)
         for m in range(FT4_NUM_SYNC):
@@ -256,7 +265,7 @@ class FTXMonitor(AbstractMonitor):
         # I.e. we can afford to skip the first 7 or the last 7 Costas symbols, as long as we track how many
         # sync symbols we included in the score, so the score is averaged.
         heap = []
-        can = Candidate(0, 0, 0, 0)
+        can = Candidate(self.wf, 0, 0, 0, 0)
         for time_sub in range(wf.time_osr):
             for freq_sub in range(wf.freq_osr):
                 for time_offset in time_offset_range:
@@ -278,20 +287,10 @@ class FTXMonitor(AbstractMonitor):
         heap.sort(key=lambda x: x.score, reverse=True)
         return heap[:num_candidates]
 
-    def get_cand_mag_idx(self, candidate: Candidate) -> int:
-        wf = self.wf
-
-        offset = candidate.time_offset
-        offset = offset * wf.time_osr + candidate.time_sub
-        offset = offset * wf.freq_osr + candidate.freq_sub
-        offset = offset * wf.num_bins + candidate.freq_offset
-
-        return offset
-
     def ft4_extract_likelihood(self, cand: Candidate) -> npt.NDArray[np.float64]:
         log174 = np.zeros(FTX_LDPC_N, dtype=np.float64)  # [0.0] * FTX_LDPC_N
 
-        mag = self.get_cand_mag_idx(cand)  # Pointer to 4 magnitude bins of the first symbol
+        mag = cand.get_mag_idx()  # Pointer to 4 magnitude bins of the first symbol
 
         # Go over FSK tones and skip Costas sync symbols
         for k in range(FT4_ND):
@@ -310,7 +309,7 @@ class FTXMonitor(AbstractMonitor):
     def ft8_extract_likelihood(self, cand: Candidate) -> npt.NDArray[np.float64]:
         log174 = np.zeros(FTX_LDPC_N, dtype=np.float64)  # [0.0] * FTX_LDPC_N
 
-        mag = self.get_cand_mag_idx(cand)  # Pointer to 8 magnitude bins of the first symbol
+        mag = cand.get_mag_idx()  # Pointer to 8 magnitude bins of the first symbol
 
         # Go over FSK tones and skip Costas sync symbols
         for k in range(FT8_ND):
@@ -411,7 +410,7 @@ class FTXMonitor(AbstractMonitor):
     def ftx_get_snr(self, candidate: Candidate, tones: typing.Iterable[int]) -> float:
         num_tones = FTX_TONES_COUNT[self.wf.protocol]
 
-        mag_cand = self.get_cand_mag_idx(candidate)
+        mag_cand = candidate.get_mag_idx()
 
         signal = 0
         noise = 0
@@ -466,7 +465,7 @@ class FTXMonitor(AbstractMonitor):
         for freq_sub in range(self.wf.freq_osr):
             can.freq_sub = freq_sub
 
-            mag_cand = self.get_cand_mag_idx(can)
+            mag_cand = can.get_mag_idx()
             noise = 0.0
             signal = 0.0
             num_average = 0
