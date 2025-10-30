@@ -66,20 +66,20 @@ def belief_propagation(
         for m in np.arange(ldpc_m):
             for n_idx in np.arange(ldpc_num_rows[m]):
                 n = ldpc_nm[m][n_idx] - 1
-                Tnm = codeword[n]
-                for m_idx in np.arange(3):
-                    if (ldpc_mn[n][m_idx] - 1) != m:
-                        Tnm += tov[n][m_idx]
+
+                ne_m_idx = (ldpc_mn[n] - 1) != m
+                Tnm = codeword[n] + np.sum(tov[n][ne_m_idx])
+
                 toc[m][n_idx] = np.tanh(-Tnm / 2)
 
         # send messages from check nodes to variable nodes
         for n in np.arange(ldpc_n):
             for m_idx in np.arange(3):
                 m = ldpc_mn[n][m_idx] - 1
-                Tmn = 1.0
-                for n_idx in np.arange(ldpc_num_rows[m]):
-                    if (ldpc_nm[m][n_idx] - 1) != n:
-                        Tmn *= toc[m][n_idx]
+
+                ne_n_idx = (ldpc_nm[m] - 1) != n
+                Tmn = np.prod(toc[m][ne_n_idx])
+
                 tov[n][m_idx] = -2 * np.atanh(Tmn)
 
     return min_errors, plain
