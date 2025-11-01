@@ -1,5 +1,6 @@
 import typing
 from contextlib import suppress
+from functools import reduce, partial
 
 from consts.msg import MSG_CALLSIGN_HASH_12_BITS, MSG_MESSAGE_TYPE_FREE_TEXT, MSG_MESSAGE_TYPE_DXPEDITION, \
     MSG_MESSAGE_TYPE_EU_VHF, MSG_MESSAGE_TYPE_ARRL_FD, MSG_MESSAGE_TYPE_TELEMETRY, MSG_MESSAGE_TYPE_STANDARD, \
@@ -15,8 +16,64 @@ from .exceptions import MSGErrorSuffix
 from .pack import pack_callsign, save_callsign, pack_extra, pack58, unpack_callsign, unpack_extra, lookup_callsign, \
     unpack58, \
     pack_basecall
-from .text import FTX_CHAR_TABLE_FULL, charn, nchar, endswith_any
+from .text import FTX_CHAR_TABLE_FULL, charn, nchar, endswith_any, FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH
 from .tools import byte, dword
+
+
+class Callsign:
+    __slots__ = ("val_str", "val_int")
+
+    def __init__(self, callsign: typing.Union[str, int]):
+        if isinstance(callsign, str):
+            self.val_str = callsign.strip()
+
+            if any(c not in FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH for c in self.val_str):
+                raise ValueError("Invalid characters")
+
+            self.val_int = pack_callsign(self.val_str)[0]
+        elif isinstance(callsign, int):
+            self.val_int = callsign
+
+            self.val_str = unpack_callsign(self.val_int, False, 0)
+        else:
+            raise TypeError(f"Unsupported data type {type(callsign)}")
+
+    def hash_22(self):
+        ct = FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH
+
+        acc = reduce(lambda a, j: len(ct) * a + j, map(partial(nchar, table=ct), self.val_str))
+
+        # pretend to have trailing whitespace (with j=0, index of ' ')
+        if (val_len := len(self.val_str)) < 11:
+            acc *= len(ct) ** (11 - val_len)
+
+        hash = ((47055833459 * acc) >> (64 - 22)) & 0x3fffff
+        return hash
+
+    def hash_12(self):
+        hash = self.hash_22()
+        return hash >> 10
+
+    def hash_10(self):
+        hash = self.hash_22()
+        return hash >> 12
+
+    @property
+    def as_str(self):
+        return self.val_str
+
+    @property
+    def as_int(self):
+        return self.val_int
+
+    def __hash__(self):
+        return self.hash_22()
+
+    def __str__(self):
+        return self.val_str
+
+    def __repr__(self):
+        return str(self)
 
 
 def message_encode(call_to: str, call_de: str, extra: str = "") -> typing.ByteString:
