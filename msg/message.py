@@ -42,6 +42,14 @@ class Item(metaclass=ABCMeta):
     def to_int(self) -> str:
         ...
 
+    @property
+    def as_str(self):
+        return self.val_str
+
+    @property
+    def as_int(self):
+        return self.val_int
+
     def __str__(self):
         return self.val_str
 
@@ -78,14 +86,6 @@ class Callsign(Item):
     def hash_10(self):
         hash = self.hash_22()
         return hash >> 12
-
-    @property
-    def as_str(self):
-        return self.val_str
-
-    @property
-    def as_int(self):
-        return self.val_int
 
     def __hash__(self):
         return self.hash_22()
