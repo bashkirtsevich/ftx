@@ -1,4 +1,5 @@
 import typing
+from abc import ABCMeta, abstractmethod
 from contextlib import suppress
 from functools import reduce, partial
 
@@ -15,28 +16,48 @@ from .exceptions import MSGErrorMsgType
 from .exceptions import MSGErrorSuffix
 from .pack import pack_callsign, save_callsign, pack_extra, pack58, unpack_callsign, unpack_extra, lookup_callsign, \
     unpack58, \
-    pack_basecall
+    pack_basecall, pack_grid
 from .text import FTX_CHAR_TABLE_FULL, charn, nchar, endswith_any, FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH
 from .tools import byte, dword
 
 
-class Callsign:
+class Item(metaclass=ABCMeta):
     __slots__ = ("val_str", "val_int")
 
-    def __init__(self, callsign: typing.Union[str, int]):
-        if isinstance(callsign, str):
-            self.val_str = callsign.strip()
-
-            if any(c not in FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH for c in self.val_str):
-                raise ValueError("Invalid characters")
-
-            self.val_int = pack_callsign(self.val_str)[0]
-        elif isinstance(callsign, int):
-            self.val_int = callsign
-
-            self.val_str = unpack_callsign(self.val_int, False, 0)
+    def __init__(self, val: typing.Union[str, int]):
+        if isinstance(val, str):
+            self.val_str = val.strip()
+            self.val_int = self.to_str()
+        elif isinstance(val, int):
+            self.val_int = val
+            self.val_str = self.to_int()
         else:
-            raise TypeError(f"Unsupported data type {type(callsign)}")
+            raise TypeError(f"Unsupported data type {type(val)}")
+
+    @abstractmethod
+    def to_str(self) -> int:
+        ...
+
+    @abstractmethod
+    def to_int(self) -> str:
+        ...
+
+    def __str__(self):
+        return self.val_str
+
+    def __repr__(self):
+        return str(self)
+
+
+class Callsign(Item):
+    def to_str(self) -> int:
+        if any(c not in FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH for c in self.val_str):
+            raise ValueError("Invalid characters")
+
+        return pack_callsign(self.val_str)[0]
+
+    def to_int(self) -> str:
+        return unpack_callsign(self.val_int, False, 0)
 
     def hash_22(self):
         ct = FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH
@@ -69,11 +90,21 @@ class Callsign:
     def __hash__(self):
         return self.hash_22()
 
-    def __str__(self):
-        return self.val_str
 
-    def __repr__(self):
-        return str(self)
+class Grid(Item):
+    def to_str(self) -> int:
+        return pack_grid(self.val_str)
+
+    def to_int(self) -> str:
+        return unpack_extra(self.val_int, False)
+
+
+class Report(Item):
+    def to_str(self) -> int:
+        return pack_extra(self.val_str)
+
+    def to_int(self) -> str:
+        return unpack_extra(self.val_int, True)
 
 
 def message_encode(call_to: str, call_de: str, extra: str = "") -> typing.ByteString:
