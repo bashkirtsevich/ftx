@@ -110,9 +110,9 @@ class Grid(Item):
 
         n = self.val_int
         val = ""
-        for ct, ct_l in map(lambda ct: (ct, len(ct)), reversed(FTX_GRID_CHAR_MAP)):
-            val = charn(n % ct_l, ct) + val
-            n //= ct_l
+        for ct_len, ct in map(lambda ct: (len(ct), ct), reversed(FTX_GRID_CHAR_MAP)):
+            val = charn(n % ct_len, ct) + val
+            n //= ct_len
 
         return val
 
