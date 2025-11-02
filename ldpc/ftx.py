@@ -21,8 +21,6 @@ from consts.ftx import FTX_LDPC_NM
 from consts.ftx import FTX_LDPC_NUM_ROWS
 from .bp_decoder import belief_propagation
 
-from .tanh import fast_tanh, fast_atanh
-
 
 # codeword is 174 log-likelihoods.
 # plain is a return value, 174 ints, to be 0 or 1.
