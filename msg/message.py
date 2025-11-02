@@ -1,3 +1,4 @@
+import re
 import typing
 from abc import ABCMeta, abstractmethod
 from contextlib import suppress
@@ -119,10 +120,23 @@ class Grid(Item):
 
 class Report(Item):
     def to_int(self) -> int:
-        return pack_extra(self.val_str)
+        if not (report := re.match(r"^(R){0,1}([\+\-]{0,1})([0-9]+)$", self.val_str)):
+            raise ValueError("Invalid report value")
+
+        _, sign, val = report.groups()
+
+        report = int(val) + 35
+        return (FTX_MAX_GRID_4 + report) | (0x8000 if sign == "-" else 0)
 
     def to_str(self) -> str:
-        return unpack_extra(self.val_int, True)
+        if self.val_int <= FTX_MAX_GRID_4:
+            raise ValueError("Invalid report representation")
+
+        val = int(self.val_int - FTX_MAX_GRID_4 - 35)
+        if val & 0x8000:
+            val = -(val & 0x7fff)
+
+        return f"R{val:+03}"
 
 
 def message_encode(call_to: str, call_de: str, extra: str = "") -> typing.ByteString:
