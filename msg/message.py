@@ -125,8 +125,10 @@ class Report(Item):
 
         _, sign, val = report.groups()
 
-        report = int(val) + 35
-        return (FTX_MAX_GRID_4 + report) | (0x8000 if sign == "-" else 0)
+        if -35 < (report := int(val)) > 35:
+            raise ValueError("Invalid report value")
+
+        return (FTX_MAX_GRID_4 + report + 35) | (0x8000 if sign == "-" else 0)
 
     def to_str(self) -> str:
         if self.val_int <= FTX_MAX_GRID_4:
