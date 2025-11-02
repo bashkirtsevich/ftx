@@ -25,9 +25,9 @@ def qra_encode(x: npt.NDArray[np.int64], concat: bool = False) -> npt.NDArray[np
     # (all operations performed over GF(M))
 
     chk = 0
-    for k in np.arange(qra_NC):
+    for k in range(qra_NC):
         kk = qra_a * k
-        for j in np.arange(qra_a):
+        for j in range(qra_a):
             jj = kk + j
             # irregular grouping support
             # if qra_acc_input_idx[jj] < 0:
@@ -62,7 +62,7 @@ def q65_6bit_encode(bits: npt.NDArray[np.uint8]) -> npt.NDArray[np.int64]:
     n_chunks = bits.shape[0] // 6
     bits = bits[:n_chunks * 6]
     chunks_reshaped = bits.reshape((n_chunks, 6))
-    values = chunks_reshaped.dot(1 << np.arange(5, -1, -1))
+    values = chunks_reshaped.dot(1 << range(5, -1, -1))
     return values.tolist()
 
 
@@ -76,7 +76,7 @@ def q65_encode(payload: typing.ByteString) -> npt.NDArray[np.int64]:
     tones_count = 85
     tones = np.zeros(tones_count, dtype=np.int64)
 
-    tone_indices = np.setdiff1d(np.arange(tones_count), Q65_SYNC - 1)
+    tone_indices = np.setdiff1d(range(tones_count), Q65_SYNC - 1)
     tones[tone_indices] = codeword + 1
 
     return tones

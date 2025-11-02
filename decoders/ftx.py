@@ -155,7 +155,7 @@ class FTXMonitor(AbstractMonitor):
         num_average = 0
 
         # Compute average score over sync symbols (m+k = 0-7, 36-43, 72-79)
-        for m in np.arange(FT8_NUM_SYNC, dtype=np.int64):
+        for m in range(FT8_NUM_SYNC):
             block_offset = FT8_SYNC_OFFSET * m
 
             for i, sm in np.ndenumerate(FT8_COSTAS_PATTERN):  # Index of the expected bin
@@ -210,10 +210,10 @@ class FTXMonitor(AbstractMonitor):
 
         # Get the pointer to symbol 0 of the candidate
         # Compute average score over sync symbols (block = 1-4, 34-37, 67-70, 100-103)
-        for m in np.arange(FT4_NUM_SYNC, dtype=np.int64):
+        for m in range(FT4_NUM_SYNC):
             block_offset = FT4_SYNC_OFFSET * m + 1
 
-            for k in np.arange(FT4_LENGTH_SYNC, dtype=np.int64):
+            for k in range(FT4_LENGTH_SYNC):
                 block = block_offset + k
                 block_abs = time_offset + block
 

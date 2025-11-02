@@ -2,10 +2,10 @@ import typing
 
 import numpy as np
 import numpy.typing as ntp
-from numba import jit
+from numba import njit
 
 
-@jit(nopython=True)
+@njit
 def ldpc_check(
         codeword: ntp.NDArray[np.uint8],
         ldpc_m: int,
@@ -14,14 +14,9 @@ def ldpc_check(
 ) -> int:
     errors = 0
 
-    for m in np.arange(ldpc_m):
-        # num_rows = ldpc_num_rows[m]
-        # indices = ldpc_nm[m][:num_rows]
-        #
-        # x = np.bitwise_xor.reduce(codeword[indices - 1])
-
+    for m in range(ldpc_m):
         x = 0
-        for i in np.arange(ldpc_num_rows[m]):
+        for i in range(ldpc_num_rows[m]):
             x ^= codeword[ldpc_nm[m][i] - 1]
 
         if x:
@@ -30,7 +25,7 @@ def ldpc_check(
     return errors
 
 
-@jit(nopython=True)
+@njit
 def belief_propagation(
         codeword: ntp.NDArray[np.float64], max_iters: int,
         ldpc_n: int, ldpc_m: int,
@@ -45,7 +40,10 @@ def belief_propagation(
     tov = np.zeros((ldpc_n, n_v), dtype=np.float64)
     toc = np.zeros((ldpc_m, m_c), dtype=np.float64)
 
-    for _ in np.arange(max_iters):
+    ldpc_nm_idx = ldpc_nm - 1
+    ldpc_mn_idx = ldpc_mn - 1
+
+    for _ in range(max_iters):
         # Do a hard decision guess (tov=0 in iter 0)
         plain = (codeword + np.sum(tov, axis=1) > 0).astype(np.uint8)
         plain_sum = np.sum(plain)
@@ -63,22 +61,29 @@ def belief_propagation(
                 break  # Found a perfect answer
 
         # Send messages from bits to check nodes
-        for m in np.arange(ldpc_m):
-            for n_idx in np.arange(ldpc_num_rows[m]):
-                n = ldpc_nm[m][n_idx] - 1
+        for m in range(ldpc_m):
+            for n_idx in range(ldpc_num_rows[m]):
+                n = ldpc_nm_idx[m][n_idx]
 
-                ne_m_idx = (ldpc_mn[n] - 1) != m
-                Tnm = codeword[n] + np.sum(tov[n][ne_m_idx])
+                total = 0.0
+                for m_idx in range(n_v):
+                    if ldpc_mn_idx[n][m_idx] != m:
+                        total += tov[n][m_idx]
+
+                Tnm = codeword[n] + total
 
                 toc[m][n_idx] = np.tanh(-Tnm / 2)
 
         # send messages from check nodes to variable nodes
-        for n in np.arange(ldpc_n):
-            for m_idx in np.arange(3):
-                m = ldpc_mn[n][m_idx] - 1
+        for n in range(ldpc_n):
+            for m_idx in range(3):
+                m = ldpc_mn_idx[n][m_idx]
 
-                ne_n_idx = (ldpc_nm[m] - 1) != n
-                Tmn = np.prod(toc[m][ne_n_idx])
+                Tmn = 1.0
+                num_rows_m = ldpc_num_rows[m]
+                for idx in range(num_rows_m):
+                    if ldpc_nm_idx[m][idx] != n:
+                        Tmn *= toc[m][idx]
 
                 tov[n][m_idx] = -2 * np.atanh(Tmn)
 

@@ -30,7 +30,7 @@ TS_QRA64 = 0.576
 # define uniform distributions of given size
 pd_uniform_tab = [
     np.full(2 ** i, 1 / 2 ** i, dtype=np.float64)
-    for i in np.arange(7)
+    for i in range(7)
 ]
 
 # table of the systematic symbols indexes in the accumulator chain
@@ -1406,8 +1406,8 @@ def np_fwht32(dst, src):
     WHBFY(t1, t2, 24, 3, 4)
 
     # group 4
-    # for i in np.arange(32, step=2):
-    #     for j in np.arange(2):
+    # for i in range(32, step=2):
+    #     for j in range(2):
     #         WHBFY(t2, t1, i, j, 2)
     WHBFY(t2, t1, 0, 0, 2)
     WHBFY(t2, t1, 0, 1, 2)
@@ -1427,7 +1427,7 @@ def np_fwht32(dst, src):
     WHBFY(t2, t1, 28, 1, 2)
 
     # group 5
-    # for i in np.arange(32, step=2):
+    # for i in range(32, step=2):
     #     WHBFY(dst, t2, i, 0, 1)
     WHBFY(dst, t2, 0, 0, 1)
     WHBFY(dst, t2, 2, 0, 1)
@@ -1452,7 +1452,7 @@ def np_fwht64(dst, src):
     t2 = np.zeros(64, dtype=np.float64)
 
     # group 1
-    # for i in np.arange(32):
+    # for i in range(32):
     #     WHBFY(t1, src, 0, i, 32)
     WHBFY(t1, src, 0, 0, 32)
     WHBFY(t1, src, 0, 1, 32)
@@ -1488,7 +1488,7 @@ def np_fwht64(dst, src):
     WHBFY(t1, src, 0, 31, 32)
 
     # group 2
-    # for i in np.arange(16):
+    # for i in range(16):
     #     WHBFY(t2, t1, 0, i, 16)
     WHBFY(t2, t1, 0, 0, 16)
     WHBFY(t2, t1, 0, 1, 16)
@@ -1507,7 +1507,7 @@ def np_fwht64(dst, src):
     WHBFY(t2, t1, 0, 14, 16)
     WHBFY(t2, t1, 0, 15, 16)
 
-    # for i in np.arange(16):
+    # for i in range(16):
     #     WHBFY(t2, t1, 32, i, 16)
     WHBFY(t2, t1, 32, 0, 16)
     WHBFY(t2, t1, 32, 1, 16)
@@ -1598,8 +1598,8 @@ def np_fwht64(dst, src):
     WHBFY(t2, t1, 56, 3, 4)
 
     # group 5
-    # for i in np.arange(64, step=4):
-    #     for j in np.arange(2):
+    # for i in range(64, step=4):
+    #     for j in range(2):
     #         WHBFY(t1, t2, i, j, 2)
     WHBFY(t1, t2, 0, 0, 2)
     WHBFY(t1, t2, 0, 1, 2)
@@ -1635,7 +1635,7 @@ def np_fwht64(dst, src):
     WHBFY(t1, t2, 60, 1, 2)
 
     # group 6
-    # for i in np.arange(64, step=2):
+    # for i in range(64, step=2):
     #     WHBFY(dst, t1, i, 0, 1)
     WHBFY(dst, t1, 0, 0, 1)
     WHBFY(dst, t1, 2, 0, 1)

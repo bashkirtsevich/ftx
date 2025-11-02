@@ -9,7 +9,7 @@ CRC12_POLYNOMIAL = 0xF01
 def crc12(x: npt.NDArray[np.int64]) -> int:
     sr = 0
     for t in x:
-        for _ in np.arange(6):
+        for _ in range(6):
             if (t ^ sr) & 0x01:
                 sr = (sr >> 1) ^ CRC12_POLYNOMIAL
             else:
