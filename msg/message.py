@@ -7,7 +7,7 @@ from consts.msg import MSG_CALLSIGN_HASH_12_BITS, MSG_MESSAGE_TYPE_FREE_TEXT, MS
     MSG_MESSAGE_TYPE_EU_VHF, MSG_MESSAGE_TYPE_ARRL_FD, MSG_MESSAGE_TYPE_TELEMETRY, MSG_MESSAGE_TYPE_STANDARD, \
     MSG_MESSAGE_TYPE_ARRL_RTTY, MSG_MESSAGE_TYPE_NONSTD_CALL, MSG_MESSAGE_TYPE_WWROF, MSG_MESSAGE_TYPE_UNKNOWN, \
     MSG_MESSAGE_FREE_TEXT_LEN, MSG_MESSAGE_TELEMETRY_LEN
-from consts.ftx import FTX_EXTRAS_CODE
+from consts.ftx import FTX_EXTRAS_CODE, FTX_MAX_GRID_4
 from consts.ftx import FTX_EXTRAS_STR
 from .exceptions import MSGErrorCallSignTo, MSGErrorTooLong, MSGErrorInvalidChar, MSGException
 from .exceptions import MSGErrorCallSignDe
@@ -17,7 +17,8 @@ from .exceptions import MSGErrorSuffix
 from .pack import pack_callsign, save_callsign, pack_extra, pack58, unpack_callsign, unpack_extra, lookup_callsign, \
     unpack58, \
     pack_basecall, pack_grid
-from .text import FTX_CHAR_TABLE_FULL, charn, nchar, endswith_any, FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH
+from .text import FTX_CHAR_TABLE_FULL, charn, nchar, endswith_any, FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH, \
+    FTX_GRID_CHAR_MAP
 from .tools import byte, dword
 
 
@@ -27,19 +28,19 @@ class Item(metaclass=ABCMeta):
     def __init__(self, val: typing.Union[str, int]):
         if isinstance(val, str):
             self.val_str = val.strip()
-            self.val_int = self.to_str()
+            self.val_int = self.to_int()
         elif isinstance(val, int):
             self.val_int = val
-            self.val_str = self.to_int()
+            self.val_str = self.to_str()
         else:
             raise TypeError(f"Unsupported data type {type(val)}")
 
     @abstractmethod
-    def to_str(self) -> int:
+    def to_int(self) -> int:
         ...
 
     @abstractmethod
-    def to_int(self) -> str:
+    def to_str(self) -> str:
         ...
 
     @property
@@ -58,13 +59,13 @@ class Item(metaclass=ABCMeta):
 
 
 class Callsign(Item):
-    def to_str(self) -> int:
+    def to_int(self) -> int:
         if any(c not in FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH for c in self.val_str):
             raise ValueError("Invalid characters")
 
         return pack_callsign(self.val_str)[0]
 
-    def to_int(self) -> str:
+    def to_str(self) -> str:
         return unpack_callsign(self.val_int, False, 0)
 
     def hash_22(self):
@@ -92,18 +93,35 @@ class Callsign(Item):
 
 
 class Grid(Item):
-    def to_str(self) -> int:
-        return pack_grid(self.val_str)
+    def to_int(self) -> int:
+        if len(self.val_str) != 4:
+            raise ValueError("Invalid grid descriptor length")
 
-    def to_int(self) -> str:
-        return unpack_extra(self.val_int, False)
+        if any(True for c, ct in zip(self.val_str, FTX_GRID_CHAR_MAP) if c not in ct):
+            raise ValueError("Invalid grid descriptor character")
+
+        n_chars = map(nchar, self.val_str, FTX_GRID_CHAR_MAP)
+        n_ct_len = map(len, FTX_GRID_CHAR_MAP)
+        return reduce(lambda a, it: a * it[0] + it[1], zip(n_ct_len, n_chars), 0)
+
+    def to_str(self) -> str:
+        if self.val_int > FTX_MAX_GRID_4:
+            raise ValueError("Invalid grid descriptor value")
+
+        n = self.val_int
+        val = ""
+        for ct, ct_l in map(lambda ct: (ct, len(ct)), reversed(FTX_GRID_CHAR_MAP)):
+            val = charn(n % ct_l, ct) + val
+            n //= ct_l
+
+        return val
 
 
 class Report(Item):
-    def to_str(self) -> int:
+    def to_int(self) -> int:
         return pack_extra(self.val_str)
 
-    def to_int(self) -> str:
+    def to_str(self) -> str:
         return unpack_extra(self.val_int, True)
 
 
