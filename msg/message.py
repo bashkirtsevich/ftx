@@ -17,9 +17,10 @@ from .exceptions import MSGErrorMsgType
 from .exceptions import MSGErrorSuffix
 from .pack import pack_callsign, save_callsign, pack_extra, pack58, unpack_callsign, unpack_extra, lookup_callsign, \
     unpack58, \
-    pack_basecall, pack_grid
+    pack_basecall, pack_grid, MAX22, NTOKENS
 from .text import FTX_CHAR_TABLE_FULL, charn, nchar, endswith_any, FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH, \
-    FTX_GRID_CHAR_MAP
+    FTX_GRID_CHAR_MAP, FTX_CHAR_TABLE_LETTERS_SPACE, ct_encode, ct_validate, ct_map_encode, FTX_BASECALL_CHAR_MAP, \
+    ct_map_decode, ct_decode
 from .tools import byte, dword
 
 
@@ -61,24 +62,100 @@ class Item(metaclass=ABCMeta):
 
 class Callsign(Item):
     def to_int(self) -> int:
-        if any(c not in FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH for c in self.val_str):
-            raise ValueError("Invalid characters")
+        if self.val_str.startswith("CQ_"):
+            return self._pack_cq_call(self.val_str[3:])
 
-        return pack_callsign(self.val_str)[0]
+        if val := self._pack_basecall(self.val_str):
+            return NTOKENS + MAX22 + val
+
+        return NTOKENS + self.hash_22()
+
+    @staticmethod
+    def _pack_cq_call(cs: str) -> int:
+        if not (1 <= (cs_len := len(cs)) <= 4):
+            raise ValueError("Invalid callsign")
+
+        if cs_len == 3 and cs.isdigit():
+            return int(cs) + 3
+
+        ct_validate(FTX_CHAR_TABLE_LETTERS_SPACE, cs, raise_exception=True)
+
+        return ct_encode(FTX_CHAR_TABLE_LETTERS_SPACE, cs) + 1003
+
+    @staticmethod
+    def _pack_basecall(cs: str) -> typing.Optional[int]:
+        if (val_len := len(cs)) <= 2:
+            return None
+
+        # Work-around for Swaziland prefix: 3DA0XYZ -> 3D0XYZ
+        if cs.startswith("3DA0") and 4 < val_len <= 7:
+            cs_norm = f"3D0{cs[4:]}"
+        # Work-around for Guinea prefixes: 3XA0XYZ -> QA0XYZ
+        elif cs.startswith("3X") and cs[2].isalpha() and val_len <= 7:
+            cs_norm = f"Q{cs[2:]}"
+        elif cs[2].isdigit() and val_len <= 6:
+            cs_norm = cs
+        # Check the position of callsign digit and make a right-aligned copy into cs_norm
+        elif cs[1].isdigit() and val_len <= 5:
+            # A0XYZ -> " A0XYZ"
+            cs_norm = f" {cs}"
+        else:
+            cs_norm = ""
+
+        cs_norm += " " * (6 - len(cs_norm))  # Normalize to 6 letters
+
+        return ct_map_encode(FTX_BASECALL_CHAR_MAP, cs_norm)
 
     def to_str(self) -> str:
-        return unpack_callsign(self.val_int, False, 0)
+        # Check for special tokens DE, QRZ, CQ, CQ_nnn, CQ_aaaa
+        val = self.val_int
+
+        if val < NTOKENS:
+            if val <= 2:
+                raise ValueError("Invalid cs representation")
+
+            if val <= 1002:
+                # CQ nnn with 3 digits
+                return f"CQ_{val - 3:03}"
+
+            if val <= 532443:
+                # CQ ABCD with 4 alphanumeric symbols
+                aaaa = ct_decode(FTX_CHAR_TABLE_LETTERS_SPACE, val - 1003, l=4)
+
+                return f"CQ_{aaaa.strip()}"
+
+            # unspecified
+            # return None
+            raise ValueError("Invalid cs specification")
+
+        val -= NTOKENS
+        if val < MAX22:
+            # This is a 22-bit hash of a result
+            return lookup_callsign(0, val)
+
+        # Standard cs
+        cs = ct_map_decode(FTX_BASECALL_CHAR_MAP, val - MAX22)
+
+        # Copy cs to 6 character buffer
+        if cs.startswith("3D0") and cs[3] != " ":
+            # Work-around for Swaziland prefix: 3D0XYZ -> 3DA0XYZ
+            cs = f"3DA0{cs[3:]}"
+        elif cs[0] == "Q" and cs[1].isalpha():
+            # Work-around for Guinea prefixes: QA0XYZ -> 3XA0XYZ
+            cs = f"3X{cs[1:]}"
+
+        # Skip trailing and leading whitespace in case of a short cs
+        return cs.strip()
 
     def hash_22(self):
         ct = FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH
-
-        acc = reduce(lambda a, j: len(ct) * a + j, map(partial(nchar, table=ct), self.val_str))
+        val = ct_encode(ct, self.val_str)
 
         # pretend to have trailing whitespace (with j=0, index of ' ')
         if (val_len := len(self.val_str)) < 11:
-            acc *= len(ct) ** (11 - val_len)
+            val *= len(ct) ** (11 - val_len)
 
-        hash = ((47055833459 * acc) >> (64 - 22)) & 0x3fffff
+        hash = ((47055833459 * val) >> (64 - 22)) & 0x3fffff
         return hash
 
     def hash_12(self):
@@ -98,24 +175,15 @@ class Grid(Item):
         if len(self.val_str) != 4:
             raise ValueError("Invalid grid descriptor length")
 
-        if any(True for c, ct in zip(self.val_str, FTX_GRID_CHAR_MAP) if c not in ct):
-            raise ValueError("Invalid grid descriptor character")
+        ct_validate(FTX_GRID_CHAR_MAP, self.val_str)
 
-        n_chars = map(nchar, self.val_str, FTX_GRID_CHAR_MAP)
-        n_ct_len = map(len, FTX_GRID_CHAR_MAP)
-        return reduce(lambda a, it: a * it[0] + it[1], zip(n_ct_len, n_chars), 0)
+        return ct_map_encode(FTX_GRID_CHAR_MAP, self.val_str)
 
     def to_str(self) -> str:
         if self.val_int > FTX_MAX_GRID_4:
             raise ValueError("Invalid grid descriptor value")
 
-        n = self.val_int
-        val = ""
-        for ct_len, ct in map(lambda ct: (len(ct), ct), reversed(FTX_GRID_CHAR_MAP)):
-            val = charn(n % ct_len, ct) + val
-            n //= ct_len
-
-        return val
+        return ct_map_decode(FTX_GRID_CHAR_MAP, self.val_int)
 
 
 class Report(Item):
@@ -125,7 +193,7 @@ class Report(Item):
 
         _, sign, val = report.groups()
 
-        if -35 < (report := int(val)) > 35:
+        if not (-35 <= (report := int(val)) <= 35):
             raise ValueError("Invalid report value")
 
         return (FTX_MAX_GRID_4 + report + 35) | (0x8000 if sign == "-" else 0)

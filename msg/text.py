@@ -1,4 +1,8 @@
 import string
+import typing
+from functools import reduce, partial
+
+from msg.exceptions import CharTableMissmatch
 
 FTX_CHAR_TABLE_NUMERIC = string.digits
 FTX_CHAR_TABLE_LETTERS = string.ascii_uppercase
@@ -47,3 +51,42 @@ def endswith_any(s: str, *tails: str) -> bool:
 
 def in_range(s: str, start: str, end: str) -> bool:
     return end >= s >= start
+
+
+def ct_validate(ct: str, val: str, raise_exception: bool = False) -> bool:
+    x = all(c in ct for c in val)
+
+    if not x and raise_exception:
+        raise CharTableMissmatch("Character table missmatch")
+
+    return x
+
+
+def ct_encode(ct: str, val: str) -> int:
+    return reduce(lambda a, j: len(ct) * a + j, map(partial(nchar, table=ct), val))
+
+
+def ct_decode(ct: str, val: int, l: int) -> str:
+    s = ""
+    ct_l = len(ct)
+    for i in range(l):
+        s = charn(val % ct_l, ct) + s
+        val //= ct_l
+
+    return s
+
+
+def ct_map_encode(ct_map: typing.List[str], val: str) -> int:
+    n_chars = map(nchar, val, ct_map)
+    n_ct_len = map(len, ct_map)
+
+    return reduce(lambda a, it: a * it[0] + it[1], zip(n_ct_len, n_chars), 0)
+
+
+def ct_map_decode(ct_map: typing.List[str], val: int) -> str:
+    s = ""
+    for ct_len, ct in map(lambda ct: (len(ct), ct), reversed(ct_map)):
+        s = charn(val % ct_len, ct) + s
+        val //= ct_len
+
+    return s
