@@ -8,7 +8,8 @@ from consts.msg import MSG_CALLSIGN_HASH_12_BITS, MSG_MESSAGE_TYPE_FREE_TEXT, MS
     MSG_MESSAGE_TYPE_EU_VHF, MSG_MESSAGE_TYPE_ARRL_FD, MSG_MESSAGE_TYPE_TELEMETRY, MSG_MESSAGE_TYPE_STANDARD, \
     MSG_MESSAGE_TYPE_ARRL_RTTY, MSG_MESSAGE_TYPE_NONSTD_CALL, MSG_MESSAGE_TYPE_WWROF, MSG_MESSAGE_TYPE_UNKNOWN, \
     MSG_MESSAGE_FREE_TEXT_LEN, MSG_MESSAGE_TELEMETRY_LEN
-from consts.ftx import FTX_EXTRAS_CODE, FTX_MAX_GRID_4
+from consts.ftx import FTX_EXTRAS_CODE, FTX_MAX_GRID_4, FTX_TOKEN_STR, FTX_TOKEN_CODE, FTX_RESPONSE_EXTRAS_CODE, \
+    FTX_RESPONSE_EXTRAS_STR
 from consts.ftx import FTX_EXTRAS_STR
 from .exceptions import MSGErrorCallSignTo, MSGErrorTooLong, MSGErrorInvalidChar, MSGException
 from .exceptions import MSGErrorCallSignDe
@@ -24,7 +25,7 @@ from .text import FTX_CHAR_TABLE_FULL, charn, nchar, endswith_any, FTX_CHAR_TABL
 from .tools import byte, dword
 
 
-class Item(metaclass=ABCMeta):
+class MsgItem(metaclass=ABCMeta):
     __slots__ = ("val_str", "val_int")
 
     def __init__(self, val: typing.Union[str, int]):
@@ -60,7 +61,7 @@ class Item(metaclass=ABCMeta):
         return str(self)
 
 
-class Callsign(Item):
+class Callsign(MsgItem):
     def to_int(self) -> int:
         if self.val_str.startswith("CQ_"):
             return self._pack_cq_call(self.val_str[3:])
@@ -109,7 +110,6 @@ class Callsign(Item):
     def to_str(self) -> str:
         # Check for special tokens DE, QRZ, CQ, CQ_nnn, CQ_aaaa
         val = self.val_int
-
         if val < NTOKENS:
             if val <= 2:
                 raise ValueError("Invalid cs representation")
@@ -125,7 +125,6 @@ class Callsign(Item):
                 return f"CQ_{aaaa.strip()}"
 
             # unspecified
-            # return None
             raise ValueError("Invalid cs specification")
 
         val -= NTOKENS
@@ -170,7 +169,7 @@ class Callsign(Item):
         return self.hash_22()
 
 
-class Grid(Item):
+class Grid(MsgItem):
     def to_int(self) -> int:
         if len(self.val_str) != 4:
             raise ValueError("Invalid grid descriptor length")
@@ -186,7 +185,7 @@ class Grid(Item):
         return ct_map_decode(FTX_GRID_CHAR_MAP, self.val_int)
 
 
-class Report(Item):
+class Report(MsgItem):
     def to_int(self) -> int:
         if not (report := re.match(r"^(R){0,1}([\+\-]{0,1})([0-9]+)$", self.val_str)):
             raise ValueError("Invalid report value")
@@ -207,6 +206,48 @@ class Report(Item):
             val = -(val & 0x7fff)
 
         return f"R{val:+03}"
+
+
+class Token(MsgItem):
+    def to_int(self) -> int:
+        if (val := FTX_TOKEN_CODE.get(self.val_str)) is not None:
+            return val
+
+        raise ValueError("Invalid token value")
+
+    def to_str(self) -> str:
+        if (val := FTX_TOKEN_STR.get(self.val_int)) is not None:
+            return val
+
+        raise ValueError("Invalid token representation")
+
+
+class Extra(MsgItem):
+    def to_int(self) -> int:
+        if (val := FTX_EXTRAS_CODE.get(self.val_str)) is not None:
+            return val
+
+        raise ValueError("Invalid extra value")
+
+    def to_str(self) -> str:
+        if (val := FTX_EXTRAS_STR.get(self.val_int)) is not None:
+            return val
+
+        raise ValueError("Invalid extra representation")
+
+
+class ResponseExtra(MsgItem):
+    def to_int(self) -> int:
+        if (val := FTX_RESPONSE_EXTRAS_CODE.get(self.val_str)) is not None:
+            return val
+
+        raise ValueError("Invalid response extra value")
+
+    def to_str(self) -> str:
+        if (val := FTX_RESPONSE_EXTRAS_STR.get(self.val_int)) is not None:
+            return val
+
+        raise ValueError("Invalid response extra representation")
 
 
 def message_encode(call_to: str, call_de: str, extra: str = "") -> typing.ByteString:
