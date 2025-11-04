@@ -38,7 +38,7 @@ class Waterfall:
 
     def __post_init__(self):
         self.block_stride = (self.time_osr * self.freq_osr * self.num_bins)
-        self.mag = np.zeros(self.max_blocks * self.time_osr * self.freq_osr * self.num_bins, dtype=np.int64)
+        self.mag = np.zeros((self.max_blocks, self.time_osr, self.freq_osr, self.num_bins), dtype=np.int64)
 
 
 @dataclass(slots=True)
@@ -112,7 +112,6 @@ class FTXMonitor(AbstractMonitor):
         if self.wf.num_blocks >= self.wf.max_blocks:
             return False
 
-        offset = self.wf.num_blocks * self.wf.block_stride
         frame_pos = 0
 
         # Loop over block subdivisions
@@ -139,8 +138,7 @@ class FTXMonitor(AbstractMonitor):
                     # Scale decibels to unsigned 8-bit range and clamp the value
                     # Range 0-240 covers -120..0 dB in 0.5 dB steps
                     scaled = int(2 * db + 240)
-                    self.wf.mag[offset] = max(min(scaled, 255), 0)
-                    offset += 1
+                    self.wf.mag[self.wf.num_blocks, time_sub, freq_sub, bin - self.min_bin] = scaled
 
                     self.max_mag = max(self.max_mag, db)
 
@@ -267,7 +265,7 @@ class FTXMonitor(AbstractMonitor):
             raise ValueError("Invalid protocol")
 
         mag_cand = candidate.get_mag_idx()
-        return sync_fun(wf.mag, mag_cand, candidate.time_offset, wf.num_blocks, wf.block_stride)
+        return sync_fun(wf.mag.ravel(), mag_cand, candidate.time_offset, wf.num_blocks, wf.block_stride)
 
     def ftx_find_candidates(self, num_candidates: int, min_score: int) -> typing.List[Candidate]:
         wf = self.wf
@@ -283,7 +281,6 @@ class FTXMonitor(AbstractMonitor):
         for time_sub in range(wf.time_osr):
             for freq_sub in range(wf.freq_osr):
                 for time_offset in time_offset_range:
-                    # (candidate.freq_offset + num_tones - 1) < wf->num_bin
                     for freq_offset in range(wf.num_bins - num_tones):
                         can.time_sub = time_sub
                         can.freq_sub = freq_sub
@@ -344,7 +341,7 @@ class FTXMonitor(AbstractMonitor):
                            bit_map: typing.Tuple) -> npt.NDArray[np.float64]:
         # Compute unnormalized log likelihood log(p(1) / p(0)) of n message bits (1 FSK symbol)
         # Cleaned up code for the simple case of n_syms==1
-        s2 = self.wf.mag[gray_map + mag_idx]
+        s2 = self.wf.mag.ravel()[gray_map + mag_idx]
 
         logl = np.fromiter((
             np.max(s2[np.array(l)]) - np.max(s2[np.array(r)])
@@ -501,10 +498,10 @@ class FTXMonitor(AbstractMonitor):
 
                 noise_val = 100000.0
                 for s in filter(lambda x: x != tone, range(num_tones)):
-                    noise_val = min(noise_val, self.wf.mag[wf_el + s] * 0.5 - 120.0)
+                    noise_val = min(noise_val, self.wf.mag.ravel()[wf_el + s] * 0.5 - 120.0)
 
                 noise += noise_val
-                signal += self.wf.mag[wf_el + tone] * 0.5 - 120.0
+                signal += self.wf.mag.ravel()[wf_el + tone] * 0.5 - 120.0
                 num_average += 1
 
             noise /= num_average
@@ -522,7 +519,7 @@ class FTXMonitor(AbstractMonitor):
 
                 # Get the pointer to symbol 'block' of the candidate
                 wf_el = mag_cand + i * self.wf.block_stride
-                self.wf.mag[wf_el + tone] -= snr * 2 + 240
+                self.wf.mag.ravel()[wf_el + tone] -= snr * 2 + 240
 
             snr_all += snr
 
