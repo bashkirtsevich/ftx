@@ -482,7 +482,9 @@ class MSK144Monitor(AbstractMonitor):
             if len(hashes) >= 3:
                 break
 
-    def decode(self, tm_slot_start: float) -> typing.Generator[LogItem, None, None]:
+    def decode(self, **kwargs) -> typing.Generator[LogItem, None, None]:
+        tm_slot_start = kwargs["tm_slot_start"]
+
         signal_len = min(len(self.signal), 30 * self.sample_rate)
 
         signal_part = self.signal[:signal_len]

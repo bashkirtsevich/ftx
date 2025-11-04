@@ -31,5 +31,5 @@ class AbstractMonitor(ABC):
         ...
 
     @abstractmethod
-    def decode(self, tm_slot_start: float) -> typing.Generator[typing.Tuple, None, None]:
+    def decode(self, **kwargs) -> typing.Generator[typing.Tuple, None, None]:
         ...

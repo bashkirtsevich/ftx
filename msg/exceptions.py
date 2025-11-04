@@ -52,3 +52,7 @@ class MSGPackCallsignError(MSGException):
 
 class MSGErrorMsgType(MSGException):
     ...
+
+
+class MSGValidateError(MSGException):
+    ...

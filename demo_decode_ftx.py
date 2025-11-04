@@ -41,9 +41,8 @@ def main():
             print(f"Waterfall accumulated {mon.wf.num_blocks} symbols")
             print(f"Max magnitude: {mon.max_mag:+.2f} dB")
 
-            tm_slot_start = 0
             ts1 = time.monotonic()
-            for i, (snr, time_sec, freq_hz, text) in enumerate(mon.decode(tm_slot_start)):
+            for i, (snr, time_sec, freq_hz, text) in enumerate(mon.decode(f_min=200, f_max=3000)):
                 # Fake WSJT-X-like output for now
                 print(
                     f"{i + 1:03}\t"

@@ -14,7 +14,7 @@ def main():
 
     ts1 = time.monotonic()
 
-    for it in mon.decode(0):
+    for it in mon.decode(tm_slot_start=0):
         msg = message_decode(it.payload)
         msg_text = " ".join(it for it in msg if isinstance(it, str))
 

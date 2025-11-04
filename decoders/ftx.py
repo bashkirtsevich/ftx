@@ -132,6 +132,7 @@ class FTXMonitor(AbstractMonitor):
             for freq_sub in range(self.wf.freq_osr):
                 for bin in range(self.min_bin, self.max_bin):
                     src_bin = (bin * self.wf.freq_osr) + freq_sub
+
                     mag2 = freq_data[src_bin].imag ** 2 + freq_data[src_bin].real ** 2
                     db = 10.0 * np.log10(1E-12 + mag2)
 
@@ -267,21 +268,27 @@ class FTXMonitor(AbstractMonitor):
         mag_cand = candidate.get_mag_idx()
         return sync_fun(wf.mag.ravel(), mag_cand, candidate.time_offset, wf.num_blocks, wf.block_stride)
 
-    def ftx_find_candidates(self, num_candidates: int, min_score: int) -> typing.List[Candidate]:
+    def ftx_find_candidates(self, num_candidates: int, min_score: int, f_min: int, f_max: int
+                            ) -> typing.List[Candidate]:
         wf = self.wf
 
-        num_tones = FTX_TONES_COUNT[wf.protocol]
         time_offset_range = range(-FTX_LENGTH_SYNC[wf.protocol], int(FTX_TIME_RANGE[wf.protocol]))
 
         # Here we allow time offsets that exceed signal boundaries, as long as we still have all data bits.
         # I.e. we can afford to skip the first 7 or the last 7 Costas symbols, as long as we track how many
         # sync symbols we included in the score, so the score is averaged.
+        num_tones = FTX_TONES_COUNT[wf.protocol]
+        period = FTX_SYMBOL_PERIODS[wf.protocol]
+
+        min_bin = max(0, int(f_min * period) - self.min_bin)
+        max_bin = min(wf.num_bins - num_tones, int(f_max * period + 1) - self.min_bin)
+
         heap = []
         can = Candidate(self.wf, 0, 0, 0, 0)
         for time_sub in range(wf.time_osr):
             for freq_sub in range(wf.freq_osr):
                 for time_offset in time_offset_range:
-                    for freq_offset in range(wf.num_bins - num_tones):
+                    for freq_offset in range(min_bin, max_bin):
                         can.time_sub = time_sub
                         can.freq_sub = freq_sub
                         can.time_offset = time_offset
@@ -525,13 +532,16 @@ class FTXMonitor(AbstractMonitor):
 
         return snr_all / self.wf.freq_osr / 2 - 22
 
-    def decode(self, tm_slot_start: float) -> typing.Generator[typing.Tuple[float, float, float, str], None, None]:
-        hashes = set()
+    def decode(self, **kwargs) -> typing.Generator[typing.Tuple[float, float, float, str], None, None]:
+        f_min = kwargs["f_min"]
+        f_max = kwargs["f_max"]
 
         # Find top candidates by Costas sync score and localize them in time and frequency
         wf = self.wf
 
-        candidate_list = self.ftx_find_candidates(self.MAX_CANDIDATES, self.MIN_SCORE)
+        hashes = set()
+
+        candidate_list = self.ftx_find_candidates(self.MAX_CANDIDATES, self.MIN_SCORE, f_min, f_max)
         # Go over candidates and attempt to decode messages
         for cand in candidate_list:
             freq_hz = (self.min_bin + cand.freq_offset + cand.freq_sub / wf.freq_osr) / self.symbol_period
