@@ -62,6 +62,13 @@ class MsgItem(metaclass=ABCMeta):
 
 
 class Callsign(MsgItem):
+    __slots__ = ("flag")
+
+    def __init__(self, val: typing.Union[str, int], flag: typing.Literal["P", "R"]):
+        self.flag = flag
+
+        super().__init__(val)
+
     def to_int(self) -> int:
         if self.val_str.startswith("CQ_"):
             return self._pack_cq_call(self.val_str[3:])
@@ -164,6 +171,9 @@ class Callsign(MsgItem):
     def hash_10(self):
         hash = self.hash_22()
         return hash >> 12
+
+    def __str__(self):
+        return f"{super().__str__()}/{self.flag}"
 
     def __hash__(self):
         return self.hash_22()
