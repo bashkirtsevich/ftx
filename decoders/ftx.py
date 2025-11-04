@@ -60,24 +60,25 @@ class Candidate:
 
 
 class FTXMonitor(AbstractMonitor):
+    __slots__ = (
+        "symbol_period",  # < FT4/FT8 symbol period in seconds
+        "min_bin",  # < First FFT bin in the frequency range (begin)
+        "max_bin",  # < First FFT bin outside the frequency range (end)
+        "block_size",  # < Number of samples per symbol (block)
+        "subblock_size",  # < Analysis shift size (number of samples)
+        "nfft",  # < FFT size
+        "window",  # < Window function for STFT analysis (nfft samples)
+        "last_frame",  # < Current STFT analysis frame (nfft samples)
+        "wf",  # < Waterfall object
+        "max_mag",  # < Maximum detected magnitude (debug stats)
+    )
+
     MIN_SCORE = 5  # Minimum sync score threshold for candidates
     MAX_CANDIDATES = 140
     LDPC_ITERATIONS = 25
     MAX_LDPC_ERRORS = 32
 
     def __init__(self, f_min: int, f_max: int, sample_rate: int, time_osr: int, freq_osr: int, protocol):
-        # symbol_period < FT4/FT8 symbol period in seconds
-        # min_bin       < First FFT bin in the frequency range (begin)
-        # max_bin       < First FFT bin outside the frequency range (end)
-        # block_size    < Number of samples per symbol (block)
-        # subblock_size < Analysis shift size (number of samples)
-        # nfft          < FFT size
-        # fft_norm      < FFT normalization factor
-        # window        < Window function for STFT analysis (nfft samples)
-        # last_frame    < Current STFT analysis frame (nfft samples)
-        # wf            < Waterfall object
-        # max_mag       < Maximum detected magnitude (debug stats)
-
         slot_time = FTX_SLOT_TIMES[protocol]
         symbol_period = FTX_SYMBOL_PERIODS[protocol]
 
