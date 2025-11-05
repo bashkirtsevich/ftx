@@ -274,7 +274,7 @@ FTX_LDPC_NM = np.array([
     [18, 42, 79, 144, 146, 152, 0],
     [25, 38, 65, 99, 122, 160, 0],
     [17, 42, 75, 129, 170, 172, 0],
-], dtype=np.uint8)
+], dtype=np.uint8) - 1
 
 # Each row corresponds to a codeword bit.
 # The numbers indicate which three LDPC parity checks (rows in Nm) refer to the codeword bit.
@@ -454,7 +454,7 @@ FTX_LDPC_MN = np.array([
     [49, 75, 83],
     [20, 44, 48],
     [42, 49, 57],
-], dtype=np.uint8)
+], dtype=np.uint8) - 1
 
 FTX_LDPC_NUM_ROWS = np.array([
     7, 6, 6, 6, 7, 6, 7, 6, 6, 7, 6, 6, 7, 7, 6, 6,

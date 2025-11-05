@@ -131,6 +131,6 @@ def bp_decode(codeword: ntp.NDArray[np.float64], max_iters: int) -> typing.Tuple
         ldpc_n=FTX_LDPC_N, ldpc_m=FTX_LDPC_M,
         n_v=3, m_c=7,
         ldpc_num_rows=FTX_LDPC_NUM_ROWS,
-        ldpc_nm=FTX_LDPC_NM - 1,
-        ldpc_mn=FTX_LDPC_MN - 1,
+        ldpc_nm=FTX_LDPC_NM,
+        ldpc_mn=FTX_LDPC_MN,
     )
