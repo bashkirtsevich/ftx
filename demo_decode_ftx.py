@@ -50,7 +50,7 @@ def main():
                 print(
                     f"{i + 1:03}\t"
                     f"{it.snr:+06.2f}dB\t"
-                    f"{it.dT:-.2f}sec\t"
+                    f"{it.dT:-.2f}s\t"
                     f"{it.dF:.2f}Hz\t"
                     f"{text}"
                 )
@@ -60,7 +60,7 @@ def main():
 
             ts2 = time.monotonic()
 
-            print("-" * 20, "decoded @", ts2 - ts1, "sec")
+            print("-" * 20, "decoded @", ts2 - ts1, "s")
 
         if eof:
             break
