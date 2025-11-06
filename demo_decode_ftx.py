@@ -16,7 +16,7 @@ def main():
 
     is_ft4 = False
 
-    sample_rate, data = read("examples/ft81.wav")
+    sample_rate, data = read("examples/signal.wav")
     # sample_rate, data = read("examples/7signals.wav")
     # sample_rate, data = read("210703_133430.wav")
 
@@ -42,7 +42,7 @@ def main():
             print(f"Waterfall accumulated {mon.num_blocks} symbols")
 
             ts1 = time.monotonic()
-            for i, it in enumerate(mon.decode(f_min=1020, f_max=1060)):
+            for i, it in enumerate(mon.decode_mp()):
                 call_to_rx, call_de_rx, extra_rx = message_decode(it.payload)
                 text = " ".join([call_to_rx, call_de_rx or "", extra_rx or ""])
 

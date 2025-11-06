@@ -6,6 +6,8 @@ from itertools import cycle
 import numpy as np
 import numpy.typing as npt
 
+import multiprocessing as mp
+
 from consts.ftx import *
 from crc.ftx import ftx_extract_crc, ftx_check_crc
 from encoders import ft4_encode, ft8_encode
@@ -260,8 +262,7 @@ class FTXMonitor(AbstractMonitor):
         mag_cand = self.get_candidate_mag_idx(candidate)
         return sync_fun(self.mag.ravel(), mag_cand, candidate.time_offset, self.num_blocks, self.block_stride)
 
-    def ftx_find_candidates(self, num_candidates: int, min_score: int, f_min: int, f_max: int
-                            ) -> typing.List[Candidate]:
+    def ftx_find_candidates(self, num_candidates: int, min_score: int, **kwargs) -> typing.List[Candidate]:
         time_offset_range = range(-FTX_LENGTH_SYNC[self.protocol], int(FTX_TIME_RANGE[self.protocol]))
 
         # Here we allow time offsets that exceed signal boundaries, as long as we still have all data bits.
@@ -270,11 +271,18 @@ class FTXMonitor(AbstractMonitor):
         num_tones = FTX_TONES_COUNT[self.protocol]
         period = FTX_SYMBOL_PERIODS[self.protocol]
 
-        min_bin = max(0, int(f_min * period) - self.min_bin)
-        max_bin = min(self.num_bins - num_tones, int(f_max * period + 1) - self.min_bin)
+        if isinstance(f_min := kwargs.get("f_min"), int):
+            min_bin = max(0, int(f_min * period) - self.min_bin)
+        else:
+            min_bin = kwargs.get("kwargs", self.min_bin)
+
+        if isinstance(f_max := kwargs.get("f_max"), int):
+            max_bin = min(self.num_bins - num_tones, int(f_max * period + 1) - self.min_bin)
+        else:
+            max_bin = kwargs.get("max_bin", self.num_bins - num_tones)
 
         heap = []
-        can = Candidate(self, 0, 0, 0, 0)
+        can = Candidate(0, 0, 0, 0)
         for time_sub in range(self.time_osr):
             for freq_sub in range(self.freq_osr):
                 for time_offset in time_offset_range:
@@ -523,13 +531,10 @@ class FTXMonitor(AbstractMonitor):
         return snr_all / self.freq_osr / 2 - 22
 
     def decode(self, **kwargs) -> typing.Generator[LogItem, None, None]:
-        f_min = kwargs["f_min"]
-        f_max = kwargs["f_max"]
-
         # Find top candidates by Costas sync score and localize them in time and frequency
         items = set()
 
-        candidate_list = self.ftx_find_candidates(self.MAX_CANDIDATES, self.MIN_SCORE, f_min, f_max)
+        candidate_list = self.ftx_find_candidates(self.MAX_CANDIDATES, self.MIN_SCORE, **kwargs)
         # Go over candidates and attempt to decode messages
         for cand in candidate_list:
             freq_hz = (self.min_bin + cand.freq_offset + cand.freq_sub / self.freq_osr) / self.symbol_period
@@ -553,3 +558,27 @@ class FTXMonitor(AbstractMonitor):
                 payload=message,
                 crc=crc
             )
+
+    def _decode_mp_wrap(self, min_bin: int, max_bin: int):
+        return list(self.decode(min_bin=min_bin, max_bin=max_bin))
+
+    def decode_mp(self, pool_size: typing.Optional[int] = None) -> typing.Generator[LogItem, None, None]:
+        num_tones = FTX_TONES_COUNT[self.protocol]
+
+        bin_overlap = num_tones * 3
+        bin_step = num_tones * 5
+
+        args = [
+            (i - bin_overlap, i + bin_overlap)
+            for i in range(self.min_bin + bin_overlap, self.max_bin, bin_step)
+        ]
+
+        with mp.Pool(processes=pool_size) as pool:
+            logs = pool.starmap(self._decode_mp_wrap, args)
+
+            hash_set = set()
+            for log in logs:
+                for it in log:
+                    if not it.crc in hash_set:
+                        hash_set.add(it.crc)
+                        yield it
