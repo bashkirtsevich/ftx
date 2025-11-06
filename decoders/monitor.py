@@ -1,8 +1,18 @@
 import typing
 from abc import ABC, abstractmethod
 from collections import namedtuple
+from dataclasses import dataclass
 
 DecodeStatus = namedtuple("DecodeStatus", ["ldpc_errors", "crc_extracted"])
+
+
+@dataclass
+class LogItem:
+    snr: float
+    dT: float
+    dF: float
+    payload: typing.ByteString
+    crc: int
 
 
 class AbstractMonitor(ABC):
@@ -31,5 +41,5 @@ class AbstractMonitor(ABC):
         ...
 
     @abstractmethod
-    def decode(self, **kwargs) -> typing.Generator[typing.Tuple, None, None]:
+    def decode(self, **kwargs) -> typing.Generator[LogItem, None, None]:
         ...

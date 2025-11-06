@@ -10,10 +10,15 @@ from consts.ftx import *
 from crc.ftx import ftx_extract_crc, ftx_check_crc
 from encoders import ft4_encode, ft8_encode
 from ldpc.ftx import bp_decode
-from msg.message import message_decode
-from .monitor import DecodeStatus, AbstractMonitor
+from .monitor import DecodeStatus, AbstractMonitor, LogItem
 
 from numba import jit
+
+
+@dataclass
+class FTXLogItem(LogItem):
+    err: int
+    payload: typing.ByteString
 
 
 @dataclass(slots=True)
@@ -517,12 +522,12 @@ class FTXMonitor(AbstractMonitor):
 
         return snr_all / self.freq_osr / 2 - 22
 
-    def decode(self, **kwargs) -> typing.Generator[typing.Tuple[float, float, float, str], None, None]:
+    def decode(self, **kwargs) -> typing.Generator[LogItem, None, None]:
         f_min = kwargs["f_min"]
         f_max = kwargs["f_max"]
 
         # Find top candidates by Costas sync score and localize them in time and frequency
-        hashes = set()
+        items = set()
 
         candidate_list = self.ftx_find_candidates(self.MAX_CANDIDATES, self.MIN_SCORE, f_min, f_max)
         # Go over candidates and attempt to decode messages
@@ -535,11 +540,16 @@ class FTXMonitor(AbstractMonitor):
 
             status, message, snr = x
 
-            if (crc := status.crc_extracted) in hashes:
+            if (crc := status.crc_extracted) in items:
                 continue
 
-            hashes.add(crc)
+            items.add(crc)
 
-            call_to_rx, call_de_rx, extra_rx = message_decode(message)
-
-            yield snr, time_sec, freq_hz, " ".join([call_to_rx, call_de_rx or "", extra_rx or ""])
+            yield FTXLogItem(
+                snr=snr,
+                dT=time_sec,
+                dF=freq_hz,
+                err=status.ldpc_errors,
+                payload=message,
+                crc=crc
+            )

@@ -10,21 +10,15 @@ from ldpc.mskx import bp_decode
 from consts.mskx import *
 import typing
 
-from .monitor import DecodeStatus, AbstractMonitor
+from .monitor import DecodeStatus, AbstractMonitor, LogItem
 
 
 @dataclass
-class LogItem:
-    snr: float
-    dT: float
-    dF: float
+class MSKXLogItem(LogItem):
     p_avg: int
     freq: int
     eye_open: float
     bit_err: int
-
-    payload: typing.ByteString
-    crc: int
 
 
 class NextCand(Exception):
@@ -196,7 +190,7 @@ class MSK144Monitor(AbstractMonitor):
         return DecodeStatus(ldpc_errors, crc_extracted), payload, eye_opening, bit_errors
 
     def detect_signals(self, signal: npt.NDArray[np.complex128], signal_len: int, start: float,
-                       max_cand: int = 16, tolerance: int = 150) -> typing.Generator[LogItem, None, None]:
+                       max_cand: int = 16, tolerance: int = 150) -> typing.Generator[MSKXLogItem, None, None]:
         # ! define half-sine pulse and raised-cosine edge window
         dt = 1 / self.sample_rate
         df = self.sample_rate / MSK144_NFFT
@@ -464,7 +458,7 @@ class MSK144Monitor(AbstractMonitor):
 
                                     df_hv = freq_est - MSK144_FREQ_CENTER
 
-                                    log_item = LogItem(
+                                    log_item = MSKXLogItem(
                                         snr=snr,
                                         dT=t0,
                                         dF=df_hv,
