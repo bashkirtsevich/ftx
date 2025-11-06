@@ -465,6 +465,8 @@ class FTXMonitor(AbstractMonitor):
         can = copy(candidate)
         snr_all = 0.0
 
+        mag = self.mag.ravel()
+
         tones = cycle(tones)
         for freq_sub in range(self.freq_osr):
             can.freq_sub = freq_sub
@@ -488,10 +490,10 @@ class FTXMonitor(AbstractMonitor):
 
                 noise_val = 100000.0
                 for s in filter(lambda x: x != tone, range(num_tones)):
-                    noise_val = min(noise_val, self.mag.ravel()[wf_el + s] * 0.5 - 120.0)
+                    noise_val = min(noise_val, mag[wf_el + s] * 0.5 - 120.0)
 
                 noise += noise_val
-                signal += self.mag.ravel()[wf_el + tone] * 0.5 - 120.0
+                signal += mag[wf_el + tone] * 0.5 - 120.0
                 num_average += 1
 
             noise /= num_average
@@ -509,7 +511,7 @@ class FTXMonitor(AbstractMonitor):
 
                 # Get the pointer to symbol 'block' of the candidate
                 wf_el = mag_cand + i * self.block_stride
-                self.mag.ravel()[wf_el + tone] -= snr * 2 + 240
+                mag[wf_el + tone] -= snr * 2 + 240
 
             snr_all += snr
 
