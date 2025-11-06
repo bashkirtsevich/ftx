@@ -38,11 +38,10 @@ def main():
         eof = frame_pos >= len(signal) - mon.block_size
 
         if eof or not mon.monitor_process(signal[frame_pos:frame_pos + mon.block_size]):
-            print(f"Waterfall accumulated {mon.wf.num_blocks} symbols")
-            print(f"Max magnitude: {mon.max_mag:+.2f} dB")
+            print(f"Waterfall accumulated {mon.num_blocks} symbols")
 
             ts1 = time.monotonic()
-            for i, (snr, time_sec, freq_hz, text) in enumerate(mon.decode(f_min=200, f_max=3000)):
+            for i, (snr, time_sec, freq_hz, text) in enumerate(mon.decode(f_min=1020, f_max=1060)):
                 # Fake WSJT-X-like output for now
                 print(
                     f"{i + 1:03}\t"
@@ -52,7 +51,7 @@ def main():
                     f"{text}"
                 )
 
-            mon.wf.num_blocks = 0
+            mon.num_blocks = 0
             mon.max_mag = -120.0
 
             ts2 = time.monotonic()

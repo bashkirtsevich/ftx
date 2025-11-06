@@ -11,52 +11,18 @@ from crc.ftx import ftx_extract_crc, ftx_check_crc
 from encoders import ft4_encode, ft8_encode
 from ldpc.ftx import bp_decode
 from msg.message import message_decode
-from ldpc.osd import osd_decode
 from .monitor import DecodeStatus, AbstractMonitor
 
 from numba import jit
 
 
-@dataclass
-class Waterfall:
-    # Input structure to ftx_find_sync() function. This structure describes stored waterfall data over the whole message slot.
-    # Fields time_osr and freq_osr specify additional oversampling rate for time and frequency resolution.
-    # If time_osr=1, FFT magnitude data is collected once for every symbol transmitted, i.e. every 1/6.25 = 0.16 seconds.
-    # Values time_osr > 1 mean each symbol is further subdivided in time.
-    # If freq_osr=1, each bin in the FFT magnitude data corresponds to 6.25 Hz, which is the tone spacing.
-    # Values freq_osr > 1 mean the tone spacing is further subdivided by FFT analysis.
-
-    num_bins: int  # number of FFT bins in terms of 6.25 Hz
-    time_osr: int  # number of time subdivisions
-    freq_osr: int  # number of frequency subdivisions
-    protocol: int  # Indicate if using FT4 or FT8
-    mag = npt.NDArray[np.int64]  # FFT magnitudes stored as uint8_t[blocks][time_osr][freq_osr][num_bins]
-    max_blocks: int  # number of blocks (symbols) allocated in the mag array
-
-    num_blocks: int = 0  # number of blocks (symbols) stored in the mag array
-    block_stride: int = 0  # Helper value = time_osr * freq_osr * num_bins
-
-    def __post_init__(self):
-        self.block_stride = (self.time_osr * self.freq_osr * self.num_bins)
-        self.mag = np.zeros((self.max_blocks, self.time_osr, self.freq_osr, self.num_bins), dtype=np.int64)
-
-
 @dataclass(slots=True)
 class Candidate:
-    wf: Waterfall  # < Reference to the waterfall
     time_offset: int  # < Index of the time block
     freq_offset: int  # < Index of the frequency bin
     time_sub: int  # < Index of the time subdivision used
     freq_sub: int  # < Index of the frequency subdivision used
     score: int = 0  # < Candidate score (non-negative number; higher score means higher likelihood)
-
-    def get_mag_idx(self) -> int:
-        offset = self.time_offset
-        offset = offset * self.wf.time_osr + self.time_sub
-        offset = offset * self.wf.freq_osr + self.freq_sub
-        offset = offset * self.wf.num_bins + self.freq_offset
-
-        return offset
 
 
 class FTXMonitor(AbstractMonitor):
@@ -69,8 +35,22 @@ class FTXMonitor(AbstractMonitor):
         "nfft",  # < FFT size
         "window",  # < Window function for STFT analysis (nfft samples)
         "last_frame",  # < Current STFT analysis frame (nfft samples)
-        "wf",  # < Waterfall object
-        "max_mag",  # < Maximum detected magnitude (debug stats)
+
+        # Input structure to ftx_find_sync() function. This structure describes stored waterfall data over the whole message slot.
+        # Fields time_osr and freq_osr specify additional oversampling rate for time and frequency resolution.
+        # If time_osr=1, FFT magnitude data is collected once for every symbol transmitted, i.e. every 1/6.25 = 0.16 seconds.
+        # Values time_osr > 1 mean each symbol is further subdivided in time.
+        # If freq_osr=1, each bin in the FFT magnitude data corresponds to 6.25 Hz, which is the tone spacing.
+        # Values freq_osr > 1 mean the tone spacing is further subdivided by FFT analysis.
+
+        "num_bins",  # < number of FFT bins in terms of 6.25 Hz
+        "time_osr",  # < number of time subdivisions
+        "freq_osr",  # < number of frequency subdivisions
+        "protocol",  # < Indicate if using FT4 or FT8
+        "mag",  # < FFT magnitudes stored as uint8_t[blocks][time_osr][freq_osr][num_bins]
+        "max_blocks",  # < number of blocks (symbols) allocated in the mag array
+        "num_blocks",  # < number of blocks (symbols) stored in the mag array
+        "block_stride"  # < Helper value = time_osr * freq_osr * num_bins
     )
 
     MIN_SCORE = 5  # Minimum sync score threshold for candidates
@@ -79,6 +59,11 @@ class FTXMonitor(AbstractMonitor):
     MAX_LDPC_ERRORS = 32
 
     def __init__(self, f_min: int, f_max: int, sample_rate: int, time_osr: int, freq_osr: int, protocol):
+        self.num_blocks = 0
+        self.time_osr = time_osr
+        self.freq_osr = freq_osr
+        self.protocol = protocol
+
         slot_time = FTX_SLOT_TIMES[protocol]
         symbol_period = FTX_SYMBOL_PERIODS[protocol]
 
@@ -92,30 +77,28 @@ class FTXMonitor(AbstractMonitor):
 
         self.last_frame = np.zeros(self.nfft, dtype=np.float64)
 
-        # Allocate enough blocks to fit the entire FT8/FT4 slot in memory
-        max_blocks = int(slot_time / symbol_period)
-
         # Keep only FFT bins in the specified frequency range (f_min/f_max)
         self.min_bin = int(f_min * symbol_period)
         self.max_bin = int(f_max * symbol_period + 1)
+        self.num_bins = self.max_bin - self.min_bin
 
-        num_bins = self.max_bin - self.min_bin
-        self.wf = Waterfall(max_blocks=max_blocks, num_bins=num_bins, time_osr=time_osr, freq_osr=freq_osr,
-                            protocol=protocol)
+        self.block_stride = (self.time_osr * self.freq_osr * self.num_bins)
+
+        # Allocate enough blocks to fit the entire FT8/FT4 slot in memory
+        self.max_blocks = int(slot_time / symbol_period)
+        self.mag = np.zeros((self.max_blocks, self.time_osr, self.freq_osr, self.num_bins), dtype=np.int64)
 
         self.symbol_period = symbol_period
 
-        self.max_mag = -120.0
-
     def monitor_process(self, frame: typing.List[float]):
         # Check if we can still store more waterfall data
-        if self.wf.num_blocks >= self.wf.max_blocks:
+        if self.num_blocks >= self.max_blocks:
             return False
 
         frame_pos = 0
 
         # Loop over block subdivisions
-        for time_sub in range(self.wf.time_osr):
+        for time_sub in range(self.time_osr):
             # Shift the new data into analysis frame
             for pos in range(self.nfft - self.subblock_size):
                 self.last_frame[pos] = self.last_frame[pos + self.subblock_size]
@@ -129,9 +112,9 @@ class FTXMonitor(AbstractMonitor):
             freq_data = np.fft.fft(time_data)[:self.nfft // 2 + 1]
 
             # Loop over possible frequency OSR offsets
-            for freq_sub in range(self.wf.freq_osr):
+            for freq_sub in range(self.freq_osr):
                 for bin in range(self.min_bin, self.max_bin):
-                    src_bin = (bin * self.wf.freq_osr) + freq_sub
+                    src_bin = (bin * self.freq_osr) + freq_sub
 
                     mag2 = freq_data[src_bin].imag ** 2 + freq_data[src_bin].real ** 2
                     db = 10.0 * np.log10(1E-12 + mag2)
@@ -139,13 +122,19 @@ class FTXMonitor(AbstractMonitor):
                     # Scale decibels to unsigned 8-bit range and clamp the value
                     # Range 0-240 covers -120..0 dB in 0.5 dB steps
                     scaled = int(2 * db + 240)
-                    self.wf.mag[self.wf.num_blocks, time_sub, freq_sub, bin - self.min_bin] = scaled
+                    self.mag[self.num_blocks, time_sub, freq_sub, bin - self.min_bin] = scaled
 
-                    self.max_mag = max(self.max_mag, db)
-
-        self.wf.num_blocks += 1
+        self.num_blocks += 1
 
         return True
+
+    def get_candidate_mag_idx(self, candidate: Candidate) -> int:
+        offset = candidate.time_offset
+        offset = offset * self.time_osr + candidate.time_sub
+        offset = offset * self.freq_osr + candidate.freq_sub
+        offset = offset * self.num_bins + candidate.freq_offset
+
+        return offset
 
     @staticmethod
     @jit(nopython=True)
@@ -256,37 +245,33 @@ class FTXMonitor(AbstractMonitor):
         return score
 
     def ftx_sync_score(self, candidate: Candidate) -> int:
-        wf = self.wf
-
-        if wf.protocol == FTX_PROTOCOL_FT4:
+        if self.protocol == FTX_PROTOCOL_FT4:
             sync_fun = self.ft4_sync_score
-        elif wf.protocol == FTX_PROTOCOL_FT8:
+        elif self.protocol == FTX_PROTOCOL_FT8:
             sync_fun = self.ft8_sync_score
         else:
             raise ValueError("Invalid protocol")
 
-        mag_cand = candidate.get_mag_idx()
-        return sync_fun(wf.mag.ravel(), mag_cand, candidate.time_offset, wf.num_blocks, wf.block_stride)
+        mag_cand = self.get_candidate_mag_idx(candidate)
+        return sync_fun(self.mag.ravel(), mag_cand, candidate.time_offset, self.num_blocks, self.block_stride)
 
     def ftx_find_candidates(self, num_candidates: int, min_score: int, f_min: int, f_max: int
                             ) -> typing.List[Candidate]:
-        wf = self.wf
-
-        time_offset_range = range(-FTX_LENGTH_SYNC[wf.protocol], int(FTX_TIME_RANGE[wf.protocol]))
+        time_offset_range = range(-FTX_LENGTH_SYNC[self.protocol], int(FTX_TIME_RANGE[self.protocol]))
 
         # Here we allow time offsets that exceed signal boundaries, as long as we still have all data bits.
         # I.e. we can afford to skip the first 7 or the last 7 Costas symbols, as long as we track how many
         # sync symbols we included in the score, so the score is averaged.
-        num_tones = FTX_TONES_COUNT[wf.protocol]
-        period = FTX_SYMBOL_PERIODS[wf.protocol]
+        num_tones = FTX_TONES_COUNT[self.protocol]
+        period = FTX_SYMBOL_PERIODS[self.protocol]
 
         min_bin = max(0, int(f_min * period) - self.min_bin)
-        max_bin = min(wf.num_bins - num_tones, int(f_max * period + 1) - self.min_bin)
+        max_bin = min(self.num_bins - num_tones, int(f_max * period + 1) - self.min_bin)
 
         heap = []
-        can = Candidate(self.wf, 0, 0, 0, 0)
-        for time_sub in range(wf.time_osr):
-            for freq_sub in range(wf.freq_osr):
+        can = Candidate(self, 0, 0, 0, 0)
+        for time_sub in range(self.time_osr):
+            for freq_sub in range(self.freq_osr):
                 for time_offset in time_offset_range:
                     for freq_offset in range(min_bin, max_bin):
                         can.time_sub = time_sub
@@ -308,7 +293,7 @@ class FTXMonitor(AbstractMonitor):
     def ft4_extract_likelihood(self, cand: Candidate) -> npt.NDArray[np.float64]:
         log174 = np.zeros(FTX_LDPC_N, dtype=np.float64)
 
-        mag = cand.get_mag_idx()  # Pointer to 4 magnitude bins of the first symbol
+        mag = self.get_candidate_mag_idx(cand)  # Pointer to 4 magnitude bins of the first symbol
 
         # Go over FSK tones and skip Costas sync symbols
         for k in range(FT4_ND):
@@ -319,15 +304,15 @@ class FTXMonitor(AbstractMonitor):
 
             # Check for time boundaries
             block = cand.time_offset + sym_idx
-            if 0 <= block < self.wf.num_blocks:
-                log174[bit_idx:bit_idx + 2] = self.ft4_extract_symbol(mag + sym_idx * self.wf.block_stride)
+            if 0 <= block < self.num_blocks:
+                log174[bit_idx:bit_idx + 2] = self.ft4_extract_symbol(mag + sym_idx * self.block_stride)
 
         return log174
 
     def ft8_extract_likelihood(self, cand: Candidate) -> npt.NDArray[np.float64]:
         log174 = np.zeros(FTX_LDPC_N, dtype=np.float64)
 
-        mag = cand.get_mag_idx()  # Pointer to 8 magnitude bins of the first symbol
+        mag = self.get_candidate_mag_idx(cand)  # Pointer to 8 magnitude bins of the first symbol
 
         # Go over FSK tones and skip Costas sync symbols
         for k in range(FT8_ND):
@@ -339,8 +324,8 @@ class FTXMonitor(AbstractMonitor):
             # Check for time boundaries
             block = cand.time_offset + sym_idx
 
-            if 0 <= block < self.wf.num_blocks:
-                log174[bit_idx:bit_idx + 3] = self.ft8_extract_symbol(mag + sym_idx * self.wf.block_stride)
+            if 0 <= block < self.num_blocks:
+                log174[bit_idx:bit_idx + 3] = self.ft8_extract_symbol(mag + sym_idx * self.block_stride)
 
         return log174
 
@@ -348,7 +333,7 @@ class FTXMonitor(AbstractMonitor):
                            bit_map: typing.Tuple) -> npt.NDArray[np.float64]:
         # Compute unnormalized log likelihood log(p(1) / p(0)) of n message bits (1 FSK symbol)
         # Cleaned up code for the simple case of n_syms==1
-        s2 = self.wf.mag.ravel()[gray_map + mag_idx]
+        s2 = self.mag.ravel()[gray_map + mag_idx]
 
         logl = np.fromiter((
             np.max(s2[np.array(l)]) - np.max(s2[np.array(r)])
@@ -377,9 +362,7 @@ class FTXMonitor(AbstractMonitor):
     def ftx_decode_candidate(
             self, cand: Candidate,
             max_iterations: int) -> typing.Optional[typing.Tuple[DecodeStatus, typing.Optional[bytes], float]]:
-        wf = self.wf
-
-        if wf.protocol == FTX_PROTOCOL_FT4:
+        if self.protocol == FTX_PROTOCOL_FT4:
             log174 = self.ft4_extract_likelihood(cand)
         else:
             log174 = self.ft8_extract_likelihood(cand)
@@ -415,7 +398,7 @@ class FTXMonitor(AbstractMonitor):
         # Extract CRC and check it
         crc_extracted = ftx_extract_crc(a91)
 
-        if wf.protocol == FTX_PROTOCOL_FT4:
+        if self.protocol == FTX_PROTOCOL_FT4:
             # '[..] for FT4 only, in order to avoid transmitting a long string of zeros when sending CQ messages,
             # the assembled 77-bit message is bitwise exclusive-OR’ed with [a] pseudorandom sequence before computing the CRC and FEC parity bits'
             payload = bytearray(a91[i] ^ xor for i, xor in enumerate(FT4_XOR_SEQUENCE))
@@ -428,48 +411,48 @@ class FTXMonitor(AbstractMonitor):
         # snr = self.ftx_get_snr(cand, tones)
         return DecodeStatus(ldpc_errors, crc_extracted), payload, snr
 
-    def ftx_get_snr(self, candidate: Candidate, tones: typing.Iterable[int]) -> float:
-        num_tones = FTX_TONES_COUNT[self.wf.protocol]
-
-        mag_cand = candidate.get_mag_idx()
-
-        signal = 0
-        noise = 0
-        num_average = 0
-
-        tones = cycle(tones)
-        for i, tone in enumerate(tones):
-            block_abs = candidate.time_offset + i  # relative to the captured signal
-            # Check for time boundaries
-            if block_abs < 0:
-                continue
-
-            if block_abs >= self.wf.num_blocks:
-                break
-
-            wf_el = mag_cand + i * self.wf.block_stride
-
-            min_val = 255
-            for s in range(num_tones):
-                wf_mag = self.wf.mag[wf_el + s]
-
-                if s == tone:
-                    signal += wf_mag
-                else:
-                    min_val = min(min_val, wf_mag)
-
-            noise += min_val
-            num_average += 1
-
-            # Mute
-            if tone == 0:
-                self.wf.mag[wf_el + 0] = self.wf.mag[wf_el + 1]
-            elif tone == 7:
-                self.wf.mag[wf_el + 7] = self.wf.mag[wf_el + 6]
-            else:
-                self.wf.mag[wf_el + tone] = int(self.wf.mag[wf_el + tone + 1] / 2 + self.wf.mag[wf_el + tone - 1] / 2)
-
-        return (signal - noise) / (2 * num_average) - 26
+    # def ftx_get_snr(self, candidate: Candidate, tones: typing.Iterable[int]) -> float:
+    #     num_tones = FTX_TONES_COUNT[self.protocol]
+    #
+    #     mag_cand = self.get_candidate_mag_idx(candidate)
+    #
+    #     signal = 0
+    #     noise = 0
+    #     num_average = 0
+    #
+    #     tones = cycle(tones)
+    #     for i, tone in enumerate(tones):
+    #         block_abs = candidate.time_offset + i  # relative to the captured signal
+    #         # Check for time boundaries
+    #         if block_abs < 0:
+    #             continue
+    #
+    #         if block_abs >= self.num_blocks:
+    #             break
+    #
+    #         wf_el = mag_cand + i * self.block_stride
+    #
+    #         min_val = 255
+    #         for s in range(num_tones):
+    #             wf_mag = self.mag[wf_el + s]
+    #
+    #             if s == tone:
+    #                 signal += wf_mag
+    #             else:
+    #                 min_val = min(min_val, wf_mag)
+    #
+    #         noise += min_val
+    #         num_average += 1
+    #
+    #         # Mute
+    #         if tone == 0:
+    #             self.mag[wf_el + 0] = self.mag[wf_el + 1]
+    #         elif tone == 7:
+    #             self.mag[wf_el + 7] = self.mag[wf_el + 6]
+    #         else:
+    #             self.mag[wf_el + tone] = int(self.mag[wf_el + tone + 1] / 2 + self.mag[wf_el + tone - 1] / 2)
+    #
+    #     return (signal - noise) / (2 * num_average) - 26
 
     def ftx_subtract(self, candidate: Candidate, tones: typing.Iterable[int]) -> float:
         # Subtract the estimated noise from the signal, given a candidate and a sequence of tones
@@ -477,16 +460,16 @@ class FTXMonitor(AbstractMonitor):
         # The noise is estimated as the minimum signal power of all tones except the one of the candidate.
         # The signal power is then subtracted from the signal.
 
-        num_tones = FTX_TONES_COUNT[self.wf.protocol]
+        num_tones = FTX_TONES_COUNT[self.protocol]
 
         can = copy(candidate)
         snr_all = 0.0
 
         tones = cycle(tones)
-        for freq_sub in range(self.wf.freq_osr):
+        for freq_sub in range(self.freq_osr):
             can.freq_sub = freq_sub
 
-            mag_cand = can.get_mag_idx()
+            mag_cand = self.get_candidate_mag_idx(can)
             noise = 0.0
             signal = 0.0
             num_average = 0
@@ -497,18 +480,18 @@ class FTXMonitor(AbstractMonitor):
                 if block_abs < 0:
                     continue
 
-                if block_abs >= self.wf.num_blocks:
+                if block_abs >= self.num_blocks:
                     break
 
                 # Get the pointer to symbol 'block' of the candidate
-                wf_el = mag_cand + i * self.wf.block_stride
+                wf_el = mag_cand + i * self.block_stride
 
                 noise_val = 100000.0
                 for s in filter(lambda x: x != tone, range(num_tones)):
-                    noise_val = min(noise_val, self.wf.mag.ravel()[wf_el + s] * 0.5 - 120.0)
+                    noise_val = min(noise_val, self.mag.ravel()[wf_el + s] * 0.5 - 120.0)
 
                 noise += noise_val
-                signal += self.wf.mag.ravel()[wf_el + tone] * 0.5 - 120.0
+                signal += self.mag.ravel()[wf_el + tone] * 0.5 - 120.0
                 num_average += 1
 
             noise /= num_average
@@ -521,31 +504,29 @@ class FTXMonitor(AbstractMonitor):
                 if block_abs < 0:
                     continue
 
-                if block_abs >= self.wf.num_blocks:
+                if block_abs >= self.num_blocks:
                     break
 
                 # Get the pointer to symbol 'block' of the candidate
-                wf_el = mag_cand + i * self.wf.block_stride
-                self.wf.mag.ravel()[wf_el + tone] -= snr * 2 + 240
+                wf_el = mag_cand + i * self.block_stride
+                self.mag.ravel()[wf_el + tone] -= snr * 2 + 240
 
             snr_all += snr
 
-        return snr_all / self.wf.freq_osr / 2 - 22
+        return snr_all / self.freq_osr / 2 - 22
 
     def decode(self, **kwargs) -> typing.Generator[typing.Tuple[float, float, float, str], None, None]:
         f_min = kwargs["f_min"]
         f_max = kwargs["f_max"]
 
         # Find top candidates by Costas sync score and localize them in time and frequency
-        wf = self.wf
-
         hashes = set()
 
         candidate_list = self.ftx_find_candidates(self.MAX_CANDIDATES, self.MIN_SCORE, f_min, f_max)
         # Go over candidates and attempt to decode messages
         for cand in candidate_list:
-            freq_hz = (self.min_bin + cand.freq_offset + cand.freq_sub / wf.freq_osr) / self.symbol_period
-            time_sec = (cand.time_offset + cand.time_sub / wf.time_osr) * self.symbol_period - 0.65
+            freq_hz = (self.min_bin + cand.freq_offset + cand.freq_sub / self.freq_osr) / self.symbol_period
+            time_sec = (cand.time_offset + cand.time_sub / self.time_osr) * self.symbol_period - 0.65
 
             if not (x := self.ftx_decode_candidate(cand, self.LDPC_ITERATIONS)):
                 continue
