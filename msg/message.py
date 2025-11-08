@@ -2,7 +2,6 @@ import re
 import typing
 from abc import ABCMeta, abstractmethod
 from contextlib import suppress
-from functools import reduce, partial
 
 from consts.msg import MSG_CALLSIGN_HASH_12_BITS, MSG_MESSAGE_TYPE_FREE_TEXT, MSG_MESSAGE_TYPE_DXPEDITION, \
     MSG_MESSAGE_TYPE_EU_VHF, MSG_MESSAGE_TYPE_ARRL_FD, MSG_MESSAGE_TYPE_TELEMETRY, MSG_MESSAGE_TYPE_STANDARD, \
@@ -29,6 +28,9 @@ class MsgItem(metaclass=ABCMeta):
     __slots__ = ("val_str", "val_int")
 
     def __init__(self, val: typing.Union[str, int]):
+        if not self.validate(val):
+            raise ValueError("Validation error")
+
         if isinstance(val, str):
             self.val_str = val.strip()
             self.val_int = self.to_int()
@@ -37,6 +39,32 @@ class MsgItem(metaclass=ABCMeta):
             self.val_str = self.to_str()
         else:
             raise TypeError(f"Unsupported data type {type(val)}")
+
+    @classmethod
+    @abstractmethod
+    def _validate_str(cls, val: str) -> bool:
+        ...
+
+    @classmethod
+    @abstractmethod
+    def _validate_int(cls, val: int) -> bool:
+        ...
+
+    @classmethod
+    def _validate_error(cls, msg: str):
+        raise ValueError(msg)
+
+    @classmethod
+    def validate(cls, val: typing.Union[str, int], raise_exception: bool = False) -> bool:
+        # TODO: Add raise_exception logic
+        if isinstance(val, str):
+            ok = cls._validate_str(val)
+        elif isinstance(val, int):
+            ok = cls._validate_int(val)
+        else:
+            raise TypeError("Unsupported value type")
+
+        return ok
 
     @abstractmethod
     def to_int(self) -> int:
@@ -62,12 +90,13 @@ class MsgItem(metaclass=ABCMeta):
 
 
 class Callsign(MsgItem):
-    __slots__ = ("flag")
+    @classmethod
+    def _validate_str(cls, val: str) -> bool:
+        return True
 
-    def __init__(self, val: typing.Union[str, int], flag: typing.Literal["P", "R"]):
-        self.flag = flag
-
-        super().__init__(val)
+    @classmethod
+    def _validate_int(cls, val: int) -> bool:
+        return True
 
     def to_int(self) -> int:
         if self.val_str.startswith("CQ_"):
@@ -136,8 +165,7 @@ class Callsign(MsgItem):
 
         val -= NTOKENS
         if val < MAX22:
-            # This is a 22-bit hash of a result
-            return lookup_callsign(0, val)
+            raise ValueError("Invalid cs representation")
 
         # Standard cs
         cs = ct_map_decode(FTX_BASECALL_CHAR_MAP, val - MAX22)
@@ -172,92 +200,178 @@ class Callsign(MsgItem):
         hash = self.hash_22()
         return hash >> 12
 
-    def __str__(self):
-        return f"{super().__str__()}/{self.flag}"
-
     def __hash__(self):
         return self.hash_22()
 
 
 class Grid(MsgItem):
+    @classmethod
+    def _validate_str(cls, val: str) -> bool:
+        return len(val) == 4 and ct_validate(FTX_GRID_CHAR_MAP, val)
+
+    @classmethod
+    def _validate_int(cls, val: int) -> bool:
+        return val <= FTX_MAX_GRID_4
+
     def to_int(self) -> int:
-        if len(self.val_str) != 4:
-            raise ValueError("Invalid grid descriptor length")
-
-        ct_validate(FTX_GRID_CHAR_MAP, self.val_str)
-
         return ct_map_encode(FTX_GRID_CHAR_MAP, self.val_str)
 
     def to_str(self) -> str:
-        if self.val_int > FTX_MAX_GRID_4:
-            raise ValueError("Invalid grid descriptor value")
-
         return ct_map_decode(FTX_GRID_CHAR_MAP, self.val_int)
 
 
 class Report(MsgItem):
+    report_regex = re.compile(r"^(R){0,1}([\+\-]{0,1})([0-9]+)$")
+
+    @classmethod
+    def _parse_report(cls, val: str) -> typing.Optional[int]:
+        if report := cls.report_regex.match(val):
+            _, sign, val = report.groups()
+
+            return int(sign + val)
+
+        return None
+
+    @classmethod
+    def _validate_str(cls, val: str) -> bool:
+        report = cls._parse_report(val)
+        return isinstance(report, int) and -35 <= report <= 35
+
+    @classmethod
+    def _validate_int(cls, val: int) -> bool:
+        return val > FTX_MAX_GRID_4
+
     def to_int(self) -> int:
-        if not (report := re.match(r"^(R){0,1}([\+\-]{0,1})([0-9]+)$", self.val_str)):
-            raise ValueError("Invalid report value")
-
-        _, sign, val = report.groups()
-
-        if not (-35 <= (report := int(val)) <= 35):
-            raise ValueError("Invalid report value")
-
-        return (FTX_MAX_GRID_4 + report + 35) | (0x8000 if sign == "-" else 0)
+        report = self._parse_report(self.val_str)
+        return FTX_MAX_GRID_4 + report + 35
 
     def to_str(self) -> str:
-        if self.val_int <= FTX_MAX_GRID_4:
-            raise ValueError("Invalid report representation")
-
         val = int(self.val_int - FTX_MAX_GRID_4 - 35)
-        if val & 0x8000:
-            val = -(val & 0x7fff)
-
         return f"R{val:+03}"
 
 
-class Token(MsgItem):
-    def to_int(self) -> int:
-        if (val := FTX_TOKEN_CODE.get(self.val_str)) is not None:
-            return val
+class _DictItem(MsgItem):
+    int_dict = None
+    str_dict = None
 
-        raise ValueError("Invalid token value")
+    @classmethod
+    def _validate_str(cls, val: str) -> bool:
+        return val in cls.int_dict
+
+    @classmethod
+    def _validate_int(cls, val: int) -> bool:
+        return val in cls.str_dict
+
+    def to_int(self) -> int:
+        return self.int_dict[self.val_str]
 
     def to_str(self) -> str:
-        if (val := FTX_TOKEN_STR.get(self.val_int)) is not None:
-            return val
-
-        raise ValueError("Invalid token representation")
+        return self.str_dict[self.val_int]
 
 
-class Extra(MsgItem):
-    def to_int(self) -> int:
-        if (val := FTX_EXTRAS_CODE.get(self.val_str)) is not None:
-            return val
-
-        raise ValueError("Invalid extra value")
-
-    def to_str(self) -> str:
-        if (val := FTX_EXTRAS_STR.get(self.val_int)) is not None:
-            return val
-
-        raise ValueError("Invalid extra representation")
+class Token(_DictItem):
+    int_dict = FTX_TOKEN_CODE
+    str_dict = FTX_TOKEN_STR
 
 
-class ResponseExtra(MsgItem):
-    def to_int(self) -> int:
-        if (val := FTX_RESPONSE_EXTRAS_CODE.get(self.val_str)) is not None:
-            return val
+class Extra(_DictItem):
+    int_dict = FTX_EXTRAS_CODE
+    str_dict = FTX_EXTRAS_STR
 
-        raise ValueError("Invalid response extra value")
 
-    def to_str(self) -> str:
-        if (val := FTX_RESPONSE_EXTRAS_STR.get(self.val_int)) is not None:
-            return val
+class ResponseExtra(_DictItem):
+    int_dict = FTX_RESPONSE_EXTRAS_CODE
+    str_dict = FTX_RESPONSE_EXTRAS_STR
 
-        raise ValueError("Invalid response extra representation")
+
+class AbstractMessage:
+    def __repr__(self):
+        return str(self)
+
+
+class StdMessage(AbstractMessage):
+    __slots__ = ("to", "de", "extra")
+
+    def __init__(self, to: typing.Union[Token, Callsign], de: Callsign, extra: typing.Union[Grid, Report, Extra]):
+        self.to = to
+        self.de = de
+        self.extra = extra
+
+    def __str__(self):
+        return f"{self.to} {self.de} {self.extra}"
+
+
+class MsgServer:
+    __slots__ = ("callsigns")
+
+    def __init__(self):
+        self.callsigns = dict()
+
+    def decode(self, payload: typing.ByteString) -> AbstractMessage:
+        msg_type = message_get_type(payload)
+
+        if msg_type == MSG_MESSAGE_TYPE_STANDARD:
+            return self._decode_std(payload)
+
+        raise NotImplemented
+
+    def decode_callsign(self, val: int):
+        if Token.validate(val):
+            return Token(val)
+
+        if val < NTOKENS + MAX22:
+            return self.callsigns.get(val, "<...>")
+
+        if Callsign.validate(val):
+            cs = Callsign(val)
+            self.callsigns[cs.hash_22()] = cs
+
+            return cs
+
+        raise ValueError
+
+    def decode_extra(self, val: int):
+        if Grid.validate(val):
+            return Grid(val)
+
+        if ResponseExtra.validate(val):
+            return ResponseExtra(val)
+
+        if Report.validate(val):
+            return Report(val)
+
+        raise ValueError
+
+    def _decode_std(self, payload: typing.ByteString) -> AbstractMessage:
+        # Extract packed fields
+        b29_to = payload[0] << 21
+        b29_to |= payload[1] << 13
+        b29_to |= payload[2] << 5
+        b29_to |= payload[3] >> 3
+        b29_to >>= 1
+
+        b29_de = (payload[3] & 0x07) << 26
+        b29_de |= payload[4] << 18
+        b29_de |= payload[5] << 10
+        b29_de |= payload[6] << 2
+        b29_de |= payload[7] >> 6
+        b29_de >>= 1
+
+        # r_flag = (payload[7] & 0x20) >> 5
+
+        b16_extra = (payload[7] & 0x1F) << 10
+        b16_extra |= payload[8] << 2
+        b16_extra |= payload[9] >> 6
+
+        # Extract cs_flags (bits 74..76)
+        # cs_flags = (payload[9] >> 3) & 0x07
+
+        call_to = self.decode_callsign(b29_to)
+        call_de = self.decode_callsign(b29_de)
+        extra = self.decode_extra(b16_extra)
+
+        # cs_flags
+        return StdMessage(call_to, call_de, extra)
 
 
 def message_encode(call_to: str, call_de: str, extra: str = "") -> typing.ByteString:
