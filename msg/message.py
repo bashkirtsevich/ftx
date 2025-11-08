@@ -10,7 +10,7 @@ from consts.msg import MSG_CALLSIGN_HASH_12_BITS, MSG_MESSAGE_TYPE_FREE_TEXT, MS
 from consts.ftx import FTX_EXTRAS_CODE, FTX_MAX_GRID_4, FTX_TOKEN_STR, FTX_TOKEN_CODE, FTX_RESPONSE_EXTRAS_CODE, \
     FTX_RESPONSE_EXTRAS_STR
 from consts.ftx import FTX_EXTRAS_STR
-from .exceptions import MSGErrorCallSignTo, MSGErrorTooLong, MSGErrorInvalidChar, MSGException
+from .exceptions import MSGErrorCallSignTo, MSGErrorTooLong, MSGErrorInvalidChar, MSGException, MSGNotImplemented
 from .exceptions import MSGErrorCallSignDe
 from .exceptions import MSGErrorGrid
 from .exceptions import MSGErrorMsgType
@@ -292,13 +292,58 @@ class AbstractMessage:
 class StdMessage(AbstractMessage):
     __slots__ = ("to", "de", "extra")
 
-    def __init__(self, to: typing.Union[Token, Callsign], de: Callsign, extra: typing.Union[Grid, Report, Extra]):
+    def __init__(self, to: typing.Union[Token, Callsign], de: Callsign,
+                 extra: typing.Union[Grid, Report, Extra, ResponseExtra]):
         self.to = to
         self.de = de
         self.extra = extra
 
     def __str__(self):
         return f"{self.to} {self.de} {self.extra}"
+
+
+class Telemetry(AbstractMessage):
+    __slots__ = ("data")
+
+    def __init__(self, data: typing.ByteString):
+        self.data = data
+
+    def _decode(self) -> typing.Generator[int, None, None]:
+        # Shift bits in payload right by 1 bit to right-align the data
+        carry = 0
+        for p_byte in self.data:
+            yield byte((carry << 7) | (p_byte >> 1))
+            carry = byte(p_byte & 0x01)
+
+    @property
+    def as_hex(self):
+        bytes = self._decode()
+        return "".join(f"{b:x}" for b in bytes)
+
+
+class FreeText(Telemetry):
+    def _decode_str(self):
+        payload = bytearray(self._decode())
+
+        ct = FTX_CHAR_TABLE_FULL
+        ct_len = len(ct)
+
+        data = ""
+        for _ in range(MSG_MESSAGE_FREE_TEXT_LEN):
+            # Divide the long integer in payload by 42
+            rem = 0
+            for i in range(MSG_MESSAGE_TELEMETRY_LEN):
+                rem = (rem << 8) | payload[i]
+                payload[i] = byte(rem // ct_len)
+                rem = rem % ct_len
+
+            data = charn(rem, ct) + data
+
+        return data.strip()
+
+    @property
+    def as_str(self):
+        return self._decode_str()
 
 
 class MsgServer:
@@ -313,9 +358,18 @@ class MsgServer:
         if msg_type == MSG_MESSAGE_TYPE_STANDARD:
             return self._decode_std(payload)
 
-        raise NotImplemented
+        elif msg_type == MSG_MESSAGE_TYPE_NONSTD_CALL:
+            return self._decode_nonstd(payload)
 
-    def decode_callsign(self, val: int):
+        elif msg_type == MSG_MESSAGE_TYPE_FREE_TEXT:
+            return FreeText(payload)
+
+        elif msg_type == MSG_MESSAGE_TYPE_TELEMETRY:
+            return Telemetry(payload)
+
+        raise MSGNotImplemented(f"Unsupported msg type {msg_type}")
+
+    def _decode_callsign(self, val: int):
         if Token.validate(val):
             return Token(val)
 
@@ -330,7 +384,7 @@ class MsgServer:
 
         raise ValueError
 
-    def decode_extra(self, val: int):
+    def _decode_extra(self, val: int):
         if Grid.validate(val):
             return Grid(val)
 
@@ -366,11 +420,55 @@ class MsgServer:
         # Extract cs_flags (bits 74..76)
         # cs_flags = (payload[9] >> 3) & 0x07
 
-        call_to = self.decode_callsign(b29_to)
-        call_de = self.decode_callsign(b29_de)
-        extra = self.decode_extra(b16_extra)
+        call_to = self._decode_callsign(b29_to)
+        call_de = self._decode_callsign(b29_de)
+        extra = self._decode_extra(b16_extra)
 
-        # cs_flags
+        return StdMessage(call_to, call_de, extra)
+
+    def _decode_nonstd(self, payload: typing.ByteString) -> AbstractMessage:
+        # non-standard messages, code originally by KD8CEC
+        n12 = payload[0] << 4  # 11 ~ 4 : 8
+        n12 |= payload[1] >> 4  # 3 ~ 0  : 12
+
+        n58 = (payload[1] & 0x0F) << 54  # 57 ~ 54 : 4
+        n58 |= payload[2] << 46  # 53 ~ 46 : 12
+        n58 |= payload[3] << 38  # 45 ~ 38 : 12
+        n58 |= payload[4] << 30  # 37 ~ 30 : 12
+        n58 |= payload[5] << 22  # 29 ~ 22 : 12
+        n58 |= payload[6] << 14  # 21 ~ 14 : 12
+        n58 |= payload[7] << 6  # 13 ~ 6  : 12
+        n58 |= payload[8] >> 2  # 5 ~ 0   : 765432 10
+
+        iflip = (payload[8] >> 1) & 0x01  # 76543210
+
+        nrpt = (payload[8] & 0x01) << 1
+        nrpt |= payload[9] >> 7  # 76543210
+
+        icq = (payload[9] >> 6) & 0x01
+
+        # Extract i3 (bits 74..76)
+        # i3 = (payload[9] >> 3) & 0x07  # UNUSED
+
+        # Decode one of the calls from 58 bit encoded string
+        call_decoded = unpack58(n58)
+
+        # Decode the other call from hash lookup table
+        call_3 = lookup_callsign(MSG_CALLSIGN_HASH_12_BITS, n12)
+
+        # Possibly flip them around
+        call_1 = call_decoded if iflip else call_3
+        call_2 = call_3 if iflip else call_decoded
+
+        if not icq:
+            call_to = Callsign(call_1)
+            extra = ResponseExtra(nrpt)
+        else:
+            call_to = Token("CQ")
+            extra = ResponseExtra("")
+
+        call_de = Callsign(call_2)
+
         return StdMessage(call_to, call_de, extra)
 
 
