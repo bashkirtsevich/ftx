@@ -10,7 +10,8 @@ from consts.msg import MSG_CALLSIGN_HASH_12_BITS, MSG_MESSAGE_TYPE_FREE_TEXT, MS
 from consts.ftx import FTX_EXTRAS_CODE, FTX_MAX_GRID_4, FTX_TOKEN_STR, FTX_TOKEN_CODE, FTX_RESPONSE_EXTRAS_CODE, \
     FTX_RESPONSE_EXTRAS_STR
 from consts.ftx import FTX_EXTRAS_STR
-from .exceptions import MSGErrorCallSignTo, MSGErrorTooLong, MSGErrorInvalidChar, MSGException, MSGNotImplemented
+from .exceptions import MSGErrorCallSignTo, MSGErrorTooLong, MSGErrorInvalidChar, MSGException, MSGNotImplemented, \
+    MSGInvalidCallsign
 from .exceptions import MSGErrorCallSignDe
 from .exceptions import MSGErrorGrid
 from .exceptions import MSGErrorMsgType
@@ -90,6 +91,58 @@ class MsgItem(metaclass=ABCMeta):
 
 
 class Callsign(MsgItem):
+    def hash_22(self):
+        ct = FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH
+        val = ct_encode(ct, self.val_str)
+
+        # pretend to have trailing whitespace (with j=0, index of ' ')
+        if (val_len := len(self.val_str)) < 11:
+            val *= len(ct) ** (11 - val_len)
+
+        hash = ((47055833459 * val) >> (64 - 22)) & 0x3fffff
+        return hash
+
+    def hash_12(self):
+        hash = self.hash_22()
+        return hash >> 10
+
+    def hash_10(self):
+        hash = self.hash_22()
+        return hash >> 12
+
+    def __hash__(self):
+        return self.hash_22()
+
+
+class DummyCallsign(Callsign):
+    @classmethod
+    def _validate_str(cls, val: str) -> bool:
+        return True
+
+    @classmethod
+    def _validate_int(cls, val: int) -> bool:
+        return True
+
+    def to_int(self) -> int:
+        return -1
+
+    def to_str(self) -> str:
+        return "<...>"
+
+    def hash_22(self):
+        return -1
+
+    def hash_12(self):
+        return -1
+
+    def hash_10(self):
+        return -1
+
+
+_DummyCallsign = DummyCallsign(-1)
+
+
+class StdCallsign(Callsign):
     @classmethod
     def _validate_str(cls, val: str) -> bool:
         return True
@@ -180,28 +233,6 @@ class Callsign(MsgItem):
 
         # Skip trailing and leading whitespace in case of a short cs
         return cs.strip()
-
-    def hash_22(self):
-        ct = FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH
-        val = ct_encode(ct, self.val_str)
-
-        # pretend to have trailing whitespace (with j=0, index of ' ')
-        if (val_len := len(self.val_str)) < 11:
-            val *= len(ct) ** (11 - val_len)
-
-        hash = ((47055833459 * val) >> (64 - 22)) & 0x3fffff
-        return hash
-
-    def hash_12(self):
-        hash = self.hash_22()
-        return hash >> 10
-
-    def hash_10(self):
-        hash = self.hash_22()
-        return hash >> 12
-
-    def __hash__(self):
-        return self.hash_22()
 
 
 class Grid(MsgItem):
@@ -317,8 +348,8 @@ class Telemetry(AbstractMessage):
 
     @property
     def as_hex(self):
-        bytes = self._decode()
-        return "".join(f"{b:x}" for b in bytes)
+        gen = self._decode()
+        return "".join(f"{b:x}" for b in gen)
 
 
 class FreeText(Telemetry):
@@ -347,10 +378,23 @@ class FreeText(Telemetry):
 
 
 class MsgServer:
-    __slots__ = ("callsigns")
+    __slots__ = ("callsigns",)
 
     def __init__(self):
         self.callsigns = dict()
+
+    def _get_cs(self, cs_hash: int) -> Callsign:
+        return self.callsigns.get(cs_hash, _DummyCallsign)
+
+    def _save_cs(self, callsign: Callsign) -> Callsign:
+        hashes = [callsign.hash_22(),
+                  callsign.hash_12(),
+                  callsign.hash_10()]
+
+        for h in hashes:
+            self.callsigns[h] = callsign
+
+        return callsign
 
     def decode(self, payload: typing.ByteString) -> AbstractMessage:
         msg_type = message_get_type(payload)
@@ -374,17 +418,16 @@ class MsgServer:
             return Token(val)
 
         if val < NTOKENS + MAX22:
-            return self.callsigns.get(val, "<...>")
+            return self._get_cs(val)
 
-        if Callsign.validate(val):
-            cs = Callsign(val)
-            self.callsigns[cs.hash_22()] = cs
+        if StdCallsign.validate(val):
+            cs = StdCallsign(val)
+            return self._save_cs(cs)
 
-            return cs
+        raise MSGInvalidCallsign
 
-        raise ValueError
-
-    def _decode_extra(self, val: int):
+    @staticmethod
+    def _decode_extra(val: int):
         if Grid.validate(val):
             return Grid(val)
 
@@ -428,8 +471,8 @@ class MsgServer:
 
     def _decode_nonstd(self, payload: typing.ByteString) -> AbstractMessage:
         # non-standard messages, code originally by KD8CEC
-        n12 = payload[0] << 4  # 11 ~ 4 : 8
-        n12 |= payload[1] >> 4  # 3 ~ 0  : 12
+        hash_12 = payload[0] << 4  # 11 ~ 4 : 8
+        hash_12 |= payload[1] >> 4  # 3 ~ 0  : 12
 
         n58 = (payload[1] & 0x0F) << 54  # 57 ~ 54 : 4
         n58 |= payload[2] << 46  # 53 ~ 46 : 12
@@ -454,20 +497,20 @@ class MsgServer:
         call_decoded = unpack58(n58)
 
         # Decode the other call from hash lookup table
-        call_3 = lookup_callsign(MSG_CALLSIGN_HASH_12_BITS, n12)
+        call_3 = self.callsigns.get(hash_12, "<...>")
 
         # Possibly flip them around
         call_1 = call_decoded if iflip else call_3
         call_2 = call_3 if iflip else call_decoded
 
         if not icq:
-            call_to = Callsign(call_1)
+            call_to = StdCallsign(call_1)
             extra = ResponseExtra(nrpt)
         else:
             call_to = Token("CQ")
             extra = ResponseExtra("")
 
-        call_de = Callsign(call_2)
+        call_de = StdCallsign(call_2)
 
         return StdMessage(call_to, call_de, extra)
 
