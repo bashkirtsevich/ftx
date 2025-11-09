@@ -5,7 +5,7 @@ from scipy.io.wavfile import read
 
 from consts.ftx import FTX_PROTOCOL_FT8, FTX_PROTOCOL_FT4
 from decoders import FTXMonitor
-from msg.message import message_decode
+from msg.message import message_decode, MsgServer
 
 kFreq_osr = 2  # Frequency oversampling rate (bin subdivision)
 kTime_osr = 4  # Time oversampling rate (symbol subdivision)
@@ -16,7 +16,7 @@ def main():
 
     is_ft4 = False
 
-    sample_rate, data = read("examples/signal.wav")
+    sample_rate, data = read("examples/ft81.wav")
     # sample_rate, data = read("examples/7signals.wav")
     # sample_rate, data = read("210703_133430.wav")
 
@@ -34,6 +34,8 @@ def main():
         protocol=protocol
     )
 
+    msg_svr = MsgServer()
+
     frame_pos = 0
     while True:
         eof = frame_pos >= len(signal) - mon.block_size
@@ -42,9 +44,8 @@ def main():
             print(f"Waterfall accumulated {mon.num_blocks} symbols")
 
             ts1 = time.monotonic()
-            for i, it in enumerate(mon.decode_mp()):
-                call_to_rx, call_de_rx, extra_rx = message_decode(it.payload)
-                text = " ".join([call_to_rx, call_de_rx or "", extra_rx or ""])
+            for i, it in enumerate(mon.decode()):
+                msg = msg_svr.decode(it.payload)
 
                 # Fake WSJT-X-like output for now
                 print(
@@ -52,7 +53,7 @@ def main():
                     f"{it.snr:+06.2f}dB\t"
                     f"{it.dT:-.2f}s\t"
                     f"{it.dF:.2f}Hz\t"
-                    f"{text}"
+                    f"{msg}"
                 )
 
             mon.num_blocks = 0
