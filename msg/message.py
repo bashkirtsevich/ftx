@@ -155,7 +155,8 @@ class Callsign(BaseCallsign):
         if self.val_str.startswith("CQ_"):
             return self._pack_cq_call(self.val_str[3:])
 
-        if val := self._pack_basecall(self.val_str):
+        if len(self.val_str) > 2:
+            val = self._pack_basecall(self.val_str)
             return NTOKENS + MAX22 + val
 
         return NTOKENS + self.hash_22()
@@ -172,11 +173,14 @@ class Callsign(BaseCallsign):
 
         return ct_encode(FTX_CHAR_TABLE_LETTERS_SPACE, cs) + 1003
 
-    @staticmethod
-    def _pack_basecall(cs: str) -> typing.Optional[int]:
-        if (val_len := len(cs)) <= 2:
-            return None
+    @classmethod
+    def _pack_basecall(cls, cs: str) -> int:
+        cs_norm = cls._normalize_cs(cs)
+        return ct_map_encode(FTX_BASECALL_CHAR_MAP, cs_norm)
 
+    @staticmethod
+    def _normalize_cs(cs: str) -> str:
+        val_len = len(cs)
         # Work-around for Swaziland prefix: 3DA0XYZ -> 3D0XYZ
         if cs.startswith("3DA0") and 4 < val_len <= 7:
             cs_norm = f"3D0{cs[4:]}"
@@ -193,8 +197,20 @@ class Callsign(BaseCallsign):
             cs_norm = ""
 
         cs_norm += " " * (6 - len(cs_norm))  # Normalize to 6 letters
+        return cs_norm
 
-        return ct_map_encode(FTX_BASECALL_CHAR_MAP, cs_norm)
+    @staticmethod
+    def _denormalize_cs(cs: str) -> str:
+        # Copy cs to 6 character buffer
+        if cs.startswith("3D0") and cs[3] != " ":
+            # Work-around for Swaziland prefix: 3D0XYZ -> 3DA0XYZ
+            cs = f"3DA0{cs[3:]}"
+        elif cs[0] == "Q" and cs[1].isalpha():
+            # Work-around for Guinea prefixes: QA0XYZ -> 3XA0XYZ
+            cs = f"3X{cs[1:]}"
+
+        # Skip trailing and leading whitespace in case of a short cs
+        return cs.strip()
 
     def to_str(self) -> str:
         # Check for special tokens DE, QRZ, CQ, CQ_nnn, CQ_aaaa
@@ -222,17 +238,7 @@ class Callsign(BaseCallsign):
 
         # Standard cs
         cs = ct_map_decode(FTX_BASECALL_CHAR_MAP, val - MAX22)
-
-        # Copy cs to 6 character buffer
-        if cs.startswith("3D0") and cs[3] != " ":
-            # Work-around for Swaziland prefix: 3D0XYZ -> 3DA0XYZ
-            cs = f"3DA0{cs[3:]}"
-        elif cs[0] == "Q" and cs[1].isalpha():
-            # Work-around for Guinea prefixes: QA0XYZ -> 3XA0XYZ
-            cs = f"3X{cs[1:]}"
-
-        # Skip trailing and leading whitespace in case of a short cs
-        return cs.strip()
+        return self._denormalize_cs(cs)
 
 
 class CallsignExt(BaseCallsign):
