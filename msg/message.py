@@ -123,6 +123,9 @@ class DummyCallsign(BaseCallsign):
     def _validate_int(cls, val: int) -> bool:
         return True
 
+    def __init__(self):
+        super().__init__(-1)
+
     def to_int(self) -> int:
         return -1
 
@@ -139,7 +142,7 @@ class DummyCallsign(BaseCallsign):
         return -1
 
 
-_DummyCallsign = DummyCallsign(-1)
+_DummyCallsign = DummyCallsign()
 
 
 class Callsign(BaseCallsign):
@@ -208,7 +211,6 @@ class Callsign(BaseCallsign):
         elif cs[0] == "Q" and cs[1].isalpha():
             # Work-around for Guinea prefixes: QA0XYZ -> 3XA0XYZ
             cs = f"3X{cs[1:]}"
-
         # Skip trailing and leading whitespace in case of a short cs
         return cs.strip()
 
@@ -225,9 +227,8 @@ class Callsign(BaseCallsign):
 
             if val <= 532443:
                 # CQ ABCD with 4 alphanumeric symbols
-                aaaa = ct_decode(FTX_CHAR_TABLE_LETTERS_SPACE, val - 1003, l=4)
-
-                return f"CQ_{aaaa.strip()}"
+                cq_tail = ct_decode(FTX_CHAR_TABLE_LETTERS_SPACE, val - 1003, l=4)
+                return f"CQ_{cq_tail.strip()}"
 
             # unspecified
             raise ValueError("Invalid cs specification")
