@@ -90,7 +90,7 @@ class MsgItem(metaclass=ABCMeta):
         return str(self)
 
 
-class Callsign(MsgItem):
+class BaseCallsign(MsgItem):
     def hash_22(self):
         ct = FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH
         val = ct_encode(ct, self.val_str)
@@ -114,7 +114,7 @@ class Callsign(MsgItem):
         return self.hash_22()
 
 
-class DummyCallsign(Callsign):
+class DummyCallsign(BaseCallsign):
     @classmethod
     def _validate_str(cls, val: str) -> bool:
         return True
@@ -142,7 +142,7 @@ class DummyCallsign(Callsign):
 _DummyCallsign = DummyCallsign(-1)
 
 
-class StdCallsign(Callsign):
+class Callsign(BaseCallsign):
     @classmethod
     def _validate_str(cls, val: str) -> bool:
         return True
@@ -235,6 +235,24 @@ class StdCallsign(Callsign):
         return cs.strip()
 
 
+class CallsignExt(BaseCallsign):
+    @classmethod
+    def _validate_str(cls, val: str) -> bool:
+        return len(val) <= 10 and all(c in FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH for c in val)
+
+    @classmethod
+    def _validate_int(cls, val: int) -> bool:
+        return True
+
+    def to_int(self) -> int:
+        val = "".join(c for c in self.val_str if c not in "<>")
+        return ct_encode(FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH, val)
+
+    def to_str(self) -> str:
+        val = ct_decode(FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH, self.val_int, 10)
+        return val.strip()
+
+
 class Grid(MsgItem):
     @classmethod
     def _validate_str(cls, val: str) -> bool:
@@ -305,14 +323,64 @@ class Token(_DictItem):
     str_dict = FTX_TOKEN_STR
 
 
+class TokenDE(Token):
+    def __init__(self):
+        super().__init__("DE")
+
+
+class TokenQRZ(Token):
+    def __init__(self):
+        super().__init__("QRZ")
+
+
+class TokenCQ(Token):
+    def __init__(self):
+        super().__init__("CQ")
+
+
 class Extra(_DictItem):
     int_dict = FTX_EXTRAS_CODE
     str_dict = FTX_EXTRAS_STR
 
 
+class ExtraRRR(Extra):
+    def __init__(self):
+        super().__init__("RRR")
+
+
+class ExtraRR73(Extra):
+    def __init__(self):
+        super().__init__("RR73")
+
+
+class Extra73(Extra):
+    def __init__(self):
+        super().__init__("73")
+
+
 class ResponseExtra(_DictItem):
     int_dict = FTX_RESPONSE_EXTRAS_CODE
     str_dict = FTX_RESPONSE_EXTRAS_STR
+
+
+class ResponseExtraEmpty(ResponseExtra):
+    def __init__(self):
+        super().__init__("")
+
+
+class ResponseExtraRRR(ResponseExtra):
+    def __init__(self):
+        super().__init__("RRR")
+
+
+class ResponseExtraRR73(ResponseExtra):
+    def __init__(self):
+        super().__init__("RR73")
+
+
+class ResponseExtra73(ResponseExtra):
+    def __init__(self):
+        super().__init__("73")
 
 
 class AbstractMessage:
@@ -323,7 +391,7 @@ class AbstractMessage:
 class StdMessage(AbstractMessage):
     __slots__ = ("to", "de", "extra")
 
-    def __init__(self, to: typing.Union[Token, Callsign], de: Callsign,
+    def __init__(self, to: typing.Union[Token, BaseCallsign], de: BaseCallsign,
                  extra: typing.Union[Grid, Report, Extra, ResponseExtra]):
         self.to = to
         self.de = de
@@ -383,10 +451,10 @@ class MsgServer:
     def __init__(self):
         self.callsigns = dict()
 
-    def _get_cs(self, cs_hash: int) -> Callsign:
+    def _get_cs(self, cs_hash: int) -> BaseCallsign:
         return self.callsigns.get(cs_hash, _DummyCallsign)
 
-    def _save_cs(self, callsign: Callsign) -> Callsign:
+    def _save_cs(self, callsign: BaseCallsign) -> BaseCallsign:
         hashes = [callsign.hash_22(),
                   callsign.hash_12(),
                   callsign.hash_10()]
@@ -420,8 +488,8 @@ class MsgServer:
         if val < NTOKENS + MAX22:
             return self._get_cs(val)
 
-        if StdCallsign.validate(val):
-            cs = StdCallsign(val)
+        if Callsign.validate(val):
+            cs = Callsign(val)
             return self._save_cs(cs)
 
         raise MSGInvalidCallsign
@@ -446,6 +514,7 @@ class MsgServer:
         b29_to |= payload[2] << 5
         b29_to |= payload[3] >> 3
         b29_to >>= 1
+        call_to = self._decode_callsign(b29_to)
 
         b29_de = (payload[3] & 0x07) << 26
         b29_de |= payload[4] << 18
@@ -453,64 +522,57 @@ class MsgServer:
         b29_de |= payload[6] << 2
         b29_de |= payload[7] >> 6
         b29_de >>= 1
+        call_de = self._decode_callsign(b29_de)
 
         # r_flag = (payload[7] & 0x20) >> 5
 
         b16_extra = (payload[7] & 0x1F) << 10
         b16_extra |= payload[8] << 2
         b16_extra |= payload[9] >> 6
+        extra = self._decode_extra(b16_extra)
 
         # Extract cs_flags (bits 74..76)
         # cs_flags = (payload[9] >> 3) & 0x07
-
-        call_to = self._decode_callsign(b29_to)
-        call_de = self._decode_callsign(b29_de)
-        extra = self._decode_extra(b16_extra)
 
         return StdMessage(call_to, call_de, extra)
 
     def _decode_nonstd(self, payload: typing.ByteString) -> AbstractMessage:
         # non-standard messages, code originally by KD8CEC
+        # Decode the other call from hash lookup table
         hash_12 = payload[0] << 4  # 11 ~ 4 : 8
         hash_12 |= payload[1] >> 4  # 3 ~ 0  : 12
-
-        n58 = (payload[1] & 0x0F) << 54  # 57 ~ 54 : 4
-        n58 |= payload[2] << 46  # 53 ~ 46 : 12
-        n58 |= payload[3] << 38  # 45 ~ 38 : 12
-        n58 |= payload[4] << 30  # 37 ~ 30 : 12
-        n58 |= payload[5] << 22  # 29 ~ 22 : 12
-        n58 |= payload[6] << 14  # 21 ~ 14 : 12
-        n58 |= payload[7] << 6  # 13 ~ 6  : 12
-        n58 |= payload[8] >> 2  # 5 ~ 0   : 765432 10
-
-        iflip = (payload[8] >> 1) & 0x01  # 76543210
-
-        nrpt = (payload[8] & 0x01) << 1
-        nrpt |= payload[9] >> 7  # 76543210
-
-        icq = (payload[9] >> 6) & 0x01
-
-        # Extract i3 (bits 74..76)
-        # i3 = (payload[9] >> 3) & 0x07  # UNUSED
+        cs_3 = self._get_cs(hash_12)
 
         # Decode one of the calls from 58 bit encoded string
-        call_decoded = unpack58(n58)
+        b58_cs = (payload[1] & 0x0F) << 54  # 57 ~ 54 : 4
+        b58_cs |= payload[2] << 46  # 53 ~ 46 : 12
+        b58_cs |= payload[3] << 38  # 45 ~ 38 : 12
+        b58_cs |= payload[4] << 30  # 37 ~ 30 : 12
+        b58_cs |= payload[5] << 22  # 29 ~ 22 : 12
+        b58_cs |= payload[6] << 14  # 21 ~ 14 : 12
+        b58_cs |= payload[7] << 6  # 13 ~ 6  : 12
+        b58_cs |= payload[8] >> 2  # 5 ~ 0   : 765432 10
+        cs_decoded = CallsignExt(b58_cs)
 
-        # Decode the other call from hash lookup table
-        call_3 = self.callsigns.get(hash_12, "<...>")
+        self._save_cs(cs_decoded)
 
         # Possibly flip them around
-        call_1 = call_decoded if iflip else call_3
-        call_2 = call_3 if iflip else call_decoded
+        flag_flip = bool((payload[8] >> 1) & 0x01)  # 76543210
+        cs_1 = cs_decoded if flag_flip else cs_3
+        cs_2 = cs_3 if flag_flip else cs_decoded
 
-        if not icq:
-            call_to = StdCallsign(call_1)
-            extra = ResponseExtra(nrpt)
+        flag_cq = bool((payload[9] >> 6) & 0x01)
+        if flag_cq:
+            call_to = TokenCQ()
+            extra = ResponseExtraEmpty()
         else:
-            call_to = Token("CQ")
-            extra = ResponseExtra("")
+            call_to = cs_1
 
-        call_de = StdCallsign(call_2)
+            b2_xtra = (payload[8] & 0x01) << 1
+            b2_xtra |= payload[9] >> 7  # 76543210
+            extra = ResponseExtra(b2_xtra)
+
+        call_de = cs_2
 
         return StdMessage(call_to, call_de, extra)
 
