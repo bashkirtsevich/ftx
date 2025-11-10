@@ -86,6 +86,9 @@ class MsgItem(metaclass=ABCMeta):
     def __str__(self):
         return self.val_str
 
+    def __int__(self):
+        return self.val_int
+
     def __repr__(self):
         return str(self)
 
@@ -395,7 +398,7 @@ class AbstractMessage(metaclass=ABCMeta):
         return str(self)
 
     @abstractmethod
-    def encode(self) -> typing.ByteString:
+    def encode(self, **kwargs) -> typing.ByteString:
         ...
 
     @classmethod
@@ -447,6 +450,33 @@ class StdMessage(AbstractMessage):
 
         raise ValueError
 
+    def encode(self, **kwargs) -> typing.ByteString:
+        sh_to = 0  # TODO
+        sh_de = 0  # TODO
+
+        b29_to = dword(int(self.to) << 1 | sh_to)
+        b29_de = dword(int(self.de) << 1 | sh_de)
+        b16_extra = int(self.extra)
+
+        suffix = 1  # TODO
+
+        # Pack into (28 + 1) + (28 + 1) + (1 + 15) + 3 bits
+        items = [
+            byte(b29_to >> 21),
+            byte(b29_to >> 13),
+            byte(b29_to >> 5),
+            byte(b29_to << 3) | byte(b29_de >> 26),
+
+            byte(b29_de >> 18),
+            byte(b29_de >> 10),
+            byte(b29_de >> 2),
+            byte(b29_de << 6) | byte(b16_extra >> 10),
+
+            byte(b16_extra >> 2),
+            byte(b16_extra << 6) | byte(suffix << 3)
+        ]
+        return bytearray(b for b in items)
+
     @classmethod
     def decode(cls, payload: typing.ByteString, **kwargs) -> AbstractMessage:
         msg_server = kwargs.get("msg_server")
@@ -480,6 +510,50 @@ class StdMessage(AbstractMessage):
 
 
 class NonStdMessage(StdMessage):
+    def encode(self, **kwargs) -> typing.ByteString:
+        msg_server = kwargs.get("msg_server")
+
+        is_cq = isinstance(self.to, TokenCQ)
+
+        if is_cq:
+            flip = False
+            n12 = 0
+            call_58 = self.to
+            xtra = 0
+        else:
+            # choose which of the callsigns to encode as plain-text (58 bits) or hash (12 bits)
+            flip = isinstance(self.de, CallsignExt)
+
+            call_12 = self.de if flip else self.to
+            call_58 = self.to if flip else self.de
+
+            n12 = call_12.hash_12()
+            if msg_server:
+                msg_server._save_cs(call_12)
+
+            xtra = int(self.extra)
+
+        n58 = int(call_58)
+
+        # Pack into 12 + 58 + 1 + 2 + 1 + 3 == 77 bits
+        i3 = 4
+        items = [
+            byte(n12 >> 4),
+            byte(n12 << 4) | byte(n58 >> 54),
+
+            byte(n58 >> 46),
+            byte(n58 >> 38),
+            byte(n58 >> 30),
+            byte(n58 >> 22),
+            byte(n58 >> 14),
+            byte(n58 >> 6),
+            byte(n58 << 2) | byte(int(flip) << 1) | byte(xtra >> 1),
+
+            byte(xtra << 7) | byte(int(is_cq) << 6) | byte(i3 << 3),
+        ]
+
+        return bytearray(b for b in items)
+
     @classmethod
     def decode(cls, payload: typing.ByteString, **kwargs) -> AbstractMessage:
         msg_server = kwargs.get("msg_server")
@@ -544,7 +618,7 @@ class Telemetry(AbstractMessage):
             yield byte((carry << 7) | (p_byte >> 1))
             carry = byte(p_byte & 0x01)
 
-    def encode(self) -> typing.ByteString:
+    def encode(self, **kwargs) -> typing.ByteString:
         # Shift bits in payload right by 1 bit to right-align the data
         carry = 0
         data = bytearray(b"\x00" * len(self.data))
