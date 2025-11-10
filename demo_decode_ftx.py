@@ -5,7 +5,7 @@ from scipy.io.wavfile import read
 
 from consts.ftx import FTX_PROTOCOL_FT8, FTX_PROTOCOL_FT4
 from decoders import FTXMonitor
-from msg.message import message_decode, MsgServer
+from msg.message import MsgServer
 
 kFreq_osr = 2  # Frequency oversampling rate (bin subdivision)
 kTime_osr = 4  # Time oversampling rate (symbol subdivision)
@@ -16,7 +16,7 @@ def main():
 
     is_ft4 = False
 
-    sample_rate, data = read("examples/ft81.wav")
+    sample_rate, data = read("examples/signal.wav")
     # sample_rate, data = read("examples/7signals.wav")
     # sample_rate, data = read("210703_133430.wav")
 

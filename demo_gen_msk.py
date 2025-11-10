@@ -7,7 +7,7 @@ from scipy.io.wavfile import write
 from scipy.signal import decimate
 
 from encoders import msk144_encode
-from msg.message import message_encode, message_encode_free
+from msg.message import *
 from mod import synth_msk
 
 
@@ -22,18 +22,11 @@ def gen_msk144_tones(payload: typing.ByteString) -> npt.NDArray[np.int64]:
     return tones
 
 
-def gen_free_text_tones(msg: str) -> npt.NDArray[np.int64]:
-    payload = message_encode_free(msg)
-    return gen_msk144_tones(payload)
-
-
-def gen_msg_tones(call_to: str, call_de: str, extra: str = "") -> npt.NDArray[np.int64]:
-    payload = message_encode(call_to, call_de, extra)
-    return gen_msk144_tones(payload)
-
-
 def main():
-    tones = gen_msg_tones("CQ", "R9FEU", "LO87")
+    # msg = FreeText("0123456789AB")
+    msg = StdMessage(TokenCQ(), Callsign("R9FEU"), Grid("LO87"))
+    payload = msg.encode()
+    tones = gen_msk144_tones(payload)
 
     # Gen base signal
     sample_rate = 48000

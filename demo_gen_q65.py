@@ -7,7 +7,7 @@ from scipy.io.wavfile import write
 from scipy.signal import decimate
 
 from encoders import q65_encode
-from msg.message import message_encode, message_encode_free
+from msg.message import *
 from mod import synth_fsk
 
 
@@ -41,18 +41,11 @@ def gen_q65_tones(payload: typing.ByteString) -> npt.NDArray[np.int64]:
     return tones
 
 
-def gen_free_text_tones(msg: str) -> npt.NDArray[np.int64]:
-    payload = message_encode_free(msg)
-    return gen_q65_tones(payload)
-
-
-def gen_msg_tones(call_to: str, call_de: str, extra: str = "") -> npt.NDArray[np.int64]:
-    payload = message_encode(call_to, call_de, extra)
-    return gen_q65_tones(payload)
-
-
 def main():
-    tones = gen_msg_tones("CQ", "R9FEU", "LO87")
+    # msg = FreeText("0123456789AB")
+    msg = StdMessage(TokenCQ(), Callsign("R9FEU"), Grid("LO87"))
+    payload = msg.encode()
+    tones = gen_q65_tones(payload)
 
     sample_rate = 48000
     signal = gen_signal(tones, sample_rate, f0=1000, q65_type=1, period=30)

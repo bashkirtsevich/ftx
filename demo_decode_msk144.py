@@ -3,11 +3,13 @@ import time
 from scipy.io.wavfile import read
 
 from decoders import MSK144Monitor
-from msg.message import message_decode
+from msg.message import MsgServer
 
 
 def main():
     sample_rate, data = read("examples/signal.wav")
+
+    msg_svr = MsgServer()
 
     mon = MSK144Monitor(sample_rate=sample_rate)
     mon.monitor_process(data)
@@ -15,8 +17,7 @@ def main():
     ts1 = time.monotonic()
 
     for it in mon.decode(tm_slot_start=0):
-        msg = message_decode(it.payload)
-        msg_text = " ".join(it for it in msg if isinstance(it, str))
+        msg = msg_svr.decode(it.payload)
 
         print(
             f"dB: {it.snr:.3f}\t"
@@ -27,7 +28,7 @@ def main():
             f"Eye opening: {it.eye_open:.3f}\t"
             f"Bit errors: {it.bit_err}\t"
             f"CRC: {it.crc}\t"
-            f"Message text: {msg_text}"
+            f"Message text: {msg}"
         )
 
     ts2 = time.monotonic()
