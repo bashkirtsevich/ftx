@@ -390,9 +390,14 @@ class ResponseExtra73(ResponseExtra):
         super().__init__("73")
 
 
-class AbstractMessage:
+class AbstractMessage(metaclass=ABCMeta):
     def __repr__(self):
         return str(self)
+
+    @classmethod
+    @abstractmethod
+    def decode(cls, payload: typing.ByteString, **kwargs) -> "AbstractMessage":
+        ...
 
 
 class StdMessage(AbstractMessage):
@@ -407,6 +412,116 @@ class StdMessage(AbstractMessage):
     def __str__(self):
         return f"{self.to} {self.de} {self.extra}"
 
+    @staticmethod
+    def _decode_callsign(val: int, msg_server: typing.Optional["MsgServer"] = None):
+        if Token.validate(val):
+            return Token(val)
+
+        if val < NTOKENS + MAX22:
+            if msg_server:
+                return msg_server._get_cs(val)
+            return _DummyCallsign
+
+        if Callsign.validate(val):
+            cs = Callsign(val)
+            if msg_server:
+                return msg_server._save_cs(cs)
+            return cs
+
+        raise MSGInvalidCallsign
+
+    @staticmethod
+    def _decode_extra(val: int):
+        if Grid.validate(val):
+            return Grid(val)
+
+        if ResponseExtra.validate(val):
+            return ResponseExtra(val)
+
+        if Report.validate(val):
+            return Report(val)
+
+        raise ValueError
+
+    @classmethod
+    def decode(cls, payload: typing.ByteString, **kwargs) -> AbstractMessage:
+        msg_server = kwargs.get("msg_server")
+
+        # Extract packed fields
+        b29_to = payload[0] << 21
+        b29_to |= payload[1] << 13
+        b29_to |= payload[2] << 5
+        b29_to |= payload[3] >> 3
+        b29_to >>= 1
+        call_to = cls._decode_callsign(b29_to, msg_server)
+
+        b29_de = (payload[3] & 0x07) << 26
+        b29_de |= payload[4] << 18
+        b29_de |= payload[5] << 10
+        b29_de |= payload[6] << 2
+        b29_de |= payload[7] >> 6
+        b29_de >>= 1
+        call_de = cls._decode_callsign(b29_de, msg_server)
+
+        # r_flag = (payload[7] & 0x20) >> 5
+
+        b16_extra = (payload[7] & 0x1F) << 10
+        b16_extra |= payload[8] << 2
+        b16_extra |= payload[9] >> 6
+        extra = cls._decode_extra(b16_extra)
+
+        # Extract cs_flags (bits 74..76)
+        # cs_flags = (payload[9] >> 3) & 0x07
+        return cls(call_to, call_de, extra)
+
+
+class NonStdMessage(StdMessage):
+    @classmethod
+    def decode(cls, payload: typing.ByteString, **kwargs) -> AbstractMessage:
+        msg_server = kwargs.get("msg_server")
+        # non-standard messages, code originally by KD8CEC
+        # Decode the other call from hash lookup table
+        hash_12 = payload[0] << 4  # 11 ~ 4 : 8
+        hash_12 |= payload[1] >> 4  # 3 ~ 0  : 12
+        if msg_server:
+            cs_3 = msg_server._get_cs(hash_12)
+        else:
+            cs_3 = _DummyCallsign
+
+        # Decode one of the calls from 58 bit encoded string
+        b58_cs = (payload[1] & 0x0F) << 54  # 57 ~ 54 : 4
+        b58_cs |= payload[2] << 46  # 53 ~ 46 : 12
+        b58_cs |= payload[3] << 38  # 45 ~ 38 : 12
+        b58_cs |= payload[4] << 30  # 37 ~ 30 : 12
+        b58_cs |= payload[5] << 22  # 29 ~ 22 : 12
+        b58_cs |= payload[6] << 14  # 21 ~ 14 : 12
+        b58_cs |= payload[7] << 6  # 13 ~ 6  : 12
+        b58_cs |= payload[8] >> 2  # 5 ~ 0   : 765432 10
+        cs_decoded = CallsignExt(b58_cs)
+
+        if msg_server:
+            msg_server._save_cs(cs_decoded)
+
+        # Possibly flip them around
+        flag_flip = bool((payload[8] >> 1) & 0x01)  # 76543210
+        cs_1 = cs_decoded if flag_flip else cs_3
+        cs_2 = cs_3 if flag_flip else cs_decoded
+
+        flag_cq = bool((payload[9] >> 6) & 0x01)
+        if flag_cq:
+            call_to = TokenCQ()
+            extra = ResponseExtraEmpty()
+        else:
+            call_to = cs_1
+
+            b2_xtra = (payload[8] & 0x01) << 1
+            b2_xtra |= payload[9] >> 7  # 76543210
+            extra = Extra(b2_xtra)
+
+        call_de = cs_2
+
+        return cls(call_to, call_de, extra)
+
 
 class Telemetry(AbstractMessage):
     __slots__ = ("data")
@@ -414,22 +529,27 @@ class Telemetry(AbstractMessage):
     def __init__(self, data: typing.ByteString):
         self.data = data
 
-    def _decode(self) -> typing.Generator[int, None, None]:
+    @property
+    def as_hex(self):
+        return "".join(f"{b:x}" for b in self.data)
+
+    @staticmethod
+    def _decode_bytes(data) -> typing.Generator[int, None, None]:
         # Shift bits in payload right by 1 bit to right-align the data
         carry = 0
-        for p_byte in self.data:
+        for p_byte in data:
             yield byte((carry << 7) | (p_byte >> 1))
             carry = byte(p_byte & 0x01)
 
-    @property
-    def as_hex(self):
-        gen = self._decode()
-        return "".join(f"{b:x}" for b in gen)
+    @classmethod
+    def decode(cls, payload: typing.ByteString, **kwargs) -> AbstractMessage:
+        data = bytearray(cls._decode_bytes(payload))
+        return cls(data)
 
 
 class FreeText(Telemetry):
     def _decode_str(self):
-        payload = bytearray(self._decode())
+        payload = self.data[:]
 
         ct = FTX_CHAR_TABLE_FULL
         ct_len = len(ct)
@@ -455,6 +575,13 @@ class FreeText(Telemetry):
 class MsgServer:
     __slots__ = ("callsigns",)
 
+    MSG_CLASSES = {
+        MSG_MESSAGE_TYPE_STANDARD: StdMessage,
+        MSG_MESSAGE_TYPE_NONSTD_CALL: NonStdMessage,
+        MSG_MESSAGE_TYPE_FREE_TEXT: FreeText,
+        MSG_MESSAGE_TYPE_TELEMETRY: Telemetry,
+    }
+
     def __init__(self):
         self.callsigns = dict()
 
@@ -473,115 +600,10 @@ class MsgServer:
 
     def decode(self, payload: typing.ByteString) -> AbstractMessage:
         msg_type = message_get_type(payload)
-
-        if msg_type == MSG_MESSAGE_TYPE_STANDARD:
-            return self._decode_std(payload)
-
-        elif msg_type == MSG_MESSAGE_TYPE_NONSTD_CALL:
-            return self._decode_nonstd(payload)
-
-        elif msg_type == MSG_MESSAGE_TYPE_FREE_TEXT:
-            return FreeText(payload)
-
-        elif msg_type == MSG_MESSAGE_TYPE_TELEMETRY:
-            return Telemetry(payload)
+        if msg_class := self.MSG_CLASSES.get(msg_type):
+            return msg_class.decode(payload, msg_server=self)
 
         raise MSGNotImplemented(f"Unsupported msg type {msg_type}")
-
-    def _decode_callsign(self, val: int):
-        if Token.validate(val):
-            return Token(val)
-
-        if val < NTOKENS + MAX22:
-            return self._get_cs(val)
-
-        if Callsign.validate(val):
-            cs = Callsign(val)
-            return self._save_cs(cs)
-
-        raise MSGInvalidCallsign
-
-    @staticmethod
-    def _decode_extra(val: int):
-        if Grid.validate(val):
-            return Grid(val)
-
-        if ResponseExtra.validate(val):
-            return ResponseExtra(val)
-
-        if Report.validate(val):
-            return Report(val)
-
-        raise ValueError
-
-    def _decode_std(self, payload: typing.ByteString) -> AbstractMessage:
-        # Extract packed fields
-        b29_to = payload[0] << 21
-        b29_to |= payload[1] << 13
-        b29_to |= payload[2] << 5
-        b29_to |= payload[3] >> 3
-        b29_to >>= 1
-        call_to = self._decode_callsign(b29_to)
-
-        b29_de = (payload[3] & 0x07) << 26
-        b29_de |= payload[4] << 18
-        b29_de |= payload[5] << 10
-        b29_de |= payload[6] << 2
-        b29_de |= payload[7] >> 6
-        b29_de >>= 1
-        call_de = self._decode_callsign(b29_de)
-
-        # r_flag = (payload[7] & 0x20) >> 5
-
-        b16_extra = (payload[7] & 0x1F) << 10
-        b16_extra |= payload[8] << 2
-        b16_extra |= payload[9] >> 6
-        extra = self._decode_extra(b16_extra)
-
-        # Extract cs_flags (bits 74..76)
-        # cs_flags = (payload[9] >> 3) & 0x07
-
-        return StdMessage(call_to, call_de, extra)
-
-    def _decode_nonstd(self, payload: typing.ByteString) -> AbstractMessage:
-        # non-standard messages, code originally by KD8CEC
-        # Decode the other call from hash lookup table
-        hash_12 = payload[0] << 4  # 11 ~ 4 : 8
-        hash_12 |= payload[1] >> 4  # 3 ~ 0  : 12
-        cs_3 = self._get_cs(hash_12)
-
-        # Decode one of the calls from 58 bit encoded string
-        b58_cs = (payload[1] & 0x0F) << 54  # 57 ~ 54 : 4
-        b58_cs |= payload[2] << 46  # 53 ~ 46 : 12
-        b58_cs |= payload[3] << 38  # 45 ~ 38 : 12
-        b58_cs |= payload[4] << 30  # 37 ~ 30 : 12
-        b58_cs |= payload[5] << 22  # 29 ~ 22 : 12
-        b58_cs |= payload[6] << 14  # 21 ~ 14 : 12
-        b58_cs |= payload[7] << 6  # 13 ~ 6  : 12
-        b58_cs |= payload[8] >> 2  # 5 ~ 0   : 765432 10
-        cs_decoded = CallsignExt(b58_cs)
-
-        self._save_cs(cs_decoded)
-
-        # Possibly flip them around
-        flag_flip = bool((payload[8] >> 1) & 0x01)  # 76543210
-        cs_1 = cs_decoded if flag_flip else cs_3
-        cs_2 = cs_3 if flag_flip else cs_decoded
-
-        flag_cq = bool((payload[9] >> 6) & 0x01)
-        if flag_cq:
-            call_to = TokenCQ()
-            extra = ResponseExtraEmpty()
-        else:
-            call_to = cs_1
-
-            b2_xtra = (payload[8] & 0x01) << 1
-            b2_xtra |= payload[9] >> 7  # 76543210
-            extra = ResponseExtra(b2_xtra)
-
-        call_de = cs_2
-
-        return StdMessage(call_to, call_de, extra)
 
 
 def message_encode(call_to: str, call_de: str, extra: str = "") -> typing.ByteString:
