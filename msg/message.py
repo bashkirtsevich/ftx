@@ -518,7 +518,7 @@ class NonStdMessage(StdMessage):
         if is_cq:
             flip = False
             n12 = 0
-            call_58 = self.to
+            call_58 = self.de
             xtra = 0
         else:
             # choose which of the callsigns to encode as plain-text (58 bits) or hash (12 bits)
