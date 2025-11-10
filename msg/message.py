@@ -606,7 +606,7 @@ class Telemetry(AbstractMessage):
 
     def __init__(self, data: typing.ByteString):
         if len(data) > MSG_MESSAGE_TELEMETRY_LEN:
-            raise MSGErrorTooLong
+            raise MSGErrorTooLong("Maximum data length exceeded")
 
         self.data = data
 
@@ -635,20 +635,22 @@ class Telemetry(AbstractMessage):
 
     @property
     def as_hex(self):
-        return "".join(f"{b:x}" for b in self.data)
+        return str(self)
+
+    def __str__(self):
+        return "".join(f"{b:02x}" for b in self.data)
 
 
 class FreeText(Telemetry):
     def __init__(self, text: str):
         if len(text) > MSG_MESSAGE_FREE_TEXT_LEN:
-            raise MSGErrorTooLong
+            raise MSGErrorTooLong("Maximum text length exceeded")
 
         data = self._encode_str(text)
         super().__init__(data)
 
     @staticmethod
     def _encode_str(text: str) -> typing.ByteString:
-
         data = bytearray(b"\x00" * MSG_MESSAGE_TELEMETRY_LEN)
         text = (" " * (MSG_MESSAGE_FREE_TEXT_LEN - len(text))) + text
         for c in text:
@@ -681,8 +683,17 @@ class FreeText(Telemetry):
 
         return text.strip()
 
+    @classmethod
+    def decode(cls, payload: typing.ByteString, **kwargs) -> AbstractMessage:
+        data = bytearray(cls._decode_bytes(payload))
+        text = cls._decode_str(data)
+        return cls(text)
+
     @property
     def as_str(self):
+        return str(self)
+
+    def __str__(self):
         data = self.data[:]
         return self._decode_str(data)
 
