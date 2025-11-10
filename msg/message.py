@@ -2,23 +2,51 @@ import re
 import typing
 from abc import ABCMeta, abstractmethod
 
-from consts.msg import MSG_MESSAGE_TYPE_FREE_TEXT, MSG_MESSAGE_TYPE_DXPEDITION, \
-    MSG_MESSAGE_TYPE_EU_VHF, MSG_MESSAGE_TYPE_ARRL_FD, MSG_MESSAGE_TYPE_TELEMETRY, MSG_MESSAGE_TYPE_STANDARD, \
-    MSG_MESSAGE_TYPE_ARRL_RTTY, MSG_MESSAGE_TYPE_NONSTD_CALL, MSG_MESSAGE_TYPE_WWROF, MSG_MESSAGE_TYPE_UNKNOWN, \
-    MSG_MESSAGE_FREE_TEXT_LEN, MSG_MESSAGE_TELEMETRY_LEN
-from consts.ftx import FTX_EXTRAS_CODE, FTX_MAX_GRID_4, FTX_TOKEN_STR, FTX_TOKEN_CODE, FTX_RESPONSE_EXTRAS_CODE, \
-    FTX_RESPONSE_EXTRAS_STR
+from consts.msg import MSG_MESSAGE_TYPE_FREE_TEXT
+from consts.msg import MSG_MESSAGE_TYPE_DXPEDITION
+from consts.msg import MSG_MESSAGE_TYPE_EU_VHF
+from consts.msg import MSG_MESSAGE_TYPE_ARRL_FD
+from consts.msg import MSG_MESSAGE_TYPE_TELEMETRY
+from consts.msg import MSG_MESSAGE_TYPE_STANDARD
+from consts.msg import MSG_MESSAGE_TYPE_ARRL_RTTY
+from consts.msg import MSG_MESSAGE_TYPE_NONSTD_CALL
+from consts.msg import MSG_MESSAGE_TYPE_WWROF
+from consts.msg import MSG_MESSAGE_TYPE_UNKNOWN
+from consts.msg import MSG_MESSAGE_FREE_TEXT_LEN
+from consts.msg import MSG_MESSAGE_TELEMETRY_LEN
+from consts.msg import MSG_NTOKENS
+from consts.msg import MSG_MAX_22
+
+from consts.ftx import FTX_EXTRAS_CODE
+from consts.ftx import FTX_MAX_GRID_4
+from consts.ftx import FTX_TOKEN_STR
+from consts.ftx import FTX_TOKEN_CODE
+from consts.ftx import FTX_RESPONSE_EXTRAS_CODE
+from consts.ftx import FTX_RESPONSE_EXTRAS_STR
 from consts.ftx import FTX_EXTRAS_STR
-from .exceptions import MSGErrorTooLong, MSGErrorInvalidChar, MSGNotImplemented, \
-    MSGInvalidCallsign
 
-from .text import FTX_CHAR_TABLE_FULL, charn, nchar, FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH, \
-    FTX_GRID_CHAR_MAP, FTX_CHAR_TABLE_LETTERS_SPACE, ct_encode, ct_validate, ct_map_encode, FTX_BASECALL_CHAR_MAP, \
-    ct_map_decode, ct_decode, ct_validate_map
+from .exceptions import MSGErrorTooLong
+from .exceptions import MSGErrorInvalidChar
+from .exceptions import MSGNotImplemented
+from .exceptions import MSGInvalidCallsign
+
+from .text import FTX_CHAR_TABLE_FULL
+from .text import FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH
+from .text import FTX_GRID_CHAR_MAP
+from .text import FTX_CHAR_TABLE_LETTERS_SPACE
+from .text import FTX_BASECALL_CHAR_MAP
+from .text import charn
+from .text import nchar
+
+from .text import ct_encode
+from .text import ct_validate
+from .text import ct_map_encode
+
+from .text import ct_map_decode
+from .text import ct_decode
+from .text import ct_validate_map
+
 from .tools import byte, dword
-
-NTOKENS = 2063592
-MAX22 = 4194304
 
 
 class MsgItem(metaclass=ABCMeta):
@@ -159,9 +187,9 @@ class Callsign(BaseCallsign):
 
         if len(self.val_str) > 2:
             val = self._pack_basecall(self.val_str)
-            return NTOKENS + MAX22 + val
+            return MSG_NTOKENS + MSG_MAX_22 + val
 
-        return NTOKENS + self.hash_22()
+        return MSG_NTOKENS + self.hash_22()
 
     @staticmethod
     def _pack_cq_call(cs: str) -> int:
@@ -216,7 +244,7 @@ class Callsign(BaseCallsign):
     def to_str(self) -> str:
         # Check for special tokens DE, QRZ, CQ, CQ_nnn, CQ_aaaa
         val = self.val_int
-        if val < NTOKENS:
+        if val < MSG_NTOKENS:
             if val <= 2:
                 raise ValueError("Invalid cs representation")
 
@@ -232,12 +260,12 @@ class Callsign(BaseCallsign):
             # unspecified
             raise ValueError("Invalid cs specification")
 
-        val -= NTOKENS
-        if val < MAX22:
+        val -= MSG_NTOKENS
+        if val < MSG_MAX_22:
             raise ValueError("Invalid cs representation")
 
         # Standard cs
-        cs = ct_map_decode(FTX_BASECALL_CHAR_MAP, val - MAX22)
+        cs = ct_map_decode(FTX_BASECALL_CHAR_MAP, val - MSG_MAX_22)
         return self._denormalize_cs(cs)
 
 
@@ -420,7 +448,7 @@ class StdMessage(AbstractMessage):
         if Token.validate(val):
             return Token(val)
 
-        if val < NTOKENS + MAX22:
+        if val < MSG_NTOKENS + MSG_MAX_22:
             if msg_server:
                 return msg_server._get_cs(val)
             return _DummyCallsign
