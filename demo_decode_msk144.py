@@ -1,3 +1,4 @@
+import os
 import time
 
 from scipy.io.wavfile import read
@@ -10,6 +11,10 @@ def main():
     sample_rate, data = read("examples/signal.wav")
 
     msg_svr = MsgServer()
+
+    db_path = "examples/cs_db.pkl"
+    if os.path.isfile(db_path):
+        msg_svr.load(db_path)
 
     mon = MSK144Monitor(sample_rate=sample_rate)
     mon.monitor_process(data)
@@ -34,6 +39,8 @@ def main():
     ts2 = time.monotonic()
 
     print("-" * 20, "decoded @", ts2 - ts1, "sec")
+
+    msg_svr.save(db_path)
 
 
 if __name__ == '__main__':

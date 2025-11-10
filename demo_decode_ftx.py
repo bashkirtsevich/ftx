@@ -1,3 +1,4 @@
+import os
 import time
 
 import numpy as np
@@ -36,6 +37,10 @@ def main():
 
     msg_svr = MsgServer()
 
+    db_path = "examples/cs_db.pkl"
+    if os.path.isfile(db_path):
+        msg_svr.load(db_path)
+
     frame_pos = 0
     while True:
         eof = frame_pos >= len(signal) - mon.block_size
@@ -67,6 +72,8 @@ def main():
             break
 
         frame_pos += mon.block_size
+
+    msg_svr.save(db_path)
 
 
 if __name__ == '__main__':

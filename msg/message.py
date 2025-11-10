@@ -2,6 +2,8 @@ import re
 import typing
 from abc import ABCMeta, abstractmethod
 
+import pickle
+
 from consts.msg import MSG_MESSAGE_TYPE_FREE_TEXT
 from consts.msg import MSG_MESSAGE_TYPE_DXPEDITION
 from consts.msg import MSG_MESSAGE_TYPE_EU_VHF
@@ -754,6 +756,16 @@ class MsgServer:
             return msg_class.decode(payload, msg_server=self)
 
         raise MSGNotImplemented(f"Unsupported msg type {msg_type}")
+
+    def save(self, path: str) -> None:
+        with open(path, "wb") as f:
+            pickle.dump(self.callsigns, f)
+
+    def load(self, path: str) -> None:
+        with open(path, "rb") as f:
+            data = pickle.load(f)
+
+        self.callsigns.update(data)
 
     @staticmethod
     def _msg_get_type(payload: typing.ByteString) -> int:
