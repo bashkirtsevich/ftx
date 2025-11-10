@@ -62,6 +62,15 @@ def ct_validate(ct: str, val: str, raise_exception: bool = False) -> bool:
     return x
 
 
+def ct_validate_map(ct_map: typing.List[str], val: str, raise_exception: bool = False) -> bool:
+    x = all(ch in ct for ct, ch in zip(ct_map, val))
+
+    if not x and raise_exception:
+        raise CharTableMissmatch("Character map table missmatch")
+
+    return x
+
+
 def ct_encode(ct: str, val: str) -> int:
     return reduce(lambda a, j: len(ct) * a + j, map(partial(nchar, table=ct), val))
 

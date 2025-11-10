@@ -21,7 +21,7 @@ from .pack import pack_callsign, save_callsign, pack_extra, pack58, unpack_calls
     pack_basecall, pack_grid, MAX22, NTOKENS
 from .text import FTX_CHAR_TABLE_FULL, charn, nchar, endswith_any, FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH, \
     FTX_GRID_CHAR_MAP, FTX_CHAR_TABLE_LETTERS_SPACE, ct_encode, ct_validate, ct_map_encode, FTX_BASECALL_CHAR_MAP, \
-    ct_map_decode, ct_decode
+    ct_map_decode, ct_decode, ct_validate_map
 from .tools import byte, dword
 
 
@@ -266,7 +266,7 @@ class CallsignExt(BaseCallsign):
 class Grid(MsgItem):
     @classmethod
     def _validate_str(cls, val: str) -> bool:
-        return len(val) == 4 and ct_validate(FTX_GRID_CHAR_MAP, val)
+        return len(val) == 4 and ct_validate_map(FTX_GRID_CHAR_MAP, val)
 
     @classmethod
     def _validate_int(cls, val: int) -> bool:
