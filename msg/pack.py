@@ -176,7 +176,7 @@ def pack58(callsign: str) -> typing.Optional[int]:
     result = 0
     c11 = ""
     for i, c in enumerate(callsign):
-        if c == "<" or i >= 11:
+        if c == ">" or i >= 11:
             break
 
         c11 += c
