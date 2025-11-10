@@ -394,6 +394,10 @@ class AbstractMessage(metaclass=ABCMeta):
     def __repr__(self):
         return str(self)
 
+    @abstractmethod
+    def encode(self) -> typing.ByteString:
+        ...
+
     @classmethod
     @abstractmethod
     def decode(cls, payload: typing.ByteString, **kwargs) -> "AbstractMessage":
@@ -527,11 +531,10 @@ class Telemetry(AbstractMessage):
     __slots__ = ("data")
 
     def __init__(self, data: typing.ByteString):
-        self.data = data
+        if len(data) > MSG_MESSAGE_TELEMETRY_LEN:
+            raise MSGErrorTooLong
 
-    @property
-    def as_hex(self):
-        return "".join(f"{b:x}" for b in self.data)
+        self.data = data
 
     @staticmethod
     def _decode_bytes(data) -> typing.Generator[int, None, None]:
@@ -541,35 +544,73 @@ class Telemetry(AbstractMessage):
             yield byte((carry << 7) | (p_byte >> 1))
             carry = byte(p_byte & 0x01)
 
+    def encode(self) -> typing.ByteString:
+        # Shift bits in payload right by 1 bit to right-align the data
+        carry = 0
+        data = bytearray(b"\x00" * len(self.data))
+        for i, t_byte in enumerate(reversed(self.data)):
+            data[-i - 1] = byte((carry >> 7) | (t_byte << 1))
+            carry = byte(t_byte & 0x80)
+
+        return data
+
     @classmethod
     def decode(cls, payload: typing.ByteString, **kwargs) -> AbstractMessage:
         data = bytearray(cls._decode_bytes(payload))
         return cls(data)
 
+    @property
+    def as_hex(self):
+        return "".join(f"{b:x}" for b in self.data)
+
 
 class FreeText(Telemetry):
-    def _decode_str(self):
-        payload = self.data[:]
+    def __init__(self, text: str):
+        if len(text) > MSG_MESSAGE_FREE_TEXT_LEN:
+            raise MSGErrorTooLong
 
+        data = self._encode_str(text)
+        super().__init__(data)
+
+    @staticmethod
+    def _encode_str(text: str) -> typing.ByteString:
+
+        data = bytearray(b"\x00" * MSG_MESSAGE_TELEMETRY_LEN)
+        text = (" " * (MSG_MESSAGE_FREE_TEXT_LEN - len(text))) + text
+        for c in text:
+            if (c_id := nchar(c, FTX_CHAR_TABLE_FULL)) == -1:
+                raise MSGErrorInvalidChar
+
+            rem = c_id
+            for i in reversed(range(MSG_MESSAGE_TELEMETRY_LEN)):
+                rem += data[i] * len(FTX_CHAR_TABLE_FULL)
+                data[i] = byte(rem)
+                rem >>= 8
+
+        return data
+
+    @staticmethod
+    def _decode_str(data: typing.ByteString) -> str:
         ct = FTX_CHAR_TABLE_FULL
         ct_len = len(ct)
 
-        data = ""
+        text = ""
         for _ in range(MSG_MESSAGE_FREE_TEXT_LEN):
             # Divide the long integer in payload by 42
             rem = 0
             for i in range(MSG_MESSAGE_TELEMETRY_LEN):
-                rem = (rem << 8) | payload[i]
-                payload[i] = byte(rem // ct_len)
+                rem = (rem << 8) | data[i]
+                data[i] = byte(rem // ct_len)
                 rem = rem % ct_len
 
-            data = charn(rem, ct) + data
+            text = charn(rem, ct) + text
 
-        return data.strip()
+        return text.strip()
 
     @property
     def as_str(self):
-        return self._decode_str()
+        data = self.data[:]
+        return self._decode_str(data)
 
 
 class MsgServer:
