@@ -12,11 +12,13 @@ from consts.ftx import FTX_EXTRAS_STR
 from .exceptions import MSGErrorTooLong, MSGErrorInvalidChar, MSGNotImplemented, \
     MSGInvalidCallsign
 
-from .pack import MAX22, NTOKENS
 from .text import FTX_CHAR_TABLE_FULL, charn, nchar, FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH, \
     FTX_GRID_CHAR_MAP, FTX_CHAR_TABLE_LETTERS_SPACE, ct_encode, ct_validate, ct_map_encode, FTX_BASECALL_CHAR_MAP, \
     ct_map_decode, ct_decode, ct_validate_map
 from .tools import byte, dword
+
+NTOKENS = 2063592
+MAX22 = 4194304
 
 
 class MsgItem(metaclass=ABCMeta):
