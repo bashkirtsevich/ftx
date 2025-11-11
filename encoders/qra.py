@@ -16,7 +16,7 @@ from consts.q65 import qra_exp
 
 
 @jit(nopython=True)
-def qra_encode(x: npt.NDArray[np.int64], concat: bool = False) -> npt.NDArray[np.int64]:
+def qra_encode(x: npt.NDArray[np.uint8], concat: bool = False) -> npt.NDArray[np.int64]:
     y = np.zeros(qra_NC, dtype=np.int64)
 
     # compute the code check symbols as a weighted accumulation of a permutated
@@ -48,7 +48,7 @@ def qra_encode(x: npt.NDArray[np.int64], concat: bool = False) -> npt.NDArray[np
     return y
 
 
-def q65_encode_msg(msg: npt.NDArray[np.int64]) -> npt.NDArray[np.int64]:
+def q65_encode_msg(msg: npt.NDArray[np.uint8]) -> npt.NDArray[np.int64]:
     # compute and append the appropriate CRC
     crc = crc12(msg)
     data_in = np.concat((msg, (crc & 0x3F, crc >> 6),))
@@ -58,7 +58,7 @@ def q65_encode_msg(msg: npt.NDArray[np.int64]) -> npt.NDArray[np.int64]:
     return np.concat((msg, data_out,))
 
 
-def q65_6bit_encode(bits: npt.NDArray[np.uint8]) -> npt.NDArray[np.int64]:
+def q65_6bit_encode(bits: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
     n_chunks = bits.shape[0] // 6
     bits = bits[:n_chunks * 6]
     chunks_reshaped = bits.reshape((n_chunks, 6))

@@ -6,7 +6,7 @@ CRC12_POLYNOMIAL = 0xF01
 
 
 @jit(nopython=True)
-def crc12(x: npt.NDArray[np.int64]) -> int:
+def crc12(x: npt.NDArray[np.uint8]) -> int:
     sr = 0
     for t in x:
         for _ in range(6):
