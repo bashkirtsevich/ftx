@@ -3,7 +3,7 @@ import numpy.typing as npt
 
 
 def synth_fsk(
-        tones: npt.NDArray[np.int64], sample_rate: int,
+        tones: npt.NDArray[np.uint8], sample_rate: int,
         samples_per_symbol: int,
         f0: float, bandwidth: float) -> npt.NDArray[np.float64]:
     dt = 1.0 / sample_rate

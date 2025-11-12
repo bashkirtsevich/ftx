@@ -11,7 +11,7 @@ from msg.message import *
 from mod import synth_fsk
 
 
-def gen_signal(tones: npt.NDArray[np.int64], sample_rate: int,
+def gen_signal(tones: npt.NDArray[np.uint8], sample_rate: int,
                f0: float, q65_type: typing.Literal[1, 2, 3, 4],
                period: typing.Optional[typing.Literal[30, 60, 120, 300]] = None) -> npt.NDArray[np.float64]:
     if period == 30:
@@ -36,7 +36,7 @@ def gen_signal(tones: npt.NDArray[np.int64], sample_rate: int,
     return signal
 
 
-def gen_q65_tones(payload: typing.ByteString) -> npt.NDArray[np.int64]:
+def gen_q65_tones(payload: typing.ByteString) -> npt.NDArray[np.uint8]:
     tones = q65_encode(payload)
     return tones
 

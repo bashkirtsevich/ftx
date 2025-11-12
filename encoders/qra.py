@@ -66,7 +66,7 @@ def q65_6bit_encode(bits: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
     return values.tolist()
 
 
-def q65_encode(payload: typing.ByteString) -> npt.NDArray[np.int64]:
+def q65_encode(payload: typing.ByteString) -> npt.NDArray[np.uint8]:
     arr = np.frombuffer(payload, dtype=np.uint8)
     bits = np.unpackbits(arr)
 
@@ -74,7 +74,7 @@ def q65_encode(payload: typing.ByteString) -> npt.NDArray[np.int64]:
     codeword = q65_encode_msg(msg)
 
     tones_count = 85
-    tones = np.zeros(tones_count, dtype=np.int64)
+    tones = np.zeros(tones_count, dtype=np.uint8)
 
     tone_indices = np.setdiff1d(range(tones_count), Q65_SYNC - 1)
     tones[tone_indices] = codeword + 1
