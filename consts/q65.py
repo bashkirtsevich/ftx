@@ -2,6 +2,8 @@ import numpy as np
 
 Q65_SYNC = np.array([1, 9, 12, 13, 15, 22, 23, 26, 27, 33, 35, 38, 46, 50, 55, 60, 62, 66, 69, 74, 76, 85])
 
+Q65_TONES_COUNT = 85
+
 QRATYPE_NORMAL = 0x00  # normal code
 QRATYPE_CRC = 0x01  # code with crc - last information symbol is a CRC-6
 QRATYPE_CRCPUNCTURED = 0x02  # the CRC-6 symbol is punctured (not sent along the channel)
@@ -13,6 +15,9 @@ qra_m = 6  # bits/symbol
 qra_M = 64  # Symbol alphabet cardinality
 qra_a = 1  # grouping factor
 qra_NC = 50  # number of check symbols (N-K)
+
+EbNodBMetric = 2.8
+EbNoMetric   = 10.0 ** (EbNodBMetric/10)
 
 # Defines used by the message passing decoder --------
 
@@ -30,6 +35,11 @@ TS_QRA64 = 0.576
 # define uniform distributions of given size
 pd_uniform_tab = [
     np.full(2 ** i, 1 / 2 ** i, dtype=np.float64)
+    for i in range(7)
+]
+
+pd_log2dim = [
+    2 ** i
     for i in range(7)
 ]
 
@@ -1680,6 +1690,3 @@ np_fwht_tab = np.array([
     np_fwht32,
     np_fwht64
 ])
-
-# void q65subs::np_fwht(int nlogdim, dst, src)
-#     np_fwht_tab[nlogdim](dst,src);
