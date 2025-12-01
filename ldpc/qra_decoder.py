@@ -741,12 +741,12 @@ def qra_mapdecode(pcode: QRACode, xdec: npt.NDArray[np.int64], pex: npt.NDArray[
 
 def q65_decode(
         codec: q65_codec_ds,
-        pDecodedCodeword: npt.NDArray[np.int64],
-        pDecodedMsg: npt.NDArray[np.int64],
-        pIntrinsics: npt.NDArray[np.float64],
+        decoded_codeword: npt.NDArray[np.int64],
+        decoded_msg: npt.NDArray[np.int64],
+        intrinsics: npt.NDArray[np.float64],
         APMask: npt.NDArray[np.int64],
         APSymbols: npt.NDArray[np.int64],
-        maxiters: int
+        max_iters: int
 ):
     qra_code = codec.pQraCode
     ix = codec.ix
@@ -762,19 +762,19 @@ def q65_decode(
 
     # Depuncture intrinsics observations as required by the code type
     if qra_code.type == QRATYPE_CRCPUNCTURED:
-        ix[:nK * nM] = pIntrinsics[:nK * nM]  # information symbols
+        ix[:nK * nM] = intrinsics[:nK * nM]  # information symbols
         pd_init(PD_ROWADDR(ix, nM, nK), pd_uniform(nBits), nM)  # crc
-        ix[(nK + 1) * nM:(nK + 1) * nM + (nN - nK) * nM] = pIntrinsics[
+        ix[(nK + 1) * nM:(nK + 1) * nM + (nN - nK) * nM] = intrinsics[
                                                            nK * nM: nK * nM + (nN - nK) * nM]  # parity checks
     elif qra_code.type == QRATYPE_CRCPUNCTURED2:
-        ix[:nK * nM] = pIntrinsics[:nK * nM]  # information symbols
+        ix[:nK * nM] = intrinsics[:nK * nM]  # information symbols
         pd_init(PD_ROWADDR(ix, nM, nK), pd_uniform(nBits), nM)  # crc
         pd_init(PD_ROWADDR(ix, nM, nK + 1), pd_uniform(nBits), nM)  # crc
-        ix[(nK + 2) * nM: (nK + 2) * nM + (nN - nK) * nM] = pIntrinsics[
+        ix[(nK + 2) * nM: (nK + 2) * nM + (nN - nK) * nM] = intrinsics[
                                                             nK * nM: nK * nM + (nN - nK) * nM]  # parity checks
     else:
         # no puncturing
-        ix[:nN * nM] = pIntrinsics[:nN * nM]  # as they are
+        ix[:nN * nM] = intrinsics[:nN * nM]  # as they are
 
     # mask the intrinsics with the available a priori knowledge
     q65_mask(qra_code, ix, APMask, APSymbols)
@@ -785,7 +785,7 @@ def q65_decode(
     rc = qra_extrinsic(qra_code,
                        ex,
                        ix,
-                       maxiters,
+                       max_iters,
                        codec.qra_v2cmsg,
                        codec.qra_c2vmsg)
     if rc < 0:
@@ -807,7 +807,7 @@ def q65_decode(
             raise CRCMismatch  # crc doesn't match
 
     # copy the decoded msg to the user buffer (excluding punctured symbols)
-    pDecodedMsg[:nK] = px[:nK]
+    decoded_msg[:nK] = px[:nK]
 
     # if (pDecodedCodeword==NULL)		# user is not interested in the decoded codeword
     #     return rc;					# return the number of iterations required to decode
@@ -820,13 +820,13 @@ def q65_decode(
 
     # ...and strip the punctured symbols from the codeword
     if qra_code.type == QRATYPE_CRCPUNCTURED:
-        pDecodedCodeword[:nK] = py[:nK]
-        pDecodedCodeword[nK:nK + (nN - nK)] = py[nK + 1:nK + (nN - nK) + 1]  # puncture crc-6 symbol
+        decoded_codeword[:nK] = py[:nK]
+        decoded_codeword[nK:nK + (nN - nK)] = py[nK + 1:nK + (nN - nK) + 1]  # puncture crc-6 symbol
     elif qra_code.type == QRATYPE_CRCPUNCTURED2:
-        pDecodedCodeword[:nK] = py[:nK]
-        pDecodedCodeword[nK:nK + (nN - nK)] = py[nK + 2:nK + (nN - nK) + 2]  # puncture crc-12 symbol
+        decoded_codeword[:nK] = py[:nK]
+        decoded_codeword[nK:nK + (nN - nK)] = py[nK + 2:nK + (nN - nK) + 2]  # puncture crc-12 symbol
     else:
-        pDecodedCodeword[:nN] = py[:nN]  # no puncturing
+        decoded_codeword[:nN] = py[:nN]  # no puncturing
 
     return rc  # return the number of iterations required to decode
 
