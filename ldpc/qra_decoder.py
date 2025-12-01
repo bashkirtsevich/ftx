@@ -131,8 +131,6 @@ qra15_65_64_irr_e23 = QRACode(
     qra_pmat
 )
 
-Q65_FASTFADING_MAXWEIGTHS = 65
-
 
 @dataclass
 class q65_codec_ds:

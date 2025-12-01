@@ -30,6 +30,7 @@ qra_R = 0.23077  # code rate (K/N)
 CODE_NAME = "qra15_65_64_irr_e23"  # code name
 
 Q65_DECODE_INVPARAMS = -1
+Q65_FASTFADING_MAXWEIGTHS = 65
 TS_QRA64 = 0.576
 
 # define uniform distributions of given size
