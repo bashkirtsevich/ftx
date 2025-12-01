@@ -1,7 +1,7 @@
 import typing
 
 import numpy as np
-from numba import jit
+from numba import njit
 import numpy.typing as npt
 from crc.q65 import crc12
 
@@ -15,7 +15,7 @@ from consts.q65 import qra_log
 from consts.q65 import qra_exp
 
 
-@jit(nopython=True)
+@njit
 def qra_encode(x: npt.NDArray[np.uint8], concat: bool = False) -> npt.NDArray[np.int64]:
     y = np.zeros(qra_NC, dtype=np.int64)
 
