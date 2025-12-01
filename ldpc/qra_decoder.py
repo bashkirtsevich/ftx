@@ -283,15 +283,10 @@ def q65_intrinsics_fastfading(
     # that's to say, at the maximum Doppler spread bandwidth (240 Hz for QRA64)
     # there's a ~8 dB Es/No degradation over the AWGN case
     fTemp = 8.0 * np.log(B90) / np.log(240.0)  # assumed Es/No degradation for the given fading bandwidth
-    # EsNoMetric = pCodec->decoderEsNoMetric * 10.0 ** (fTemp/10.0)
+    EsNoMetric = codec.decoderEsNoMetric * np.pow(10.0, fTemp / 10.0)
 
-    nm = 6
-    R = 0.206349
-    decoderEsNoMetric = 1.0 * nm * R * EbNoMetric
-    EsNoMetric = decoderEsNoMetric * np.pow(10.0, fTemp / 10.0)
-
-    nM = 64  # q65_get_alphabet_size(pCodec)
-    nN = 63  # q65_get_codeword_length(pCodec)
+    nM = codec.pQraCode.q65_get_alphabet_size()
+    nN = codec.pQraCode.q65_get_codeword_length()
     nBinsPerTone = 1 << sub_mode
 
     nBinsPerSymbol = nM * (2 + nBinsPerTone)
@@ -348,8 +343,7 @@ def q65_intrinsics_fastfading(
     # Compute now the instrinsics as indicated above
     cur_sym_id = nM  # point to the central bin of the first symbol tone
     cur_ix_id = 0  # point to the first intrinsic
-    # cur_ix = np.zeros(nN * nM, dtype=np.float64)
-    cur_ix = np.zeros(nN * nM, dtype=np.float64)
+    cur_ix = np.zeros((nN, nM), dtype=np.float64)
 
     hhsz = hlen - 1  # number of symmetric taps
     hlast = 2 * hhsz  # index of the central tap
@@ -368,25 +362,21 @@ def q65_intrinsics_fastfading(
             fTemp += weight[hhsz] * input_energies[cur_bin_id + hhsz]
 
             maxlogp = max(maxlogp, fTemp)  # keep track of the max
-            cur_ix[cur_ix_id + k] = fTemp
-            # cur_ix[n, k] = fTemp
+            cur_ix[n, k] = fTemp
 
             cur_bin_id += nBinsPerTone  # next tone
 
         # exponentiate and accumulate the normalization constant
         sumix = 0.0
         for k in range(nM):
-            # x = cur_ix[n, k] - maxlogp
-            x = cur_ix[cur_ix_id + k] - maxlogp
+            x = cur_ix[n, k] - maxlogp
             x = min(85.0, max(-85.0, x))
             fTemp = np.exp(x)
-            # cur_ix[n, k] = fTemp
-            cur_ix[cur_ix_id + k] = fTemp
+            cur_ix[n, k] = fTemp
             sumix += fTemp
 
         # scale to a probability distribution
-        cur_ix[cur_ix_id:cur_ix_id + nM] *= 1.0 / sumix
-        # cur_ix[n, :] *= 1.0 / sumix
+        cur_ix[n, :] *= 1.0 / sumix
 
         cur_sym_id += nBinsPerSymbol  # next symbol input energies
         cur_ix_id += nM  # next symbol intrinsics
@@ -458,22 +448,8 @@ def q65_intrinsics_ff(codec: q65_codec_ds, s3: npt.NDArray[np.float64], sub_mode
     #          fadingModel     0=Gaussian, 1=Lorentzian
     # Output:  s3prob[LL,NN]   Symbol-value intrinsic probabilities
 
-    # static int first=1;
-    #
-    # if (first)
-    #     // Set the QRA code, allocate memory, and initialize
-    #     int rc = q65_init(&codec,&qra15_65_64_irr_e23);
-    #     if (rc<0)
-    #         printf("error in q65_init()\n");
-    #         exit(0);
-    #     first=0;
-    # rc = q65_intrinsics_fastfading(&codec,s3prob,s3,submode,B90Ts,fadingModel);
     s3prob = q65_intrinsics_fastfading(codec, s3, sub_mode, B90Ts, fading_model)
     return s3prob
-    # if (rc<0)
-    #     printf("error in q65_intrinsics()\n");
-    #     ///qDebug()<<"hgjhgdjhgj";
-    #     exit(0);
 
 
 # Max codeword list size in q65_decode_fullaplist
@@ -849,25 +825,18 @@ def q65_dec(
     #          esnodb0         Estimated Es/No (dB)
     #          xdec[13]        Decoded 78-bit message as 13 six-bit integers
     #          rc0             Return code from q65_decode()
-    # int rc;
-    # int ydec[63];
-    # float esnodb;
 
     ydec = np.zeros(63, dtype=np.int64)
     rc = q65_decode(codec, ydec, xdec, s3prob, APmask, APsymbols, maxiters)
-    # rc0=rc;
-    # # rc = -1:  Invalid params
-    # # rc = -2:  Decode failed
-    # # rc = -3:  CRC mismatch
-    # esnodb0 = 0.0;             //Default Es/No for a failed decode
+    # rc = -1:  Invalid params
+    # rc = -2:  Decode failed
+    # rc = -3:  CRC mismatch
     # if (rc<0) return;
 
-    # rc = q65_esnodb_fastfading(&codec,&esnodb,ydec,s3);
     esnodb = q65_esnodb_fastfading(codec, ydec, s3)
     # if (rc<0)
     #     printf("error in q65_esnodb_fastfading()\n");
-    #     exit(0);
-    # esnodb0 = esnodb;
+
     return rc, esnodb
 
 
@@ -887,7 +856,7 @@ if __name__ == '__main__':
 
     codec = q65_init()
     s3prob = q65_intrinsics_ff(codec, s3_1fa, nsubmode, b90ts, nFadingModel)
-    rc, esnodb = q65_dec(codec, s3_1fa, s3prob, apmask, apsymbols, s_maxiters, dat4)
+    rc, esnodb = q65_dec(codec, s3_1fa, s3prob.ravel(), apmask, apsymbols, s_maxiters, dat4)
 
     print(rc, esnodb)
     print(dat4)
