@@ -25,6 +25,14 @@ class InvalidFadingModel(QRAException):
     ...
 
 
+class CRCMismatch(QRAException):
+    ...
+
+
+class MExceeded(QRAException):
+    ...
+
+
 @dataclass
 class QRACode:
     # code parameters
@@ -556,9 +564,8 @@ def qra_extrinsic(
     # # rc=-2  error in the code tables (code checks degrees must be >1)
     # # rc=-3  M is larger than QRACODE_MAX_M
 
-    assert qra_M <= QRACODE_MAX_M
-    #     if (qra_M>QRACODE_MAX_M)
-    #         return -3;
+    if qra_M > QRACODE_MAX_M:
+        raise MExceeded
 
     # message initialization -------------------------------------------------------
 
@@ -732,9 +739,6 @@ def qra_mapdecode(pcode: QRACode, xdec: npt.NDArray[np.int64], pex: npt.NDArray[
         xdec[k] = pd_argmax(PD_ROWADDR(pex, qra_M, k), qra_M)
 
 
-Q65_DECODE_CRCMISMATCH = -3
-
-
 def q65_decode(
         codec: q65_codec_ds,
         pDecodedCodeword: npt.NDArray[np.int64],
@@ -796,16 +800,14 @@ def q65_decode(
     if qra_code.type in (QRATYPE_CRC, QRATYPE_CRCPUNCTURED):
         crc = crc6(px[:nK])  # compute crc-6
         if crc != px[nK]:
-            return Q65_DECODE_CRCMISMATCH  # crc doesn't match
+            raise CRCMismatch  # crc doesn't match
     elif qra_code.type == QRATYPE_CRCPUNCTURED2:
         crc = crc12(px[:nK])  # compute crc-12
         if (crc & 0x3F) != px[nK] or (crc >> 6) != px[nK + 1]:
-            return Q65_DECODE_CRCMISMATCH  # crc doesn't match
+            raise CRCMismatch  # crc doesn't match
 
     # copy the decoded msg to the user buffer (excluding punctured symbols)
-    if pDecodedMsg is not None:
-        # memcpy(pDecodedMsg,px,nK*sizeof(int));
-        pDecodedMsg[:nK] = px[:nK]
+    pDecodedMsg[:nK] = px[:nK]
 
     # if (pDecodedCodeword==NULL)		# user is not interested in the decoded codeword
     #     return rc;					# return the number of iterations required to decode
