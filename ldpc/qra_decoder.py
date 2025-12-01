@@ -10,6 +10,19 @@ import numpy.typing as npt
 from crc.q65 import crc6, crc12
 
 from consts.q65 import *
+from encoders.qra import qra_encode
+
+
+class QRAException(Exception):
+    ...
+
+
+class InvalidQRAType(QRAException):
+    ...
+
+
+class InvalidFadingModel(QRAException):
+    ...
 
 
 @dataclass
@@ -60,8 +73,8 @@ class QRACode:
         elif self.type == QRATYPE_CRCPUNCTURED2:
             # two code information symbols are reserved for CRC
             return self.K - 2
-        else:
-            return -1  # raise exception
+
+        raise InvalidQRAType
 
     def q65_get_codeword_length(self):
         # return the actual codeword length (in symbols)
@@ -76,8 +89,8 @@ class QRACode:
         elif self.type == QRATYPE_CRCPUNCTURED2:
             # the two CRC symbols are punctured
             return self.N - 2
-        else:
-            return -1  # raise exception
+
+        raise InvalidQRAType
 
     def q65_get_alphabet_size(self):
         return self.M
@@ -117,8 +130,8 @@ Q65_FASTFADING_MAXWEIGTHS = 65
 class q65_codec_ds:
     pQraCode: QRACode  # qra code to be used by the codec
     decoderEsNoMetric: float  # value for which we optimize the decoder metric
-    x: npt.NDArray[np.int8]  # codec input
-    y: npt.NDArray[np.int8]  # codec output
+    x: npt.NDArray[np.int64]  # codec input
+    y: npt.NDArray[np.int64]  # codec output
     qra_v2cmsg: npt.NDArray[np.float64]  # decoder v->c messages
     qra_c2vmsg: npt.NDArray[np.float64]  # decoder c->v messages
     ix: npt.NDArray[np.float64]  # decoder intrinsic information
@@ -175,8 +188,8 @@ def q65_init():
     pCodec = q65_codec_ds(
         pQraCode=pqracode,
         decoderEsNoMetric=1.0 * nm * R * EbNoMetric,
-        x=np.zeros(pqracode.K, dtype=np.int8),
-        y=np.zeros(pqracode.N, dtype=np.int8),
+        x=np.zeros(pqracode.K, dtype=np.int64),
+        y=np.zeros(pqracode.N, dtype=np.int64),
         qra_v2cmsg=np.zeros(pqracode.NMSG * pqracode.M, dtype=np.float64),
         qra_c2vmsg=np.zeros(pqracode.NMSG * pqracode.M, dtype=np.float64),
         ix=np.zeros(pqracode.N * pqracode.M, dtype=np.float64),
@@ -254,7 +267,7 @@ def q65_intrinsics_fastfading(
         hlen = glen_tab_lorentz[hidx]  # hlen = (L+1)/2 (where L=(odd) number of taps of w fun)
         hptr = gptr_tab_lorentz[hidx]  # pointer to the first (L+1)/2 coefficients of w fun
     else:
-        raise ValueError("invalid fading model")
+        raise InvalidFadingModel
 
     # compute (euristically) the optimal decoder metric accordingly the given spread amount
     # We assume that the decoder 50% decoding threshold is:
@@ -326,7 +339,7 @@ def q65_intrinsics_fastfading(
 
     # Compute now the instrinsics as indicated above
     cur_sym_id = nM  # point to the central bin of the first symbol tone
-    # cur_ix_id = 0  # point to the first intrinsic
+    cur_ix_id = 0  # point to the first intrinsic
     # cur_ix = np.zeros(nN * nM, dtype=np.float64)
     cur_ix = np.zeros(nN * nM, dtype=np.float64)
 
@@ -347,39 +360,41 @@ def q65_intrinsics_fastfading(
             fTemp += weight[hhsz] * input_energies[cur_bin_id + hhsz]
 
             maxlogp = max(maxlogp, fTemp)  # keep track of the max
-            # cur_ix[cur_ix_id + k] = fTemp
-            cur_ix[n, k] = fTemp
+            cur_ix[cur_ix_id + k] = fTemp
+            # cur_ix[n, k] = fTemp
 
             cur_bin_id += nBinsPerTone  # next tone
 
         # exponentiate and accumulate the normalization constant
         sumix = 0.0
         for k in range(nM):
-            x = cur_ix[n, k] - maxlogp
+            # x = cur_ix[n, k] - maxlogp
+            x = cur_ix[cur_ix_id + k] - maxlogp
             x = min(85.0, max(-85.0, x))
             fTemp = np.exp(x)
-            cur_ix[n, k] = fTemp
+            # cur_ix[n, k] = fTemp
+            cur_ix[cur_ix_id + k] = fTemp
             sumix += fTemp
 
         # scale to a probability distribution
-        # cur_ix[cur_ix_id:cur_ix_id + nM] *= 1.0 / sumix
-        cur_ix[n, :] *= 1.0 / sumix
+        cur_ix[cur_ix_id:cur_ix_id + nM] *= 1.0 / sumix
+        # cur_ix[n, :] *= 1.0 / sumix
 
         cur_sym_id += nBinsPerSymbol  # next symbol input energies
-        # cur_ix_id += nM  # next symbol intrinsics
+        cur_ix_id += nM  # next symbol intrinsics
 
     return cur_ix
 
 
 def q65_esnodb_fastfading(
         codec: q65_codec_ds,
-        ydec: npt.NDArray[np.int64],
+        y_dec: npt.NDArray[np.int64],
         input_energies: npt.NDArray[np.float64],
 ) -> float:
     # Estimate the Es/No ratio of the decoded codeword
 
-    nN = codec.pQraCode.q65_get_codeword_length()
-    nM = codec.pQraCode.q65_get_alphabet_size()
+    qra_N = codec.pQraCode.q65_get_codeword_length()
+    qra_M = codec.pQraCode.q65_get_alphabet_size()
 
     nBinsPerTone = codec.nBinsPerTone
     nBinsPerSymbol = codec.nBinsPerSymbol
@@ -392,9 +407,9 @@ def q65_esnodb_fastfading(
     # energies pertaining to the decoded symbols in the codeword
 
     EsPlusWNo = 0.0
-    cur_sym_idx = nM  # pInputEnergies + nM	# point to first central bin of first symbol tone
-    for n in range(nN):
-        cur_tone_idx = cur_sym_idx + ydec[n] * nBinsPerTone  # point to the central bin of the current decoded symbol
+    cur_sym_idx = qra_M  # pInputEnergies + qra_M	# point to first central bin of first symbol tone
+    for n in range(qra_N):
+        cur_tone_idx = cur_sym_idx + y_dec[n] * nBinsPerTone  # point to the central bin of the current decoded symbol
         cur_bin_idx = cur_tone_idx - nWeights + 1  # point to first bin
 
         # sum over all the pertaining bins
@@ -404,7 +419,7 @@ def q65_esnodb_fastfading(
 
         cur_sym_idx += nBinsPerSymbol
 
-    EsPlusWNo = EsPlusWNo / nN  # Es + nTotWeigths*No
+    EsPlusWNo = EsPlusWNo / qra_N  # Es + nTotWeigths*No
 
     # The noise power ffNoiseVar computed in the q65_intrisics_fastading(...) function
     # is not the true noise power as it includes part of the signal energy.
@@ -419,16 +434,15 @@ def q65_esnodb_fastfading(
     # u = EsPlusNo/ffNoiseVar/(1+EsNoMetric/nBinsPerSymbol)
 
     u = EsPlusWNo / (ffNoiseVar * (1 + ffEsNoMetric / nBinsPerSymbol))
+    u = max(u, nTotWeights + 0.316)  # Limit the minimum Es/No to -5 dB approx.
+    u = (u - float(nTotWeights)) / (1 - u / float(nBinsPerSymbol))  # linear scale Es/No
 
-    minu = nTotWeights + 0.316
-    u = max(u, minu)  # Limit the minimum Es/No to -5 dB approx.
-
-    u = (u - float(nTotWeights)) / (1.0 - u / float(nBinsPerSymbol))  # linear scale Es/No
     EsNodB = 10.0 * np.log10(u)
     return EsNodB
 
 
-def q65_intrinsics_ff(s3: npt.NDArray[np.float64], submode: int, B90Ts: float, fadingModel: int) -> npt.NDArray[
+def q65_intrinsics_ff(codec: q65_codec_ds, s3: npt.NDArray[np.float64], sub_mode: int, B90Ts: float,
+                      fading_model: int) -> npt.NDArray[
     np.float64]:
     # Input:   s3[LL,NN]       Received energies
     #          submode         0=A, 4=E
@@ -446,7 +460,7 @@ def q65_intrinsics_ff(s3: npt.NDArray[np.float64], submode: int, B90Ts: float, f
     #         exit(0);
     #     first=0;
     # rc = q65_intrinsics_fastfading(&codec,s3prob,s3,submode,B90Ts,fadingModel);
-    s3prob = q65_intrinsics_fastfading(s3, submode, B90Ts, fadingModel)
+    s3prob = q65_intrinsics_fastfading(codec, s3, sub_mode, B90Ts, fading_model)
     return s3prob
     # if (rc<0)
     #     printf("error in q65_intrinsics()\n");
@@ -799,7 +813,8 @@ def q65_decode(
     # crc matches therefore we can reconstruct the transmitted codeword
     #  reencoding the information available in px...
 
-    qra_encode(qra_code, py, px)
+    # qra_encode(qra_code, py, px)
+    py[:] = qra_encode(px, concat=True)
 
     # ...and strip the punctured symbols from the codeword
     if qra_code.type == QRATYPE_CRCPUNCTURED:
@@ -810,10 +825,12 @@ def q65_decode(
         pDecodedCodeword[nK:nK + (nN - nK)] = py[nK + 2:nK + (nN - nK) + 2]  # puncture crc-12 symbol
     else:
         pDecodedCodeword[:nN] = py[:nN]  # no puncturing
-    # return rc;	# return the number of iterations required to decode
+
+    return rc  # return the number of iterations required to decode
 
 
 def q65_dec(
+        codec: q65_codec_ds,
         s3: npt.NDArray[np.float64],
         s3prob: npt.NDArray[np.float64],
         APmask: npt.NDArray[np.int64],
@@ -834,7 +851,6 @@ def q65_dec(
     # int ydec[63];
     # float esnodb;
 
-    codec = q65_init()
     ydec = np.zeros(63, dtype=np.int64)
     rc = q65_decode(codec, ydec, xdec, s3prob, APmask, APsymbols, maxiters)
     # rc0=rc;
@@ -850,17 +866,26 @@ def q65_dec(
     #     printf("error in q65_esnodb_fastfading()\n");
     #     exit(0);
     # esnodb0 = esnodb;
+    return rc, esnodb
 
 
 if __name__ == '__main__':
-    with open("../data.json") as f:
+    with open("../data2.json") as f:
         data = json.load(f)
 
-    s3 = data["s3"]
-    s3prob = data["s3prob"]
-    APmask = np.zeros(13, dtype=np.int64)
-    APsymbols = np.zeros(13, dtype=np.int64)
-    dat4 = np.zeros(13, dtype=np.int64)
+    s3_1fa = data["s3_1fa"]
+    nsubmode = 1
+    b90ts = 0.516000
+    nFadingModel = 1
 
-    maxiters = 100
-    q65_dec(s3, s3prob, APmask, APsymbols, maxiters, dat4)
+    apmask = np.zeros(13, dtype=np.int64)
+    apsymbols = np.zeros(13, dtype=np.int64)
+    dat4 = np.zeros(13, dtype=np.int64)
+    s_maxiters = 100
+
+    codec = q65_init()
+    s3prob = q65_intrinsics_ff(codec, s3_1fa, nsubmode, b90ts, nFadingModel)
+    rc, esnodb = q65_dec(codec, s3_1fa, s3prob, apmask, apsymbols, s_maxiters, dat4)
+
+    print(rc, esnodb)
+    print(dat4)
