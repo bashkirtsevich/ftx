@@ -523,17 +523,6 @@ repfact = np.array([
 # corresponding to a given B90 must be scaled appropriately.
 # See below.
 # Gaussian energy fading tables for QRA64
-glen_tab_gauss = np.array([
-    2, 2, 2, 2, 2, 2, 2, 2,
-    2, 2, 2, 2, 2, 2, 2, 2,
-    3, 3, 3, 3, 3, 3, 3, 3,
-    4, 4, 4, 4, 5, 5, 5, 6,
-    6, 6, 7, 7, 8, 8, 9, 10,
-    10, 11, 12, 13, 14, 15, 17, 18,
-    19, 21, 23, 25, 27, 29, 32, 34,
-    37, 41, 44, 48, 52, 57, 62, 65
-])
-
 ggauss1 = np.array([
     0.0296, 0.9101
 ])
@@ -892,17 +881,6 @@ gptr_tab_gauss = [
 ]
 
 # Lorentz energy fading tables for QRA64
-glen_tab_lorentz = np.array([
-    2, 2, 2, 2, 2, 2, 2, 2,
-    2, 2, 2, 2, 2, 2, 3, 3,
-    3, 3, 3, 3, 3, 4, 4, 4,
-    4, 4, 5, 5, 5, 5, 6, 6,
-    7, 7, 7, 8, 8, 9, 10, 10,
-    11, 12, 13, 14, 15, 16, 17, 19,
-    20, 22, 23, 25, 27, 30, 32, 35,
-    38, 41, 45, 49, 53, 57, 62, 65
-])
-
 glorentz1 = np.array([
     0.0214, 0.9107
 ])

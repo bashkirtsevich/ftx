@@ -266,12 +266,14 @@ def q65_intrinsics_fastfading(
     if fading_model == 0:
         # gaussian fading model
         # point to gaussian energy weighting taps
-        hlen = glen_tab_gauss[hidx]  # hlen = (L+1)/2 (where L=(odd) number of taps of w fun)
+        # hlen = glen_tab_gauss[hidx]  # hlen = (L+1)/2 (where L=(odd) number of taps of w fun)
         hptr = gptr_tab_gauss[hidx]  # pointer to the first (L+1)/2 coefficients of w fun
+        hlen = len(hptr)  # hlen = (L+1)/2 (where L=(odd) number of taps of w fun)
     elif fading_model == 1:
         # point to lorentzian energy weighting taps
-        hlen = glen_tab_lorentz[hidx]  # hlen = (L+1)/2 (where L=(odd) number of taps of w fun)
+        # hlen = glen_tab_lorentz[hidx]  # hlen = (L+1)/2 (where L=(odd) number of taps of w fun)
         hptr = gptr_tab_lorentz[hidx]  # pointer to the first (L+1)/2 coefficients of w fun
+        hlen = len(hptr)  # hlen = (L+1)/2 (where L=(odd) number of taps of w fun)
     else:
         raise InvalidFadingModel
 
