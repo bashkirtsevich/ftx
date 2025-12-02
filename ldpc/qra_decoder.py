@@ -172,14 +172,6 @@ def pd_imul(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], nlogdim:
     dst[:idx] *= src[:idx]
 
 
-def pd_max(src: npt.NDArray[np.float64], ndim: int) -> float:
-    return np.max(src[:ndim])
-
-
-def pd_argmax(src: npt.NDArray[np.float64], ndim: int) -> int:
-    return np.argmax(src[:ndim])
-
-
 def q65_init():
     pqracode = qra15_65_64_irr_e23
     # Eb/No value for which we optimize the decoder metric (AWGN/Rayleigh cases)
@@ -196,10 +188,10 @@ def q65_init():
         decoderEsNoMetric=1.0 * nm * R * EbNoMetric,
         x=np.zeros(pqracode.K, dtype=np.int64),
         y=np.zeros(pqracode.N, dtype=np.int64),
-        qra_v2cmsg=np.zeros(pqracode.NMSG * pqracode.M, dtype=np.float64),
-        qra_c2vmsg=np.zeros(pqracode.NMSG * pqracode.M, dtype=np.float64),
-        ix=np.zeros(pqracode.N * pqracode.M, dtype=np.float64),
-        ex=np.zeros(pqracode.N * pqracode.M, dtype=np.float64),
+        qra_v2cmsg=np.zeros((pqracode.NMSG, pqracode.M), dtype=np.float64),
+        qra_c2vmsg=np.zeros((pqracode.NMSG, pqracode.M), dtype=np.float64),
+        ix=np.zeros((pqracode.N, pqracode.M), dtype=np.float64),
+        ex=np.zeros((pqracode.N, pqracode.M), dtype=np.float64),
 
         nBinsPerTone=0,
         nBinsPerSymbol=0,
@@ -290,7 +282,7 @@ def q65_intrinsics_fastfading(
     nBinsPerTone = 1 << sub_mode
 
     nBinsPerSymbol = nM * (2 + nBinsPerTone)
-    nBinsPerCodeword = nN * nBinsPerSymbol
+    # nBinsPerCodeword = nN * nBinsPerSymbol
 
     # In the fast fading case , the intrinsic probabilities can be computed only
     # if both the noise spectral density and the average Es/No ratio are known.
@@ -315,7 +307,8 @@ def q65_intrinsics_fastfading(
     #    by the sum of all of them
 
     # Evaluate the average noise spectral density
-    fNoiseVar = np.mean(input_energies[:nBinsPerCodeword])
+    # fNoiseVar = np.mean(input_energies.ravel()[:nBinsPerCodeword])
+    fNoiseVar = np.mean(input_energies[:nBinsPerSymbol, :nM])
 
     # The noise spectral density so computed includes also the signal power.
     # Therefore we scale it accordingly to the Es/No assumed by the decoder
@@ -347,6 +340,9 @@ def q65_intrinsics_fastfading(
 
     hhsz = hlen - 1  # number of symmetric taps
     hlast = 2 * hhsz  # index of the central tap
+
+    input_energies = input_energies.ravel()
+
     for n in range(nN):  # for each symbol in the message
         # compute the logarithm of the tone probability
         # as a weighted sum of the pertaining energies
@@ -413,7 +409,7 @@ def q65_esnodb_fastfading(
         # sum over all the pertaining bins
         # for j in range(nTotWeights):
         #     EsPlusWNo += input_energies[cur_bin_idx + j]
-        EsPlusWNo += np.sum(input_energies[cur_bin_idx: cur_bin_idx + nTotWeights])
+        EsPlusWNo += np.sum(input_energies.ravel()[cur_bin_idx: cur_bin_idx + nTotWeights])
 
         cur_sym_idx += nBinsPerSymbol
 
@@ -439,8 +435,13 @@ def q65_esnodb_fastfading(
     return EsNodB
 
 
-def q65_intrinsics_ff(codec: q65_codec_ds, s3: npt.NDArray[np.float64], sub_mode: int, B90Ts: float,
-                      fading_model: int) -> npt.NDArray[
+def q65_intrinsics_ff(
+        codec: q65_codec_ds,
+        s3: npt.NDArray[np.float64],
+        sub_mode: int,
+        B90Ts: float,
+        fading_model: int
+) -> npt.NDArray[
     np.float64]:
     # Input:   s3[LL,NN]       Received energies
     #          submode         0=A, 4=E
@@ -520,25 +521,16 @@ def qra_extrinsic(
     qra_cdeg = qra_code.cdeg
     qra_v2cmidx = qra_code.v2cmidx
     qra_c2vmidx = qra_code.c2vmidx
-    qra_pmat = qra_code.gfpmat
+    qra_pmat = qra_code.gfpmat.reshape((-1, qra_M))
     qra_msgw = qra_code.msgw
-
-    # define ADDRMSG(fp, msgidx)    PD_ROWADDR(fp,qra_M,msgidx)
-    # define C2VMSG(msgidx)         PD_ROWADDR(qra_c2vmsg,qra_M,msgidx)
-    # define V2CMSG(msgidx)         PD_ROWADDR(qra_v2cmsg,qra_M,msgidx)
-    # define MSGPERM(logw)          PD_ROWADDR(qra_pmat,qra_M,logw)
-    C2VMSG = partial(PD_ROWADDR, qra_c2vmsg, qra_M)
-    V2CMSG = partial(PD_ROWADDR, qra_v2cmsg, qra_M)
-    MSGPERM = partial(PD_ROWADDR, qra_pmat, qra_M)
-    ADDRMSG = partial(PD_ROWADDR, ix, qra_M)
 
     # float msgout[QRACODE_MAX_M]; # we use a fixed size in order to avoid mallocs
     msgout = np.zeros(QRACODE_MAX_M, dtype=np.float64)
 
     rc = -1  # rc>=0  extrinsic converged to 1 at iteration rc (rc=0..maxiter-1)
-    # # rc=-1  no convergence in the given number of iterations
-    # # rc=-2  error in the code tables (code checks degrees must be >1)
-    # # rc=-3  M is larger than QRACODE_MAX_M
+    # rc=-1  no convergence in the given number of iterations
+    # rc=-2  error in the code tables (code checks degrees must be >1)
+    # rc=-3  M is larger than QRACODE_MAX_M
 
     if qra_M > QRACODE_MAX_M:
         raise MExceeded
@@ -546,7 +538,7 @@ def qra_extrinsic(
     # message initialization -------------------------------------------------------
 
     # init c->v variable intrinsic msgs
-    pd_init(C2VMSG(0), ix, qra_M * qra_V)
+    qra_c2vmsg[:qra_V, :qra_M] = ix[:qra_V, :qra_M]
 
     # init the v->c messages directed to code factors (k=1..ndeg) with the intrinsic info
     for nv in range(qra_V):  # current variable
@@ -556,7 +548,7 @@ def qra_extrinsic(
         # copy intrinsics on v->c
         for k in range(1, ndeg):
             msg_idx = qra_v2cmidx[msgbase + k]  # current message index
-            pd_init(V2CMSG(msg_idx), ADDRMSG(nv), qra_M)
+            qra_v2cmsg[msg_idx, :qra_M] = ix[nv, :qra_M]
 
     # message passing algorithm iterations ------------------------------
 
@@ -597,12 +589,12 @@ def qra_extrinsic(
             # v->c  -> fwht(v->c)
             for k in range(ndeg):
                 msg_idx = qra_c2vmidx[msgbase + k]  # msg index
-                np_fwht(qra_m, V2CMSG(msg_idx), V2CMSG(msg_idx))  # compute fwht
+                np_fwht(qra_m, qra_v2cmsg[msg_idx, :], qra_v2cmsg[msg_idx, :])  # compute fwht
 
             # compute products and transform them back in the WH "time" domain
             for k in range(ndeg):  # loop indexes
                 # init output message to uniform distribution
-                pd_init(msgout, pd_uniform(qra_m), qra_M)
+                msgout[:qra_M] = pd_uniform(qra_m)[:qra_M]
 
                 # c->v = prod(fwht(v->c))
                 # TODO: we assume that checks degrees are not larger than three but
@@ -610,7 +602,7 @@ def qra_extrinsic(
                 for kk in range(ndeg):  # loop indexes
                     if kk != k:
                         msg_idx = qra_c2vmidx[msgbase + kk]
-                        pd_imul(msgout, V2CMSG(msg_idx), qra_m)
+                        pd_imul(msgout, qra_v2cmsg[msg_idx, :], qra_m)
 
                 # transform product back in the WH "time" domain
 
@@ -627,10 +619,10 @@ def qra_extrinsic(
                 wmsg = qra_msgw[msg_idx]  # current msg weight
 
                 if wmsg == 0:
-                    pd_init(C2VMSG(msg_idx), msgout, qra_M)
+                    qra_c2vmsg[msg_idx, :qra_M] = msgout[:qra_M]
                 else:
                     # output p(alfa^(-w)*x)
-                    pd_bwdperm(C2VMSG(msg_idx), msgout, MSGPERM(wmsg), qra_M)
+                    pd_bwdperm(qra_c2vmsg[msg_idx, :], msgout, qra_pmat[wmsg, :], qra_M)
 
         # v->c step -----------------------------------------------------
         for nv in range(qra_V):
@@ -639,14 +631,14 @@ def qra_extrinsic(
 
             for k in range(ndeg):
                 # init output message to uniform distribution
-                pd_init(msgout, pd_uniform(qra_m), qra_M)
+                msgout[:qra_M] = pd_uniform(qra_m)[:qra_M]
 
                 # v->c msg = prod(c->v)
                 # TODO: factor factors to reduce the number of computations for high degree nodes
                 for kk in range(ndeg):
                     if kk != k:
                         msg_idx = qra_v2cmidx[msgbase + kk]
-                        pd_imul(msgout, C2VMSG(msg_idx), qra_m)
+                        pd_imul(msgout, qra_c2vmsg[msg_idx, :], qra_m)
 
                 # normalize the result to a probability distribution
                 pd_norm(msgout, qra_m)
@@ -655,10 +647,10 @@ def qra_extrinsic(
                 wmsg = qra_msgw[msg_idx]  # current msg weight
 
                 if wmsg == 0:
-                    pd_init(V2CMSG(msg_idx), msgout, qra_M)
+                    qra_v2cmsg[msg_idx, :qra_M] = msgout[:qra_M]
                 else:
                     # output p(alfa^w*x)
-                    pd_fwdperm(V2CMSG(msg_idx), msgout, MSGPERM(wmsg), qra_M)
+                    pd_fwdperm(qra_v2cmsg[msg_idx, :qra_M], msgout, qra_pmat[wmsg, :], qra_M)
 
         # check extrinsic information ------------------------------
         # We assume that decoding is successful if each of the extrinsic
@@ -678,7 +670,7 @@ def qra_extrinsic(
 
         totex = 0  # total extrinsic information
         for nv in range(qra_V):
-            totex += pd_max(V2CMSG(nv), qra_M)
+            totex += np.max(qra_v2cmsg[nv, :qra_M])
 
         if totex > (1.0 * (qra_V) - 0.01):
             # the total maximum extrinsic information of each symbol in the codeword
@@ -688,11 +680,10 @@ def qra_extrinsic(
             break  # remove the break to evaluate the decoder speed performance as a function of the max iterations number)
 
     # copy extrinsic information to output to do the actual max a posteriori prob decoding
-    pd_init(ex, V2CMSG(0), (qra_M * qra_V))
+    ex[:qra_V, :qra_M] = qra_v2cmsg[:qra_V, :qra_M]
     return rc
 
 
-# void q65subs::qra_mapdecode(const qracode *pcode, int *xdec, float *pex, const float *pix)
 def qra_mapdecode(pcode: QRACode, xdec: npt.NDArray[np.int64], pex: npt.NDArray[np.float64],
                   pix: npt.NDArray[np.float64]):
     # Maximum a posteriori probability decoding.
@@ -711,8 +702,8 @@ def qra_mapdecode(pcode: QRACode, xdec: npt.NDArray[np.int64], pex: npt.NDArray[
 
     for k in range(qra_K):
         # compute a posteriori prob
-        pd_imul(PD_ROWADDR(pex, qra_M, k), PD_ROWADDR(pix, qra_M, k), qra_m)
-        xdec[k] = pd_argmax(PD_ROWADDR(pex, qra_M, k), qra_M)
+        pd_imul(pex[k, :], pix[k, :], qra_m)
+        xdec[k] = np.argmax(pex[k, :qra_M])
 
 
 def q65_decode(
@@ -738,19 +729,25 @@ def q65_decode(
 
     # Depuncture intrinsics observations as required by the code type
     if qra_code.type == QRATYPE_CRCPUNCTURED:
-        ix[:nK * nM] = intrinsics[:nK * nM]  # information symbols
-        pd_init(PD_ROWADDR(ix, nM, nK), pd_uniform(nBits), nM)  # crc
-        ix[(nK + 1) * nM:(nK + 1) * nM + (nN - nK) * nM] = intrinsics[
-                                                           nK * nM: nK * nM + (nN - nK) * nM]  # parity checks
+        ix[:nK, :nM] = intrinsics[:nK, :nM]
+
+        uniform = pd_uniform(nBits)
+        ix[nK, :nM] = uniform[:nM]  # crc
+
+        ix[nK + 1: nK + 1 + nN - nK, :nM] = intrinsics[nK:nK + nN - nK, :nM]  # parity checks
+
     elif qra_code.type == QRATYPE_CRCPUNCTURED2:
-        ix[:nK * nM] = intrinsics[:nK * nM]  # information symbols
-        pd_init(PD_ROWADDR(ix, nM, nK), pd_uniform(nBits), nM)  # crc
-        pd_init(PD_ROWADDR(ix, nM, nK + 1), pd_uniform(nBits), nM)  # crc
-        ix[(nK + 2) * nM: (nK + 2) * nM + (nN - nK) * nM] = intrinsics[
-                                                            nK * nM: nK * nM + (nN - nK) * nM]  # parity checks
+        ix[:nK, :nM] = intrinsics[:nK, :nM]
+
+        uniform = pd_uniform(nBits)
+        ix[nK, :nM] = uniform[:nM]  # crc
+        ix[nK + 1, :nM] = uniform[:nM]  # crc
+
+        ix[nK + 2: nK + 2 + nN - nK, :nM] = intrinsics[nK: nK + nN - nK, :nM]  # parity checks
+
     else:
         # no puncturing
-        ix[:nN * nM] = intrinsics[:nN * nM]  # as they are
+        ix[:nK, :nM] = intrinsics[:nK, :nM]  # as they are
 
     # mask the intrinsics with the available a priori knowledge
     q65_mask(qra_code, ix, APMask, APSymbols)
@@ -758,12 +755,14 @@ def q65_decode(
     # Compute the extrinsic symbols probabilities with the message-passing algorithm
     # Stop if the extrinsics information does not converges to unity
     # within the given number of iterations
-    rc = qra_extrinsic(qra_code,
-                       ex,
-                       ix,
-                       max_iters,
-                       codec.qra_v2cmsg,
-                       codec.qra_c2vmsg)
+    rc = qra_extrinsic(
+        qra_code,
+        ex,
+        ix,
+        max_iters,
+        codec.qra_v2cmsg,
+        codec.qra_c2vmsg
+    )
     if rc < 0:
         # failed to converge to a solution
         # return Q65_DECODE_FAILED
@@ -844,7 +843,9 @@ if __name__ == '__main__':
     with open("../data2.json") as f:
         data = json.load(f)
 
-    s3_1fa = data["s3_1fa"]
+    LL = 64 * 10  # (2 + mode_q65);
+    NN = 63
+    s3_1fa = np.array(data["s3_1fa"]).reshape((LL, NN))
     nsubmode = 1
     b90ts = 0.516000
     nFadingModel = 1
@@ -856,7 +857,11 @@ if __name__ == '__main__':
 
     codec = q65_init()
     s3prob = q65_intrinsics_ff(codec, s3_1fa, nsubmode, b90ts, nFadingModel)
-    rc, esnodb = q65_dec(codec, s3_1fa, s3prob.ravel(), apmask, apsymbols, s_maxiters, dat4)
+    rc, esnodb = q65_dec(codec, s3_1fa, s3prob, apmask, apsymbols, s_maxiters, dat4)
 
     print(rc, esnodb)
     print(dat4)
+
+# Should be:
+# 1 32.47482297965466
+# [ 0  0  0  0  8  5 38 44 63 57 19  9 50]
