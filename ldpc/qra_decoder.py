@@ -163,10 +163,6 @@ def pd_init(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], ndim: in
     dst[:ndim] = src[:ndim]
 
 
-def PD_ROWADDR(arr: npt.NDArray[np.float64], ndim: int, idx: int) -> npt.NDArray[np.float64]:
-    return arr[ndim * idx:]
-
-
 def pd_imul(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], nlogdim: int):
     idx = int(2 ** nlogdim)
     dst[:idx] *= src[:idx]
@@ -242,7 +238,7 @@ def q65_intrinsics_fastfading(
         sub_mode: int,  # submode idx (0=A ... 4=E)
         B90Ts: float,  # spread bandwidth (90% fractional energy)
         fading_model: int  # 0=Gaussian 1=Lorentzian fade model
-):  # -> npt.NDArray[np.float64]:
+) -> npt.NDArray[np.float64]:
     # As the symbol duration in q65 is different than in QRA64,
     # the fading tables continue to be valid if the B90Ts parameter
     # is properly scaled to the QRA64 symbol interval
@@ -307,7 +303,6 @@ def q65_intrinsics_fastfading(
     #    by the sum of all of them
 
     # Evaluate the average noise spectral density
-    # fNoiseVar = np.mean(input_energies.ravel()[:nBinsPerCodeword])
     fNoiseVar = np.mean(input_energies[:nBinsPerSymbol, :nM])
 
     # The noise spectral density so computed includes also the signal power.
@@ -387,6 +382,8 @@ def q65_esnodb_fastfading(
 ) -> float:
     # Estimate the Es/No ratio of the decoded codeword
 
+    input_energies = input_energies.ravel()
+
     qra_N = codec.pQraCode.q65_get_codeword_length()
     qra_M = codec.pQraCode.q65_get_alphabet_size()
 
@@ -407,9 +404,7 @@ def q65_esnodb_fastfading(
         cur_bin_idx = cur_tone_idx - nWeights + 1  # point to first bin
 
         # sum over all the pertaining bins
-        # for j in range(nTotWeights):
-        #     EsPlusWNo += input_energies[cur_bin_idx + j]
-        EsPlusWNo += np.sum(input_energies.ravel()[cur_bin_idx: cur_bin_idx + nTotWeights])
+        EsPlusWNo += np.sum(input_energies[cur_bin_idx: cur_bin_idx + nTotWeights])
 
         cur_sym_idx += nBinsPerSymbol
 
@@ -437,18 +432,11 @@ def q65_esnodb_fastfading(
 
 def q65_intrinsics_ff(
         codec: q65_codec_ds,
-        s3: npt.NDArray[np.float64],
-        sub_mode: int,
-        B90Ts: float,
-        fading_model: int
-) -> npt.NDArray[
-    np.float64]:
-    # Input:   s3[LL,NN]       Received energies
-    #          submode         0=A, 4=E
-    #          B90             Spread bandwidth, 90% fractional energy
-    #          fadingModel     0=Gaussian, 1=Lorentzian
-    # Output:  s3prob[LL,NN]   Symbol-value intrinsic probabilities
-
+        s3: npt.NDArray[np.float64],  # [LL,NN] Received energies
+        sub_mode: int,  # 0=A, 4=E
+        B90Ts: float,  # Spread bandwidth, 90% fractional energy
+        fading_model: int  # 0=Gaussian, 1=Lorentzian
+) -> npt.NDArray[np.float64]:  # [LL,NN] Symbol-value intrinsic probabilities
     s3prob = q65_intrinsics_fastfading(codec, s3, sub_mode, B90Ts, fading_model)
     return s3prob
 
@@ -494,10 +482,10 @@ def q65_mask(qra_code: QRACode, ix: npt.NDArray[np.float64], mask: npt.NDArray[n
                     # This symbol value is not allowed
                     # by the AP information
                     # Set its probability to zero
-                    PD_ROWADDR(ix, qra_M, k)[kk] = 0.0
+                    ix[k, kk] = 0.0
 
             # normalize to a probability distribution
-            pd_norm(PD_ROWADDR(ix, qra_M, k), qra_m)
+            pd_norm(ix[k, :], qra_m)
 
 
 QRACODE_MAX_M = 256
