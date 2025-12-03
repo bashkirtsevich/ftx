@@ -133,8 +133,8 @@ qra15_65_64_irr_e23 = QRACode(
 
 
 @dataclass
-class q65_codec_ds:
-    pQraCode: QRACode  # qra code to be used by the codec
+class Q65Codec:
+    qra_code: QRACode  # qra code to be used by the codec
     decoderEsNoMetric: float  # value for which we optimize the decoder metric
     x: npt.NDArray[np.int64]  # codec input
     y: npt.NDArray[np.int64]  # codec output
@@ -151,39 +151,39 @@ class q65_codec_ds:
     ffWeight: npt.NDArray[np.float64]  # len = Q65_FASTFADING_MAXWEIGTHS
 
 
-def np_fwht(nlogdim: int, dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64]):
-    return np_fwht_tab[nlogdim](dst, src)
+def np_fwht(log_dim: int, dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64]):
+    return np_fwht_tab[log_dim](dst, src)
 
 
-def pd_uniform(nlogdim: int) -> npt.NDArray[np.float64]:
-    return pd_uniform_tab[nlogdim]
+def pd_uniform(log_dim: int) -> npt.NDArray[np.float64]:
+    return pd_uniform_tab[log_dim]
 
 
-def pd_imul(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], nlogdim: int):
-    idx = int(2 ** nlogdim)
+def pd_imul(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], log_dim: int):
+    idx = int(2 ** log_dim)
     dst[:idx] *= src[:idx]
 
 
-def q65_init():
-    pqracode = qra15_65_64_irr_e23
+def q65_init() -> Q65Codec:
+    qra_code = qra15_65_64_irr_e23
     # Eb/No value for which we optimize the decoder metric (AWGN/Rayleigh cases)
     EbNodBMetric = 2.8
     EbNoMetric = 10 ** (EbNodBMetric / 10)
 
     # compute and store the AWGN/Rayleigh Es/No ratio for which we optimize
     # the decoder metric
-    nm = pqracode.q65_get_bits_per_symbol()
-    R = pqracode.q65_get_code_rate()
+    nm = qra_code.q65_get_bits_per_symbol()
+    R = qra_code.q65_get_code_rate()
 
-    pCodec = q65_codec_ds(
-        pQraCode=pqracode,
+    codec = Q65Codec(
+        qra_code=qra_code,
         decoderEsNoMetric=1.0 * nm * R * EbNoMetric,
-        x=np.zeros(pqracode.K, dtype=np.int64),
-        y=np.zeros(pqracode.N, dtype=np.int64),
-        qra_v2cmsg=np.zeros((pqracode.NMSG, pqracode.M), dtype=np.float64),
-        qra_c2vmsg=np.zeros((pqracode.NMSG, pqracode.M), dtype=np.float64),
-        ix=np.zeros((pqracode.N, pqracode.M), dtype=np.float64),
-        ex=np.zeros((pqracode.N, pqracode.M), dtype=np.float64),
+        x=np.zeros(qra_code.K, dtype=np.int64),
+        y=np.zeros(qra_code.N, dtype=np.int64),
+        qra_v2cmsg=np.zeros((qra_code.NMSG, qra_code.M), dtype=np.float64),
+        qra_c2vmsg=np.zeros((qra_code.NMSG, qra_code.M), dtype=np.float64),
+        ix=np.zeros((qra_code.N, qra_code.M), dtype=np.float64),
+        ex=np.zeros((qra_code.N, qra_code.M), dtype=np.float64),
 
         nBinsPerTone=0,
         nBinsPerSymbol=0,
@@ -192,7 +192,7 @@ def q65_init():
         nWeights=0,
         ffWeight=np.zeros(Q65_FASTFADING_MAXWEIGTHS, dtype=np.float64)
     )
-    return pCodec
+    return codec
 
 
 def pd_norm_tab(ppd: npt.NDArray[np.float64], c0: int) -> float:
@@ -229,7 +229,7 @@ def pd_fwdperm(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], perm:
 
 
 def q65_intrinsics_fastfading(
-        codec: q65_codec_ds,
+        codec: Q65Codec,
         # pIntrinsics: npt.NDArray[np.float64], # intrinsic symbol probabilities output
         input_energies: npt.NDArray[np.float64],  # received energies input
         sub_mode: int,  # submode idx (0=A ... 4=E)
@@ -270,12 +270,10 @@ def q65_intrinsics_fastfading(
     fTemp = 8.0 * np.log(B90) / np.log(240.0)  # assumed Es/No degradation for the given fading bandwidth
     EsNoMetric = codec.decoderEsNoMetric * np.pow(10.0, fTemp / 10.0)
 
-    nM = codec.pQraCode.q65_get_alphabet_size()
-    nN = codec.pQraCode.q65_get_codeword_length()
+    nM = codec.qra_code.q65_get_alphabet_size()
+    nN = codec.qra_code.q65_get_codeword_length()
     nBinsPerTone = 1 << sub_mode
-
     nBinsPerSymbol = nM * (2 + nBinsPerTone)
-    # nBinsPerCodeword = nN * nBinsPerSymbol
 
     # In the fast fading case , the intrinsic probabilities can be computed only
     # if both the noise spectral density and the average Es/No ratio are known.
@@ -340,7 +338,7 @@ def q65_intrinsics_fastfading(
         # as a weighted sum of the pertaining energies
         cur_bin_id = cur_sym_id - hlen + 1  # point to the first bin of the current symbol
 
-        maxlogp = 0.0
+        max_log_prob = 0.0
         for k in range(nM):  # for each tone in the current symbol
             # do a symmetric weighted sum
             fTemp = 0.0
@@ -349,7 +347,7 @@ def q65_intrinsics_fastfading(
 
             fTemp += weight[hhsz] * input_energies[cur_bin_id + hhsz]
 
-            maxlogp = max(maxlogp, fTemp)  # keep track of the max
+            max_log_prob = max(max_log_prob, fTemp)  # keep track of the max
             cur_ix[n, k] = fTemp
 
             cur_bin_id += nBinsPerTone  # next tone
@@ -357,7 +355,7 @@ def q65_intrinsics_fastfading(
         # exponentiate and accumulate the normalization constant
         sumix = 0.0
         for k in range(nM):
-            x = cur_ix[n, k] - maxlogp
+            x = cur_ix[n, k] - max_log_prob
             x = min(85.0, max(-85.0, x))
             fTemp = np.exp(x)
             cur_ix[n, k] = fTemp
@@ -373,16 +371,15 @@ def q65_intrinsics_fastfading(
 
 
 def q65_esnodb_fastfading(
-        codec: q65_codec_ds,
+        codec: Q65Codec,
         y_dec: npt.NDArray[np.int64],
         input_energies: npt.NDArray[np.float64],
 ) -> float:
     # Estimate the Es/No ratio of the decoded codeword
-
     input_energies = input_energies.ravel()
 
-    qra_N = codec.pQraCode.q65_get_codeword_length()
-    qra_M = codec.pQraCode.q65_get_alphabet_size()
+    qra_N = codec.qra_code.q65_get_codeword_length()
+    qra_M = codec.qra_code.q65_get_alphabet_size()
 
     nBinsPerTone = codec.nBinsPerTone
     nBinsPerSymbol = codec.nBinsPerSymbol
@@ -428,7 +425,7 @@ def q65_esnodb_fastfading(
 
 
 def q65_intrinsics_ff(
-        codec: q65_codec_ds,
+        codec: Q65Codec,
         s3: npt.NDArray[np.float64],  # [LL,NN] Received energies
         sub_mode: int,  # 0=A, 4=E
         B90Ts: float,  # Spread bandwidth, 90% fractional energy
@@ -692,7 +689,7 @@ def qra_mapdecode(pcode: QRACode, xdec: npt.NDArray[np.int64], pex: npt.NDArray[
 
 
 def q65_decode(
-        codec: q65_codec_ds,
+        codec: Q65Codec,
         decoded_codeword: npt.NDArray[np.int64],
         decoded_msg: npt.NDArray[np.int64],
         intrinsics: npt.NDArray[np.float64],
@@ -700,7 +697,7 @@ def q65_decode(
         APSymbols: npt.NDArray[np.int64],
         max_iters: int
 ):
-    qra_code = codec.pQraCode
+    qra_code = codec.qra_code
     ix = codec.ix
     ex = codec.ex
 
@@ -792,26 +789,17 @@ def q65_decode(
 
 
 def q65_dec(
-        codec: q65_codec_ds,
-        s3: npt.NDArray[np.float64],
-        s3prob: npt.NDArray[np.float64],
-        APmask: npt.NDArray[np.int64],
-        APsymbols: npt.NDArray[np.int64],
+        codec: Q65Codec,
+        s3: npt.NDArray[np.float64],  # [LL,NN] Symbol spectra
+        s3prob: npt.NDArray[np.float64],  # [LL,NN] Symbol-value intrinsic probabilities
+        APmask: npt.NDArray[np.int64],  # [13]  AP information to be used in decoding
+        APsymbols: npt.NDArray[np.int64],  # [13] Available AP informtion
 
-        maxiters: int,
-        xdec: npt.NDArray[np.int64],
-):
-    # Input:   s3[LL,NN]       Symbol spectra
-    #          s3prob[LL,NN]   Symbol-value intrinsic probabilities
-    #          APmask[13]      AP information to be used in decoding
-    #          APsymbols[13]   Available AP informtion
-    # Output:
-    #          esnodb0         Estimated Es/No (dB)
-    #          xdec[13]        Decoded 78-bit message as 13 six-bit integers
-    #          rc0             Return code from q65_decode()
-
+        max_iters: int,
+        x_dec: npt.NDArray[np.int64],  # [13] Decoded 78-bit message as 13 six-bit integers
+) -> typing.Tuple[int, float]:  # Return code from q65_decode(); Estimated Es/No (dB)
     ydec = np.zeros(63, dtype=np.int64)
-    rc = q65_decode(codec, ydec, xdec, s3prob, APmask, APsymbols, maxiters)
+    rc = q65_decode(codec, ydec, x_dec, s3prob, APmask, APsymbols, max_iters)
     # rc = -1:  Invalid params
     # rc = -2:  Decode failed
     # rc = -3:  CRC mismatch
@@ -846,7 +834,3 @@ if __name__ == '__main__':
 
     print(rc, esnodb)
     print(dat4)
-
-# Should be:
-# 1 32.47482297965466
-# [ 0  0  0  0  8  5 38 44 63 57 19  9 50]
