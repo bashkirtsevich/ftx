@@ -159,10 +159,6 @@ def pd_uniform(nlogdim: int) -> npt.NDArray[np.float64]:
     return pd_uniform_tab[nlogdim]
 
 
-def pd_init(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], ndim: int):
-    dst[:ndim] = src[:ndim]
-
-
 def pd_imul(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], nlogdim: int):
     idx = int(2 ** nlogdim)
     dst[:idx] *= src[:idx]
@@ -210,7 +206,8 @@ def pd_norm_tab(ppd: npt.NDArray[np.float64], c0: int) -> float:
     t = np.sum(ppd[:c1])
 
     if t <= 0:
-        pd_init(ppd, pd_uniform(c0), pd_log2dim[c0])
+        dim = pd_log2dim[c0]
+        ppd[:dim] = pd_uniform(c0)[:dim]
         return t
 
     ppd *= 1 / t
