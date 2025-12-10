@@ -1,11 +1,9 @@
 import typing
 import json
-import numpy as np
-from numba import njit
 import numpy.typing as npt
 
 from consts.q65 import *
-from ldpc.qra_decoder import q65_intrinsics_ff, q65_dec_fullaplist, q65_dec, q65_init
+from qra.q65 import q65_intrinsics_ff, q65_dec_fullaplist, q65_dec, q65_init
 
 
 def smo121(a: np.ndarray):
@@ -1050,22 +1048,4 @@ class Q65:
             irc = -1
 
 
-if __name__ == '__main__':
-    with open("../data3.json") as f:
-        data = json.load(f)
 
-    iwave = np.array(data["iwave"], dtype=np.float64)
-
-    q65 = Q65()
-    q65.q65_dec0(
-        iavg=0,
-        iwave=iwave,
-        nfqso=1000,
-        lclearave=False,
-        emedelay=False,
-        nQSOp=0,
-        cont_id=0,
-        cont_type=0,
-        stageno=0,
-        fsdec=False,
-    )

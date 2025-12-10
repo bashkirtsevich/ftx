@@ -1,110 +1,15 @@
-import json
-import math
 import typing
-from dataclasses import dataclass
-from functools import partial
 
-import numpy as np
-from numba import jit
 import numpy.typing as npt
 from crc.q65 import crc6, crc12
 
 from consts.q65 import *
 from encoders.qra import qra_encode
+from qra.exceptions import InvalidFadingModel, CRCMismatch, MExceeded
+from qra.q65_codec import Q65Codec
+from qra.qra_code_params import QRACodeParams
 
-
-class QRAException(Exception):
-    ...
-
-
-class InvalidQRAType(QRAException):
-    ...
-
-
-class InvalidFadingModel(QRAException):
-    ...
-
-
-class CRCMismatch(QRAException):
-    ...
-
-
-class MExceeded(QRAException):
-    ...
-
-
-@dataclass
-class QRACode:
-    # code parameters
-    K: int  # number of information symbols
-    N: int  # codeword length in symbols
-    m: int  # bits/symbol
-    M: int  # Symbol alphabet cardinality (2^m)
-    a: int  # code grouping factor
-    NC: int  # number of check symbols (N-K)
-    V: int  # number of variables in the code graph (N)
-    C: int  # number of factors in the code graph (N +(N-K)+1)
-    NMSG: int  # number of msgs in the code graph
-    MAXVDEG: int  # maximum variable degree
-    MAXCDEG: int  # maximum factor degree
-    type: int  # see QRATYPE_xx defines # FIXME: use enum
-    R: float  # code rate (K/N)
-    name: str  # code name
-    # tables used by the encoder
-    acc_input_idx: npt.NDArray[np.int64]
-    acc_input_wlog: npt.NDArray[np.int64]
-    gflog: npt.NDArray[np.int64]
-    gfexp: npt.NDArray[np.int64]
-    # tables used by the decoder -------------------------
-    msgw: npt.NDArray[np.int64]
-    vdeg: npt.NDArray[np.int64]
-    cdeg: npt.NDArray[np.int64]
-    v2cmidx: npt.NDArray[np.int64]
-    c2vmidx: npt.NDArray[np.int64]
-    gfpmat: npt.NDArray[np.int64]  # Permutation matrix
-
-    def q65_get_bits_per_symbol(self):
-        return self.m
-
-    def q65_get_code_rate(self):
-        return 1.0 * self.q65_get_message_length() / self.q65_get_codeword_length()
-
-    def q65_get_message_length(self):
-        # return the actual information message length (in symbols)
-        # excluding any punctured symbol
-
-        if self.type == QRATYPE_NORMAL:
-            return self.K
-        elif self.type in (QRATYPE_CRC, QRATYPE_CRCPUNCTURED):
-            # one information symbol of the underlying qra code is reserved for CRC
-            return self.K - 1
-        elif self.type == QRATYPE_CRCPUNCTURED2:
-            # two code information symbols are reserved for CRC
-            return self.K - 2
-
-        raise InvalidQRAType
-
-    def q65_get_codeword_length(self):
-        # return the actual codeword length (in symbols)
-        # excluding any punctured symbol
-
-        if self.type in (QRATYPE_NORMAL, QRATYPE_CRC):
-            # no puncturing
-            return self.N
-        elif self.type == QRATYPE_CRCPUNCTURED:
-            # the CRC symbol is punctured
-            return self.N - 1
-        elif self.type == QRATYPE_CRCPUNCTURED2:
-            # the two CRC symbols are punctured
-            return self.N - 2
-
-        raise InvalidQRAType
-
-    def q65_get_alphabet_size(self):
-        return self.M
-
-
-qra15_65_64_irr_e23 = QRACode(
+qra15_65_64_irr_e23 = QRACodeParams(
     qra_K,
     qra_N,
     qra_m,
@@ -116,7 +21,7 @@ qra15_65_64_irr_e23 = QRACode(
     qra_NMSG,
     qra_MAXVDEG,
     qra_MAXCDEG,
-    QRATYPE_CRCPUNCTURED2,
+    QRAType.CRC_PUNCTURED2,
     qra_R,
     CODE_NAME,
     qra_acc_input_idx,
@@ -130,25 +35,6 @@ qra15_65_64_irr_e23 = QRACode(
     qra_c2vmidx,
     qra_pmat
 )
-
-
-@dataclass
-class Q65Codec:
-    qra_code: QRACode  # qra code to be used by the codec
-    decoderEsNoMetric: float  # value for which we optimize the decoder metric
-    x: npt.NDArray[np.int64]  # codec input
-    y: npt.NDArray[np.int64]  # codec output
-    qra_v2cmsg: npt.NDArray[np.float64]  # decoder v->c messages
-    qra_c2vmsg: npt.NDArray[np.float64]  # decoder c->v messages
-    ix: npt.NDArray[np.float64]  # decoder intrinsic information
-    ex: npt.NDArray[np.float64]  # decoder extrinsic information
-    # variables used to compute the intrinsics in the fast-fading case
-    nBinsPerTone: int
-    nBinsPerSymbol: int
-    ffNoiseVar: float
-    ffEsNoMetric: float
-    nWeights: int
-    ffWeight: npt.NDArray[np.float64]  # len = Q65_FASTFADING_MAXWEIGTHS
 
 
 def np_fwht(log_dim: int, dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64]):
@@ -172,8 +58,8 @@ def q65_init() -> Q65Codec:
 
     # compute and store the AWGN/Rayleigh Es/No ratio for which we optimize
     # the decoder metric
-    nm = qra_code.q65_get_bits_per_symbol()
-    R = qra_code.q65_get_code_rate()
+    nm = qra_code.bits_per_symbol
+    R = qra_code.code_rate
 
     codec = Q65Codec(
         qra_code=qra_code,
@@ -270,8 +156,8 @@ def q65_intrinsics_fastfading(
     fTemp = 8.0 * np.log(B90) / np.log(240.0)  # assumed Es/No degradation for the given fading bandwidth
     EsNoMetric = codec.decoderEsNoMetric * np.pow(10.0, fTemp / 10.0)
 
-    nM = codec.qra_code.q65_get_alphabet_size()
-    nN = codec.qra_code.q65_get_codeword_length()
+    nM = codec.qra_code.alphabet_size
+    nN = codec.qra_code.codeword_length
     nBinsPerTone = 1 << sub_mode
     nBinsPerSymbol = nM * (2 + nBinsPerTone)
 
@@ -378,8 +264,8 @@ def q65_esnodb_fastfading(
     # Estimate the Es/No ratio of the decoded codeword
     input_energies = input_energies.ravel()
 
-    qra_N = codec.qra_code.q65_get_codeword_length()
-    qra_M = codec.qra_code.q65_get_alphabet_size()
+    qra_N = codec.qra_code.codeword_length
+    qra_M = codec.qra_code.alphabet_size
 
     nBinsPerTone = codec.nBinsPerTone
     nBinsPerSymbol = codec.nBinsPerSymbol
@@ -435,12 +321,6 @@ def q65_intrinsics_ff(
     return s3prob
 
 
-# Max codeword list size in q65_decode_fullaplist
-Q65_FULLAPLIST_SIZE = 256
-# Minimum codeword loglikelihood for decoding
-Q65_LLH_THRESHOLD = -260.0
-
-
 # Full AP decoding from a list of codewords
 # Compute and verify the loglikelihood of the decoded codeword
 def q65_check_llh(intrin: npt.NDArray[np.float64], ydec: npt.NDArray[np.int64], N: int, M: int) -> int:
@@ -455,7 +335,8 @@ def q65_check_llh(intrin: npt.NDArray[np.float64], ydec: npt.NDArray[np.int64], 
     return t  # (t, t >= Q65_LLH_THRESHOLD)
 
 
-def q65_mask(qra_code: QRACode, ix: npt.NDArray[np.float64], mask: npt.NDArray[np.int64], x: npt.NDArray[np.int64]):
+def q65_mask(qra_code: QRACodeParams, ix: npt.NDArray[np.float64], mask: npt.NDArray[np.int64],
+             x: npt.NDArray[np.int64]):
     # mask intrinsic information ix with available a priori knowledge
     qra_M = qra_code.M
     qra_m = qra_code.m
@@ -463,7 +344,7 @@ def q65_mask(qra_code: QRACode, ix: npt.NDArray[np.float64], mask: npt.NDArray[n
     # Exclude from masking the symbols which have been punctured.
     # qra_K is the length of the mask and x arrays, which do
     # not include any punctured symbol
-    qra_K = qra_code.q65_get_message_length()
+    qra_K = qra_code.message_length
 
     # for each symbol set to zero the probability
     # of the values which are not allowed by
@@ -482,11 +363,8 @@ def q65_mask(qra_code: QRACode, ix: npt.NDArray[np.float64], mask: npt.NDArray[n
             pd_norm(ix[k, :], qra_m)
 
 
-QRACODE_MAX_M = 256
-
-
 def qra_extrinsic(
-        qra_code: QRACode,
+        qra_code: QRACodeParams,
         ex: npt.NDArray[np.float64],
         ix: npt.NDArray[np.float64],
         max_iter: int,
@@ -666,7 +544,7 @@ def qra_extrinsic(
     return rc
 
 
-def qra_mapdecode(pcode: QRACode, xdec: npt.NDArray[np.int64], pex: npt.NDArray[np.float64],
+def qra_mapdecode(pcode: QRACodeParams, xdec: npt.NDArray[np.int64], pex: npt.NDArray[np.float64],
                   pix: npt.NDArray[np.float64]):
     # Maximum a posteriori probability decoding.
     # Given the intrinsic information (pix) and extrinsic information (pex) (computed with qra_extrinsic(...))
@@ -701,8 +579,8 @@ def q65_decode(
     ix = codec.ix
     ex = codec.ex
 
-    nK = qra_code.q65_get_message_length()
-    nN = qra_code.q65_get_codeword_length()
+    nK = qra_code.message_length
+    nN = qra_code.codeword_length
     nM = qra_code.M
     nBits = qra_code.m
 
@@ -710,7 +588,7 @@ def q65_decode(
     py = codec.y
 
     # Depuncture intrinsics observations as required by the code type
-    if qra_code.type == QRATYPE_CRCPUNCTURED:
+    if qra_code.type == QRAType.CRC_PUNCTURED:
         ix[:nK, :nM] = intrinsics[:nK, :nM]
 
         uniform = pd_uniform(nBits)
@@ -718,7 +596,7 @@ def q65_decode(
 
         ix[nK + 1: nK + 1 + nN - nK, :nM] = intrinsics[nK:nK + nN - nK, :nM]  # parity checks
 
-    elif qra_code.type == QRATYPE_CRCPUNCTURED2:
+    elif qra_code.type == QRAType.CRC_PUNCTURED2:
         ix[:nK, :nM] = intrinsics[:nK, :nM]
 
         uniform = pd_uniform(nBits)
@@ -754,11 +632,11 @@ def q65_decode(
     qra_mapdecode(qra_code, px, ex, ix)
 
     # verify CRC match
-    if qra_code.type in (QRATYPE_CRC, QRATYPE_CRCPUNCTURED):
+    if qra_code.type in (QRAType.CRC, QRAType.CRC_PUNCTURED):
         crc = crc6(px[:nK])  # compute crc-6
         if crc != px[nK]:
             raise CRCMismatch  # crc doesn't match
-    elif qra_code.type == QRATYPE_CRCPUNCTURED2:
+    elif qra_code.type == QRAType.CRC_PUNCTURED2:
         crc = crc12(px[:nK])  # compute crc-12
         if (crc & 0x3F) != px[nK] or (crc >> 6) != px[nK + 1]:
             raise CRCMismatch  # crc doesn't match
@@ -776,10 +654,10 @@ def q65_decode(
     py[:] = qra_encode(px, concat=True)
 
     # ...and strip the punctured symbols from the codeword
-    if qra_code.type == QRATYPE_CRCPUNCTURED:
+    if qra_code.type == QRAType.CRC_PUNCTURED:
         decoded_codeword[:nK] = py[:nK]
         decoded_codeword[nK:nK + (nN - nK)] = py[nK + 1:nK + (nN - nK) + 1]  # puncture crc-6 symbol
-    elif qra_code.type == QRATYPE_CRCPUNCTURED2:
+    elif qra_code.type == QRAType.CRC_PUNCTURED2:
         decoded_codeword[:nK] = py[:nK]
         decoded_codeword[nK:nK + (nN - nK)] = py[nK + 2:nK + (nN - nK) + 2]  # puncture crc-12 symbol
     else:
@@ -791,7 +669,7 @@ def q65_decode(
 def q65_dec(
         codec: Q65Codec,
         s3: npt.NDArray[np.float64],  # [LL,NN] Symbol spectra
-        s3prob: npt.NDArray[np.float64],  # [LL,NN] Symbol-value intrinsic probabilities
+        s3_prob: npt.NDArray[np.float64],  # [LL,NN] Symbol-value intrinsic probabilities
         APmask: npt.NDArray[np.int64],  # [13]  AP information to be used in decoding
         APsymbols: npt.NDArray[np.int64],  # [13] Available AP informtion
 
@@ -799,7 +677,7 @@ def q65_dec(
         x_dec: npt.NDArray[np.int64],  # [13] Decoded 78-bit message as 13 six-bit integers
 ) -> typing.Tuple[int, float]:  # Return code from q65_decode(); Estimated Es/No (dB)
     ydec = np.zeros(63, dtype=np.int64)
-    rc = q65_decode(codec, ydec, x_dec, s3prob, APmask, APsymbols, max_iters)
+    rc = q65_decode(codec, ydec, x_dec, s3_prob, APmask, APsymbols, max_iters)
     # rc = -1:  Invalid params
     # rc = -2:  Decode failed
     # rc = -3:  CRC mismatch
@@ -834,9 +712,9 @@ def q65_decode_fullaplist(
     if nCodewords < 1 or nCodewords > Q65_FULLAPLIST_SIZE:
         raise Exception("Q65_DECODE_INVPARAMS")  # return Q65_DECODE_INVPARAMS
 
-    nK = codec.qra_code.q65_get_message_length()
-    nN = codec.qra_code.q65_get_codeword_length()
-    nM = codec.qra_code.q65_get_alphabet_size()
+    nK = codec.qra_code.message_length
+    nN = codec.qra_code.codeword_length
+    nM = codec.qra_code.alphabet_size
 
     # we adjust the llh threshold in order to mantain the
     # same false decode rate independently from the size
@@ -858,14 +736,9 @@ def q65_decode_fullaplist(
                 maxcw = k  # index of the most likely codeword
         pCw += nN
 
-    # q65_llh = maxllh  # save for Joe's use
-
     if maxcw < 0:  # no llh larger than threshold found
         raise Exception("Q65_DECODE_FAILED")  # return Q65_DECODE_FAILED
 
-    # pCw = pCodewords + nN * maxcw
-    # memcpy(ydec, pCw, nN * sizeof(int))
-    # memcpy(xdec, pCw, nK * sizeof(int))
     ydec[:nN] = pCodewords[nN * maxcw:nN * maxcw + nN]
     xdec[:nK] = pCodewords[nN * maxcw:nN * maxcw + nK]
 

@@ -1,4 +1,7 @@
+from enum import Enum
+
 import numpy as np
+import numpy.typing as npt
 
 Q65_SYNC = np.array([1, 9, 12, 13, 15, 22, 23, 26, 27, 33, 35, 38, 46, 50, 55, 60, 62, 66, 69, 74, 76, 85])
 
@@ -27,10 +30,20 @@ mrr73_ft = [
     0, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1, 0, 1, 0, 0, 1
 ]
 
-QRATYPE_NORMAL = 0x00  # normal code
-QRATYPE_CRC = 0x01  # code with crc - last information symbol is a CRC-6
-QRATYPE_CRCPUNCTURED = 0x02  # the CRC-6 symbol is punctured (not sent along the channel)
-QRATYPE_CRCPUNCTURED2 = 0x03  # code with CRC-12. The two crc symbols are punctured
+
+class QRAType(Enum):
+    NORMAL = 0  # normal code
+    CRC = 1  # code with crc - last information symbol is a CRC-6
+    CRC_PUNCTURED = 2  # the CRC-6 symbol is punctured (not sent along the channel)
+    CRC_PUNCTURED2 = 3  # code with CRC-12. The two crc symbols are punctured
+
+
+QRACODE_MAX_M = 256
+
+# Max codeword list size in q65_decode_fullaplist
+Q65_FULLAPLIST_SIZE = 256
+# Minimum codeword loglikelihood for decoding
+Q65_LLH_THRESHOLD = -260.0
 
 qra_K = 15  # number of information symbols
 qra_N = 65  # codeword length in symbols
@@ -546,39 +559,39 @@ repfact = np.array([
 # corresponding to a given B90 must be scaled appropriately.
 # See below.
 # Gaussian energy fading tables for QRA64
-ggauss1 = np.array([
+ggauss01 = np.array([
     0.0296, 0.9101
 ])
 
-ggauss2 = np.array([
+ggauss02 = np.array([
     0.0350, 0.8954
 ])
 
-ggauss3 = np.array([
+ggauss03 = np.array([
     0.0411, 0.8787
 ])
 
-ggauss4 = np.array([
+ggauss04 = np.array([
     0.0483, 0.8598
 ])
 
-ggauss5 = np.array([
+ggauss05 = np.array([
     0.0566, 0.8387
 ])
 
-ggauss6 = np.array([
+ggauss06 = np.array([
     0.0660, 0.8154
 ])
 
-ggauss7 = np.array([
+ggauss07 = np.array([
     0.0767, 0.7898
 ])
 
-ggauss8 = np.array([
+ggauss08 = np.array([
     0.0886, 0.7621
 ])
 
-ggauss9 = np.array([
+ggauss09 = np.array([
     0.1017, 0.7325
 ])
 
@@ -845,58 +858,48 @@ ggauss64 = np.array([
 ])
 
 gptr_tab_gauss = [
-    ggauss1, ggauss2, ggauss3, ggauss4,
-    ggauss5, ggauss6, ggauss7, ggauss8,
-    ggauss9, ggauss10, ggauss11, ggauss12,
-    ggauss13, ggauss14, ggauss15, ggauss16,
-    ggauss17, ggauss18, ggauss19, ggauss20,
-    ggauss21, ggauss22, ggauss23, ggauss24,
-    ggauss25, ggauss26, ggauss27, ggauss28,
-    ggauss29, ggauss30, ggauss31, ggauss32,
-    ggauss33, ggauss34, ggauss35, ggauss36,
-    ggauss37, ggauss38, ggauss39, ggauss40,
-    ggauss41, ggauss42, ggauss43, ggauss44,
-    ggauss45, ggauss46, ggauss47, ggauss48,
-    ggauss49, ggauss50, ggauss51, ggauss52,
-    ggauss53, ggauss54, ggauss55, ggauss56,
-    ggauss57, ggauss58, ggauss59, ggauss60,
-    ggauss61, ggauss62, ggauss63, ggauss64
+    ggauss01, ggauss02, ggauss03, ggauss04, ggauss05, ggauss06, ggauss07, ggauss08, ggauss09, ggauss10, ggauss11,
+    ggauss12, ggauss13, ggauss14, ggauss15, ggauss16, ggauss17, ggauss18, ggauss19, ggauss20, ggauss21, ggauss22,
+    ggauss23, ggauss24, ggauss25, ggauss26, ggauss27, ggauss28, ggauss29, ggauss30, ggauss31, ggauss32, ggauss33,
+    ggauss34, ggauss35, ggauss36, ggauss37, ggauss38, ggauss39, ggauss40, ggauss41, ggauss42, ggauss43, ggauss44,
+    ggauss45, ggauss46, ggauss47, ggauss48, ggauss49, ggauss50, ggauss51, ggauss52, ggauss53, ggauss54, ggauss55,
+    ggauss56, ggauss57, ggauss58, ggauss59, ggauss60, ggauss61, ggauss62, ggauss63, ggauss64
 ]
 
 # Lorentz energy fading tables for QRA64
-glorentz1 = np.array([
+glorentz01 = np.array([
     0.0214, 0.9107
 ])
 
-glorentz2 = np.array([
+glorentz02 = np.array([
     0.0244, 0.9030
 ])
 
-glorentz3 = np.array([
+glorentz03 = np.array([
     0.0280, 0.8950
 ])
 
-glorentz4 = np.array([
+glorentz04 = np.array([
     0.0314, 0.8865
 ])
 
-glorentz5 = np.array([
+glorentz05 = np.array([
     0.0349, 0.8773
 ])
 
-glorentz6 = np.array([
+glorentz06 = np.array([
     0.0388, 0.8675
 ])
 
-glorentz7 = np.array([
+glorentz07 = np.array([
     0.0426, 0.8571
 ])
 
-glorentz8 = np.array([
+glorentz08 = np.array([
     0.0463, 0.8459
 ])
 
-glorentz9 = np.array([
+glorentz09 = np.array([
     0.0500, 0.8339
 ])
 
@@ -1161,40 +1164,27 @@ glorentz64 = np.array([
 ])
 
 gptr_tab_lorentz = [
-    glorentz1, glorentz2, glorentz3, glorentz4,
-    glorentz5, glorentz6, glorentz7, glorentz8,
-    glorentz9, glorentz10, glorentz11, glorentz12,
-    glorentz13, glorentz14, glorentz15, glorentz16,
-    glorentz17, glorentz18, glorentz19, glorentz20,
-    glorentz21, glorentz22, glorentz23, glorentz24,
-    glorentz25, glorentz26, glorentz27, glorentz28,
-    glorentz29, glorentz30, glorentz31, glorentz32,
-    glorentz33, glorentz34, glorentz35, glorentz36,
-    glorentz37, glorentz38, glorentz39, glorentz40,
-    glorentz41, glorentz42, glorentz43, glorentz44,
-    glorentz45, glorentz46, glorentz47, glorentz48,
-    glorentz49, glorentz50, glorentz51, glorentz52,
-    glorentz53, glorentz54, glorentz55, glorentz56,
-    glorentz57, glorentz58, glorentz59, glorentz60,
-    glorentz61, glorentz62, glorentz63, glorentz64
+    glorentz01, glorentz02, glorentz03, glorentz04, glorentz05, glorentz06, glorentz07, glorentz08, glorentz09,
+    glorentz10, glorentz11, glorentz12, glorentz13, glorentz14, glorentz15, glorentz16, glorentz17, glorentz18,
+    glorentz19, glorentz20, glorentz21, glorentz22, glorentz23, glorentz24, glorentz25, glorentz26, glorentz27,
+    glorentz28, glorentz29, glorentz30, glorentz31, glorentz32, glorentz33, glorentz34, glorentz35, glorentz36,
+    glorentz37, glorentz38, glorentz39, glorentz40, glorentz41, glorentz42, glorentz43, glorentz44, glorentz45,
+    glorentz46, glorentz47, glorentz48, glorentz49, glorentz50, glorentz51, glorentz52, glorentz53, glorentz54,
+    glorentz55, glorentz56, glorentz57, glorentz58, glorentz59, glorentz60, glorentz61, glorentz62, glorentz63,
+    glorentz64
 ]
 
 
-# #define WHBFY(dst,src,base,offs,dist) {
-#       dst[base+offs]     = src[base+offs]+src[base+offs+dist];
-#       dst[base+offs+dist]= src[base+offs]-src[base+offs+dist];
-# }
-
-def WHBFY(dst, src, base, offs, dist):
+def WHBFY(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], base: int, offs: int, dist: int):
     dst[base + offs] = src[base + offs] + src[base + offs + dist]
     dst[base + offs + dist] = src[base + offs] - src[base + offs + dist]
 
 
-def np_fwht1(dst, src):
+def np_fwht1(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64]):
     dst[0] = src[0]
 
 
-def np_fwht2(dst, src):
+def np_fwht2(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64]):
     t = np.zeros(2, dtype=np.float64)
 
     WHBFY(t, src, 0, 0, 1)
@@ -1202,7 +1192,7 @@ def np_fwht2(dst, src):
     dst[1] = t[1]
 
 
-def np_fwht4(dst, src):
+def np_fwht4(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64]):
     t = np.zeros(4, dtype=np.float64)
 
     # group 1
@@ -1213,7 +1203,7 @@ def np_fwht4(dst, src):
     WHBFY(dst, t, 2, 0, 1)
 
 
-def np_fwht8(dst, src):
+def np_fwht8(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64]):
     t1 = np.zeros(8, dtype=np.float64)
     t2 = np.zeros(8, dtype=np.float64)
 
@@ -1234,7 +1224,7 @@ def np_fwht8(dst, src):
     WHBFY(dst, t2, 6, 0, 1)
 
 
-def np_fwht16(dst, src):
+def np_fwht16(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64]):
     t1 = np.zeros(16, dtype=np.float64)
     t2 = np.zeros(16, dtype=np.float64)
 
@@ -1276,7 +1266,7 @@ def np_fwht16(dst, src):
     WHBFY(dst, t1, 14, 0, 1)
 
 
-def np_fwht32(dst, src):
+def np_fwht32(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64]):
     t1 = np.zeros(32, dtype=np.float64)
     t2 = np.zeros(32, dtype=np.float64)
 
@@ -1376,7 +1366,7 @@ def np_fwht32(dst, src):
     WHBFY(dst, t2, 30, 0, 1)
 
 
-def np_fwht64(dst, src):
+def np_fwht64(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64]):
     t1 = np.zeros(64, dtype=np.float64)
     t2 = np.zeros(64, dtype=np.float64)
 
@@ -1600,7 +1590,7 @@ def np_fwht64(dst, src):
     WHBFY(dst, t1, 62, 0, 1)
 
 
-np_fwht_tab = np.array([
+np_fwht_tab = [
     np_fwht1,
     np_fwht2,
     np_fwht4,
@@ -1608,4 +1598,4 @@ np_fwht_tab = np.array([
     np_fwht16,
     np_fwht32,
     np_fwht64
-])
+]
