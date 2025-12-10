@@ -4,6 +4,29 @@ Q65_SYNC = np.array([1, 9, 12, 13, 15, 22, 23, 26, 27, 33, 35, 38, 46, 50, 55, 6
 
 Q65_TONES_COUNT = 85
 
+naptypes_q65 = [
+    [1, 2, 0, 0],
+    [2, 3, 0, 0],
+    [2, 3, 0, 0],
+    [3, 4, 5, 6],
+    [3, 4, 5, 6],
+    [3, 1, 2, 0],
+]
+
+mcq_ft = [
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0
+]
+
+mrrr_ft = [
+    0, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1
+]
+m73_ft = [
+    0, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1
+]
+mrr73_ft = [
+    0, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1, 0, 1, 0, 0, 1
+]
+
 QRATYPE_NORMAL = 0x00  # normal code
 QRATYPE_CRC = 0x01  # code with crc - last information symbol is a CRC-6
 QRATYPE_CRCPUNCTURED = 0x02  # the CRC-6 symbol is punctured (not sent along the channel)
