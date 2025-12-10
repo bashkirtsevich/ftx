@@ -814,12 +814,13 @@ def q65_dec(
 
 # float q65_llh;
 # #define Q65_DECODE_FAILED		 -2
-# int q65subs::q65_decode_fullaplist(q65_codec_ds *codec,
-#                                    int *ydec,
-#                                    int *xdec,
-#                                    const float *pIntrinsics,
-#                                    const int *pCodewords,
-#                                    const int nCodewords)
+# int q65subs::q65_decode_fullaplist(
+# q65_codec_ds *codec,
+# int *ydec,
+# int *xdec,
+# const float *pIntrinsics,
+# const int *pCodewords,
+# const int nCodewords)
 def q65_decode_fullaplist(
         codec: Q65Codec,
         ydec: npt.NDArray[np.int64],

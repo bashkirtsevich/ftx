@@ -1,7 +1,7 @@
 import typing
 import json
 import numpy as np
-from numba import jit
+from numba import njit
 import numpy.typing as npt
 
 from consts.q65 import *
@@ -23,6 +23,7 @@ def dB(x: float) -> float:
     return val
 
 
+# @njit
 def shell(arr):
     n = len(arr)
     inc = 1
@@ -42,9 +43,27 @@ def shell(arr):
     return arr
 
 
+# @njit
+def q65_bzap(s3f: npt.NDArray[np.float64], LL: int):
+    NBZAP = 15
+    hist = np.zeros(LL, dtype=np.int64)
+
+    for j in range(63):
+        beg = j * LL
+        ipk1 = np.argmax(s3f[beg:beg + LL])
+        hist[ipk1] += 1
+
+    if np.max(hist) > NBZAP:
+        for i in range(LL):
+            if hist[i] > NBZAP:
+                for j in range(63):
+                    s3f[j * LL + i] = 1.0
+
+
 NMAX_PT = 141072
 
 
+# @njit
 def pctile_shell(x: npt.NDArray[np.float64], npts: int, npct: int) -> float:
     xpct = 1.0
 
@@ -88,8 +107,6 @@ class Q65:
     dtstep = nsps / (NSTEP * 12000.0)
     lag1 = int(-1.0 / dtstep)
     lag2 = int(1.0 / dtstep + 0.9999)
-
-
 
     i0 = 0
     j0 = 0
@@ -155,8 +172,6 @@ class Q65:
             # ! Interpolate to fill in the skipped-over spectra.
             if j >= 2:
                 s1_[j - 1] = 0.5 * (s1_[j - 2] + s1_[j])
-                # for i in range(iz):
-                #     s1_[j-1][i]=0.5*(s1_[j-2][i]+s1_[j][i])
 
         # if lnewdat:
         #     navg[iseq]+=1
@@ -317,7 +332,6 @@ class Q65:
             indx[j] = 0
 
         if ncand > 0:
-            # pomAll.indexx_msk(tmp_[1], ncand - 1, indx)
             indx = np.argsort(tmp_[1][:ncand])
 
         for i in range(ncand):
@@ -390,22 +404,6 @@ class Q65:
                 tbest = 0.001
             better = ccf_best / tbest
 
-    # void DecoderQ65::q65_bzap(float *s3f,int LL)
-    def q65_bzap(self, s3f: npt.NDArray[np.float64], LL: int):
-        NBZAP = 15
-        hist = np.zeros(LL, dtype=np.int64)
-
-        for j in range(63):
-            beg = j * LL
-            ipk1 = np.argmax(s3f[beg:beg + LL])
-            hist[ipk1] += 1
-
-        if np.max(hist) > NBZAP:
-            for i in range(LL):
-                if hist[i] > NBZAP:
-                    for j in range(63):
-                        s3f[j * LL + i] = 1.0
-
     # void DecoderQ65::q65_s1_to_s3(double s1_[800][7000],int iz,int jz,int ipk,int jpk,int LL,float *s3_1fa)
     def q65_s1_to_s3(
             self,
@@ -417,9 +415,6 @@ class Q65:
             LL: int,
             s3_1fa: npt.NDArray[np.float64]
     ):
-        # with open("../data2.json") as f:
-        #     data = json.load(f)
-        # foo = np.array(data["s3_1fa"])
         # ! Copy synchronized symbol energies from s1 (or s1a) into s3.
         i1 = self.i0 + ipk + self.mode_q65 - 64
         i2 = i1 + LL  # int LL=64*(2+mode_q65);
@@ -437,7 +432,7 @@ class Q65:
                         s3_1fa[n] = s1_[j, i + i1]
                         n += 1
 
-        self.q65_bzap(s3_1fa, LL)  # !Zap birdies
+        q65_bzap(s3_1fa, LL)  # !Zap birdies
 
     # void DecoderQ65::q65_dec_q3(
     # double s1_[800][7000],
@@ -739,7 +734,8 @@ class Q65:
         # decoded="";
 
         s3prob = q65_intrinsics_ff(self.codec, s3_1fa.reshape((-1, self.NN)), nsubmode, b90ts, nFadingModel)
-        irc, esnodb = q65_dec(self.codec, s3_1fa.reshape((-1, self.NN)), s3prob, self.apmask, self.apsymbols, self.s_maxiters, dat4)
+        irc, esnodb = q65_dec(self.codec, s3_1fa.reshape((-1, self.NN)), s3prob, self.apmask, self.apsymbols,
+                              self.s_maxiters, dat4)
         print("decoded data:", dat4)
 
         sumd4 = 0
@@ -799,7 +795,8 @@ class Q65:
 
             if ipass >= 1:
                 # ! Subsequent passes use AP information appropiate for nQSOprogress
-                iaptype = self.q65_ap(nQSOprogress, ipass, cont_id, cont_type, lapcqonly, self.apsym0, self.apmask1, self.apsymbols1)
+                iaptype = self.q65_ap(nQSOprogress, ipass, cont_id, cont_type, lapcqonly, self.apsym0, self.apmask1,
+                                      self.apsymbols1)
                 z = 0
                 for i in range(13):
                     self.apmask[i] = BinToInt32(apmask1, z, z + 6)
@@ -886,7 +883,6 @@ class Q65:
             jz = int((txt + 2.0) * 12000.0 / istep)  # !For TR 60 s and higher
 
         ia = int(self.nfa / self.df)
-        # ia2 = int(self.nfb / self.df)
         xxmax = max(10 * self.mode_q65, int(100.0 / self.df))
         ia2 = max(ia, xxmax)
 
@@ -898,9 +894,7 @@ class Q65:
         s3_1fa = np.zeros(63 * 640, dtype=np.float64)  # attention = 63*640=40320 q65d from q65_subs
 
         s1w_ = np.zeros((800, 7000), dtype=np.float64)
-        # double base;
         t_s = np.zeros(700, dtype=np.float64)
-        # s1max = 0.0
         ipk = 0
         jpk = 0
         # f0a = 0.0
@@ -1034,14 +1028,9 @@ class Q65:
             b90ts: float,
     ):
         # ! Attmpt a full-AP list decode.
-        # bool c77[100];
-        # float s3prob[4132] = {0.0};//row= 63 col= 64=4032
-        # bool unpk77_success = false;
-        #
         plog = self.PLOG_MIN
         nFadingModel = 1
-        decoded = ""
-        q65_intrinsics_ff(s3_1fa, nsubmode, b90ts, nFadingModel, s3prob)
+        q65_intrinsics_ff(self.codec, s3_1fa, nsubmode, b90ts, nFadingModel, s3prob)
         q65_dec_fullaplist(s3_1fa, s3prob, codewords_1da, ncw, esnodb, dat4, plog, irc)
 
         sumd4 = np.sum(dat4[:13])
