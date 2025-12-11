@@ -567,8 +567,6 @@ def qra_mapdecode(pcode: QRACodeParams, xdec: npt.NDArray[np.int64], pex: npt.ND
 
 def q65_decode(
         codec: Q65Codec,
-        decoded_codeword: npt.NDArray[np.int64],
-        decoded_msg: npt.NDArray[np.int64],
         intrinsics: npt.NDArray[np.float64],
         APMask: npt.NDArray[np.int64],
         APSymbols: npt.NDArray[np.int64],
@@ -635,13 +633,15 @@ def q65_decode(
         crc = crc6(px[:nK])  # compute crc-6
         if crc != px[nK]:
             raise CRCMismatch  # crc doesn't match
+
     elif qra_code.type == QRAType.CRC_PUNCTURED2:
         crc = crc12(px[:nK])  # compute crc-12
         if (crc & 0x3F) != px[nK] or (crc >> 6) != px[nK + 1]:
             raise CRCMismatch  # crc doesn't match
 
     # copy the decoded msg to the user buffer (excluding punctured symbols)
-    decoded_msg[:nK] = px[:nK]
+    # decoded_msg[:nK] = px[:nK]
+    decoded_msg = px[:nK].copy()
 
     # if (pDecodedCodeword==NULL)		# user is not interested in the decoded codeword
     #     return rc;					# return the number of iterations required to decode
@@ -654,15 +654,16 @@ def q65_decode(
 
     # ...and strip the punctured symbols from the codeword
     if qra_code.type == QRAType.CRC_PUNCTURED:
-        decoded_codeword[:nK] = py[:nK]
-        decoded_codeword[nK:nK + (nN - nK)] = py[nK + 1:nK + (nN - nK) + 1]  # puncture crc-6 symbol
+        # puncture crc-6 symbol
+        decoded_codeword = np.concat([py[:nK], py[nK + 1:nK + (nN - nK) + 1]])
     elif qra_code.type == QRAType.CRC_PUNCTURED2:
-        decoded_codeword[:nK] = py[:nK]
-        decoded_codeword[nK:nK + (nN - nK)] = py[nK + 2:nK + (nN - nK) + 2]  # puncture crc-12 symbol
+        # puncture crc-12 symbol
+        decoded_codeword = np.concat([py[:nK], py[nK + 2:nK + (nN - nK) + 2]])
     else:
-        decoded_codeword[:nN] = py[:nN]  # no puncturing
+        decoded_codeword = py[:nN].copy()  # no puncturing
 
-    return rc  # return the number of iterations required to decode
+    # return the number of iterations required to decode
+    return rc, decoded_codeword, decoded_msg
 
 
 def q65_dec(
@@ -675,8 +676,8 @@ def q65_dec(
         max_iters: int,
         x_dec: npt.NDArray[np.int64],  # [13] Decoded 78-bit message as 13 six-bit integers
 ) -> typing.Tuple[int, float]:  # Return code from q65_decode(); Estimated Es/No (dB)
-    ydec = np.zeros(63, dtype=np.int64)
-    rc = q65_decode(codec, ydec, x_dec, s3_prob, APmask, APsymbols, max_iters)
+    rc, ydec, xdec = q65_decode(codec, s3_prob, APmask, APsymbols, max_iters)
+    x_dec[:13] = xdec[:13]
     # rc = -1:  Invalid params
     # rc = -2:  Decode failed
     # rc = -3:  CRC mismatch

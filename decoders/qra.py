@@ -709,40 +709,28 @@ class Q65:
 
         return iaptypet
 
-    # void DecoderQ65::q65_dec2(
-    # float *s3_1fa,
-    # int nsubmode,
-    # float b90ts,
-    # float &esnodb,
-    # int &irc,
-    # int *dat4)
     def q65_dec2(
             self,
             s3_1fa: npt.NDArray[np.float64],
-            nsubmode: int,
+            sub_mode: int,
             b90ts: float,
             dat4: npt.NDArray[np.int64],
     ):
         # ! Attempt a q0, q1, or q2 decode using spcified AP information.
-        # bool c77[100];
-        # float s3prob[4132] = {0.0};//row= 63 col= 64=4032
-        # bool unpk77_success = false;
-        #
-        nFadingModel = 1
-        # decoded="";
+        fading_model = 1
 
-        s3prob = q65_intrinsics_ff(self.codec, s3_1fa.reshape((-1, self.NN)), nsubmode, b90ts, nFadingModel)
-        irc, esnodb = q65_dec(self.codec, s3_1fa.reshape((-1, self.NN)), s3prob, self.apmask, self.apsymbols,
-                              self.s_maxiters, dat4)
+        s3 = s3_1fa.reshape((-1, self.NN))
+        s3prob = q65_intrinsics_ff(self.codec, s3, sub_mode, b90ts, fading_model)
+        irc, esnodb = q65_dec(self.codec, s3, s3prob, self.apmask, self.apsymbols, self.s_maxiters, dat4)
+
+        print("Es/No dB:", esnodb)
         print("decoded data:", dat4)
 
-        sumd4 = 0
-        for i in range(13):
-            sumd4 += dat4[i]
-        if sumd4 <= 0:
+        sum_dat = np.sum(dat4)
+        if sum_dat <= 0:
             irc = -2
+
         if irc >= 0:
-            co_t = 0
             for i in range(13):
                 bits = 6
                 in_ = dat4[i]
@@ -1046,6 +1034,3 @@ class Q65:
             # decoded = TGenQ65->unpack77(c77,unpk77_success)
         else:
             irc = -1
-
-
-
