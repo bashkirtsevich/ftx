@@ -717,7 +717,7 @@ class Q65:
             dat4: npt.NDArray[np.int64],
     ):
         # ! Attempt a q0, q1, or q2 decode using spcified AP information.
-        fading_model = 1
+        fading_model = FadingModel.Lorentzian
 
         s3 = s3_1fa.reshape((-1, self.NN))
         s3prob = q65_intrinsics_ff(self.codec, s3, sub_mode, b90ts, fading_model)

@@ -121,7 +121,7 @@ def q65_intrinsics_fastfading(
         input_energies: npt.NDArray[np.float64],  # received energies input
         sub_mode: int,  # submode idx (0=A ... 4=E)
         B90Ts: float,  # spread bandwidth (90% fractional energy)
-        fading_model: int  # 0=Gaussian 1=Lorentzian fade model
+        fading_model: FadingModel  # 0=Gaussian 1=Lorentzian fade model
 ) -> npt.NDArray[np.float64]:
     # As the symbol duration in q65 is different than in QRA64,
     # the fading tables continue to be valid if the B90Ts parameter
@@ -135,13 +135,13 @@ def q65_intrinsics_fastfading(
     hidx = min(63, max(0, hidx))
 
     # select the appropriate weighting fading coefficients array
-    if fading_model == 0:
+    if fading_model == FadingModel.Gaussian:
         # gaussian fading model
         # point to gaussian energy weighting taps
         # hlen = glen_tab_gauss[hidx]  # hlen = (L+1)/2 (where L=(odd) number of taps of w fun)
         hptr = gptr_tab_gauss[hidx]  # pointer to the first (L+1)/2 coefficients of w fun
         hlen = len(hptr)  # hlen = (L+1)/2 (where L=(odd) number of taps of w fun)
-    elif fading_model == 1:
+    elif fading_model == FadingModel.Lorentzian:
         # point to lorentzian energy weighting taps
         # hlen = glen_tab_lorentz[hidx]  # hlen = (L+1)/2 (where L=(odd) number of taps of w fun)
         hptr = gptr_tab_lorentz[hidx]  # pointer to the first (L+1)/2 coefficients of w fun
@@ -314,7 +314,7 @@ def q65_intrinsics_ff(
         s3: npt.NDArray[np.float64],  # [LL,NN] Received energies
         sub_mode: int,  # 0=A, 4=E
         B90Ts: float,  # Spread bandwidth, 90% fractional energy
-        fading_model: int  # 0=Gaussian, 1=Lorentzian
+        fading_model: FadingModel  # 0=Gaussian, 1=Lorentzian
 ) -> npt.NDArray[np.float64]:  # [LL,NN] Symbol-value intrinsic probabilities
     s3prob = q65_intrinsics_fastfading(codec, s3, sub_mode, B90Ts, fading_model)
     return s3prob

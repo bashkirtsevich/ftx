@@ -38,6 +38,11 @@ class QRAType(Enum):
     CRC_PUNCTURED2 = 3  # code with CRC-12. The two crc symbols are punctured
 
 
+class FadingModel(Enum):
+    Gaussian = 0
+    Lorentzian = 1
+
+
 QRACODE_MAX_M = 256
 
 # Max codeword list size in q65_decode_fullaplist
