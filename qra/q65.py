@@ -72,10 +72,10 @@ def q65_init() -> Q65Codec:
         ix=np.zeros((qra_code.N, qra_code.M), dtype=np.float64),
         ex=np.zeros((qra_code.N, qra_code.M), dtype=np.float64),
 
-        nBinsPerTone=0,
-        nBinsPerSymbol=0,
-        ffNoiseVar=0,
-        ffEsNoMetric=0,
+        BinsPerTone=0,
+        BinsPerSymbol=0,
+        NoiseVar=0,
+        EsNoMetric=0,
         nWeights=0,
         ffWeight=np.zeros(Q65_FASTFADING_MAXWEIGTHS, dtype=np.float64)
     )
@@ -195,10 +195,10 @@ def q65_intrinsics_fastfading(
     # We will take this factor in account when computing the true Es/No ratio
 
     # store in the pCodec structure for later use in the estimation of the Es/No ratio
-    codec.ffNoiseVar = noise_var
-    codec.ffEsNoMetric = EsNo_metric
-    codec.nBinsPerTone = bins_per_tone
-    codec.nBinsPerSymbol = bins_per_symbol
+    codec.NoiseVar = noise_var
+    codec.EsNoMetric = EsNo_metric
+    codec.BinsPerTone = bins_per_tone
+    codec.BinsPerSymbol = bins_per_symbol
     codec.nWeights = hlen
 
     # compute the fast fading weights accordingly to the Es/No ratio
@@ -266,11 +266,11 @@ def q65_esnodb_fastfading(
     qra_N = codec.qra_code.codeword_length
     qra_M = codec.qra_code.alphabet_size
 
-    nBinsPerTone = codec.nBinsPerTone
-    nBinsPerSymbol = codec.nBinsPerSymbol
+    nBinsPerTone = codec.BinsPerTone
+    nBinsPerSymbol = codec.BinsPerSymbol
     nWeights = codec.nWeights
-    ffNoiseVar = codec.ffNoiseVar
-    ffEsNoMetric = codec.ffEsNoMetric
+    ffNoiseVar = codec.NoiseVar
+    ffEsNoMetric = codec.EsNoMetric
     nTotWeights = 2 * nWeights - 1
 
     # compute symbols energy (noise included) summing the

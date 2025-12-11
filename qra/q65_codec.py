@@ -17,9 +17,9 @@ class Q65Codec:
     ix: npt.NDArray[np.float64]  # decoder intrinsic information
     ex: npt.NDArray[np.float64]  # decoder extrinsic information
     # variables used to compute the intrinsics in the fast-fading case
-    nBinsPerTone: int
-    nBinsPerSymbol: int
-    ffNoiseVar: float
-    ffEsNoMetric: float
+    BinsPerTone: int
+    BinsPerSymbol: int
+    NoiseVar: float
+    EsNoMetric: float
     nWeights: int
     ffWeight: npt.NDArray[np.float64]  # len = Q65_FASTFADING_MAXWEIGTHS
