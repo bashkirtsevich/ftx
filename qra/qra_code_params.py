@@ -7,7 +7,7 @@ from consts.q65 import QRAType
 from qra.exceptions import InvalidQRAType
 
 
-@dataclass
+@dataclass(frozen=True)
 class QRACodeParams:
     # code parameters
     K: int  # number of information symbols
