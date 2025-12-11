@@ -76,8 +76,8 @@ def q65_init() -> Q65Codec:
         BinsPerSymbol=0,
         NoiseVar=0,
         EsNoMetric=0,
-        nWeights=0,
-        ffWeight=np.zeros(Q65_FASTFADING_MAXWEIGTHS, dtype=np.float64)
+        WeightsCount=0,
+        FastFadingWeights=np.zeros(Q65_FASTFADING_MAXWEIGTHS, dtype=np.float64)
     )
     return codec
 
@@ -199,13 +199,13 @@ def q65_intrinsics_fastfading(
     codec.EsNoMetric = EsNo_metric
     codec.BinsPerTone = bins_per_tone
     codec.BinsPerSymbol = bins_per_symbol
-    codec.nWeights = hlen
+    codec.WeightsCount = hlen
 
     # compute the fast fading weights accordingly to the Es/No ratio
     # for which we compute the exact intrinsics probabilities
     EsNo_gain = EsNo_metric * hptr
     weight = EsNo_gain / (EsNo_gain + 1) / noise_var
-    codec.ffWeight = weight
+    codec.FastFadingWeights = weight
 
     # Compute now the intrinsics as indicated above
     cur_sym_id = nM  # point to the central bin of the first symbol tone
@@ -268,7 +268,7 @@ def q65_esnodb_fastfading(
 
     nBinsPerTone = codec.BinsPerTone
     nBinsPerSymbol = codec.BinsPerSymbol
-    nWeights = codec.nWeights
+    nWeights = codec.WeightsCount
     ffNoiseVar = codec.NoiseVar
     ffEsNoMetric = codec.EsNoMetric
     nTotWeights = 2 * nWeights - 1

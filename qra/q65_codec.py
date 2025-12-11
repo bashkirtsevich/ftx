@@ -21,5 +21,5 @@ class Q65Codec:
     BinsPerSymbol: int
     NoiseVar: float
     EsNoMetric: float
-    nWeights: int
-    ffWeight: npt.NDArray[np.float64]  # len = Q65_FASTFADING_MAXWEIGTHS
+    WeightsCount: int  # FIXME: To be deleted
+    FastFadingWeights: npt.NDArray[np.float64]
