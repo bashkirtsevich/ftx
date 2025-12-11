@@ -266,12 +266,12 @@ def q65_esnodb_fastfading(
     qra_N = codec.qra_code.codeword_length
     qra_M = codec.qra_code.alphabet_size
 
-    nBinsPerTone = codec.BinsPerTone
-    nBinsPerSymbol = codec.BinsPerSymbol
-    nWeights = codec.WeightsCount
-    ffNoiseVar = codec.NoiseVar
-    ffEsNoMetric = codec.EsNoMetric
-    nTotWeights = 2 * nWeights - 1
+    bins_per_tone = codec.BinsPerTone
+    bins_per_symbol = codec.BinsPerSymbol
+    weights = codec.WeightsCount
+    noise_var = codec.NoiseVar
+    EsNo_metric = codec.EsNoMetric
+    tot_weights = 2 * weights - 1
 
     # compute symbols energy (noise included) summing the
     # energies pertaining to the decoded symbols in the codeword
@@ -279,31 +279,31 @@ def q65_esnodb_fastfading(
     EsPlusWNo = 0.0
     cur_sym_idx = qra_M  # pInputEnergies + qra_M	# point to first central bin of first symbol tone
     for n in range(qra_N):
-        cur_tone_idx = cur_sym_idx + y_dec[n] * nBinsPerTone  # point to the central bin of the current decoded symbol
-        cur_bin_idx = cur_tone_idx - nWeights + 1  # point to first bin
+        cur_tone_idx = cur_sym_idx + y_dec[n] * bins_per_tone  # point to the central bin of the current decoded symbol
+        cur_bin_idx = cur_tone_idx - weights + 1  # point to first bin
 
         # sum over all the pertaining bins
-        EsPlusWNo += np.sum(input_energies[cur_bin_idx: cur_bin_idx + nTotWeights])
+        EsPlusWNo += np.sum(input_energies[cur_bin_idx: cur_bin_idx + tot_weights])
 
-        cur_sym_idx += nBinsPerSymbol
+        cur_sym_idx += bins_per_symbol
 
     EsPlusWNo = EsPlusWNo / qra_N  # Es + nTotWeigths*No
 
-    # The noise power ffNoiseVar computed in the q65_intrisics_fastading(...) function
+    # The noise power noise_var computed in the q65_intrisics_fastading(...) function
     # is not the true noise power as it includes part of the signal energy.
     # The true noise variance is:
-    # No = ffNoiseVar*(1+EsNoMetric/nBinsPerSymbol)/(1+EsNo/nBinsPerSymbol)
+    # No = noise_var*(1+EsNoMetric/bins_per_symbol)/(1+EsNo/bins_per_symbol)
 
     # Therefore:
-    # Es/No = EsPlusWNo/No - W = EsPlusWNo/ffNoiseVar*(1+Es/No/nBinsPerSymbol)/(1+Es/NoMetric/nBinsPerSymbol) - W
+    # Es/No = EsPlusWNo/No - W = EsPlusWNo/noise_var*(1+Es/No/bins_per_symbol)/(1+Es/NoMetric/bins_per_symbol) - W
     # and:
-    # Es/No*(1-u/nBinsPerSymbol) = u-W or Es/No = (u-W)/(1-u/nBinsPerSymbol)
+    # Es/No*(1-u/bins_per_symbol) = u-W or Es/No = (u-W)/(1-u/bins_per_symbol)
     # where:
-    # u = EsPlusNo/ffNoiseVar/(1+EsNoMetric/nBinsPerSymbol)
+    # u = EsPlusNo/noise_var/(1+EsNoMetric/bins_per_symbol)
 
-    u = EsPlusWNo / (ffNoiseVar * (1 + ffEsNoMetric / nBinsPerSymbol))
-    u = max(u, nTotWeights + 0.316)  # Limit the minimum Es/No to -5 dB approx.
-    u = (u - float(nTotWeights)) / (1 - u / float(nBinsPerSymbol))  # linear scale Es/No
+    u = EsPlusWNo / (noise_var * (1 + EsNo_metric / bins_per_symbol))
+    u = max(u, tot_weights + 0.316)  # Limit the minimum Es/No to -5 dB approx.
+    u = (u - float(tot_weights)) / (1 - u / float(bins_per_symbol))  # linear scale Es/No
 
     EsNodB = 10.0 * np.log10(u)
     return EsNodB
