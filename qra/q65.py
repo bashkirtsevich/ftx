@@ -1,5 +1,6 @@
 import typing
 
+import numpy as np
 import numpy.typing as npt
 from crc.q65 import crc6, crc12
 
@@ -148,20 +149,20 @@ def q65_intrinsics_fastfading(
     else:
         raise InvalidFadingModel
 
-    # compute (euristically) the optimal decoder metric accordingly the given spread amount
+    # compute (heuristically) the optimal decoder metric accordingly the given spread amount
     # We assume that the decoder 50% decoding threshold is:
     # Es/No(dB) = Es/No(AWGN)(dB) + 8*log(B90)/log(240)(dB)
     # that's to say, at the maximum Doppler spread bandwidth (240 Hz for QRA64)
     # there's a ~8 dB Es/No degradation over the AWGN case
     fTemp = 8.0 * np.log(B90) / np.log(240.0)  # assumed Es/No degradation for the given fading bandwidth
-    EsNoMetric = codec.decoderEsNoMetric * np.pow(10.0, fTemp / 10.0)
+    EsNo_metric = codec.decoderEsNoMetric * np.pow(10.0, fTemp / 10.0)
 
     nM = codec.qra_code.alphabet_size
     nN = codec.qra_code.codeword_length
-    nBinsPerTone = 1 << sub_mode
-    nBinsPerSymbol = nM * (2 + nBinsPerTone)
+    bins_per_tone = 1 << sub_mode
+    bins_per_symbol = nM * (2 + bins_per_tone)
 
-    # In the fast fading case , the intrinsic probabilities can be computed only
+    # In the fast fading case, the intrinsic probabilities can be computed only
     # if both the noise spectral density and the average Es/No ratio are known.
 
     # Assuming that the energy of a tone is spread, on average, over adjacent bins
@@ -176,7 +177,7 @@ def q65_intrinsics_fastfading(
 
     # Therefore we:
     # 1) compute No - the noise spectral density (or noise variance)
-    # 2) compute the coefficients w(k) given the coefficient g(k) for the given decodeer Es/No metric
+    # 2) compute the coefficients w(k) given the coefficient g(k) for the given decoder Es/No metric
     # 3) compute the logarithm of prob(tone j| en1....enN) which is simply = sum(En(k,j)*w(k)/No
     # 4) subtract from the logarithm of the probabilities their maximum,
     # 5) exponentiate the logarithms
@@ -184,32 +185,29 @@ def q65_intrinsics_fastfading(
     #    by the sum of all of them
 
     # Evaluate the average noise spectral density
-    fNoiseVar = np.mean(input_energies[:nBinsPerSymbol, :nM])
+    noise_var = np.mean(input_energies[:bins_per_symbol, :nM])
 
     # The noise spectral density so computed includes also the signal power.
     # Therefore we scale it accordingly to the Es/No assumed by the decoder
-    fNoiseVar = fNoiseVar / (1.0 + EsNoMetric / nBinsPerSymbol)
+    noise_var = noise_var / (1.0 + EsNo_metric / bins_per_symbol)
     # The value so computed is an overestimate of the true noise spectral density
     # by the (unknown) factor (1+Es/No(true)/nBinsPerSymbol)/(1+EsNoMetric/nBinsPerSymbol)
     # We will take this factor in account when computing the true Es/No ratio
 
     # store in the pCodec structure for later use in the estimation of the Es/No ratio
-    codec.ffNoiseVar = fNoiseVar
-    codec.ffEsNoMetric = EsNoMetric
-    codec.nBinsPerTone = nBinsPerTone
-    codec.nBinsPerSymbol = nBinsPerSymbol
+    codec.ffNoiseVar = noise_var
+    codec.ffEsNoMetric = EsNo_metric
+    codec.nBinsPerTone = bins_per_tone
+    codec.nBinsPerSymbol = bins_per_symbol
     codec.nWeights = hlen
 
     # compute the fast fading weights accordingly to the Es/No ratio
     # for which we compute the exact intrinsics probabilities
-    weight = np.zeros(hlen, dtype=np.float64)
+    EsNo_gain = EsNo_metric * hptr
+    weight = EsNo_gain / (EsNo_gain + 1) / noise_var
     codec.ffWeight = weight
 
-    for k in range(hlen):
-        fTemp = hptr[k] * EsNoMetric
-        weight[k] = fTemp / (1.0 + fTemp) / fNoiseVar
-
-    # Compute now the instrinsics as indicated above
+    # Compute now the intrinsics as indicated above
     cur_sym_id = nM  # point to the central bin of the first symbol tone
     cur_ix_id = 0  # point to the first intrinsic
     cur_ix = np.zeros((nN, nM), dtype=np.float64)
@@ -227,30 +225,31 @@ def q65_intrinsics_fastfading(
         max_log_prob = 0.0
         for k in range(nM):  # for each tone in the current symbol
             # do a symmetric weighted sum
-            fTemp = 0.0
+            log_prob = 0.0
             for j in range(hhsz):
-                fTemp += weight[j] * (input_energies[cur_bin_id + j] + input_energies[cur_bin_id + hlast - j])
+                log_prob += weight[j] * (input_energies[cur_bin_id + j] + input_energies[cur_bin_id + hlast - j])
 
-            fTemp += weight[hhsz] * input_energies[cur_bin_id + hhsz]
+            log_prob += weight[hhsz] * input_energies[cur_bin_id + hhsz]
 
-            max_log_prob = max(max_log_prob, fTemp)  # keep track of the max
-            cur_ix[n, k] = fTemp
+            max_log_prob = max(max_log_prob, log_prob)  # keep track of the max
+            cur_ix[n, k] = log_prob
 
-            cur_bin_id += nBinsPerTone  # next tone
+            cur_bin_id += bins_per_tone  # next tone
 
         # exponentiate and accumulate the normalization constant
-        sumix = 0.0
+        sum_prob = 0.0
         for k in range(nM):
             x = cur_ix[n, k] - max_log_prob
             x = min(85.0, max(-85.0, x))
-            fTemp = np.exp(x)
-            cur_ix[n, k] = fTemp
-            sumix += fTemp
+
+            rel_prob = np.exp(x)
+            cur_ix[n, k] = rel_prob
+            sum_prob += rel_prob
 
         # scale to a probability distribution
-        cur_ix[n, :] *= 1.0 / sumix
+        cur_ix[n, :] *= 1.0 / sum_prob
 
-        cur_sym_id += nBinsPerSymbol  # next symbol input energies
+        cur_sym_id += bins_per_symbol  # next symbol input energies
         cur_ix_id += nM  # next symbol intrinsics
 
     return cur_ix
