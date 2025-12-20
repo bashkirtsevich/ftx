@@ -2,6 +2,7 @@ import typing
 
 import numpy as np
 import numpy.typing as npt
+from utils.common import dB
 from crc.q65 import crc6, crc12
 
 from consts.q65 import *
@@ -305,7 +306,7 @@ def q65_esnodb_fastfading(
     u = max(u, tot_weights + 0.316)  # Limit the minimum Es/No to -5 dB approx.
     u = (u - float(tot_weights)) / (1 - u / float(bins_per_symbol))  # linear scale Es/No
 
-    EsNodB = 10.0 * np.log10(u)
+    EsNodB = dB(u)
     return EsNodB
 
 
@@ -674,10 +675,10 @@ def q65_dec(
         APsymbols: npt.NDArray[np.int64],  # [13] Available AP informtion
 
         max_iters: int,
-        x_dec: npt.NDArray[np.int64],  # [13] Decoded 78-bit message as 13 six-bit integers
-) -> typing.Tuple[int, float]:  # Return code from q65_decode(); Estimated Es/No (dB)
+        # x_dec: npt.NDArray[np.int64],  # [13] Decoded 78-bit message as 13 six-bit integers
+) -> typing.Tuple[int, float, npt.NDArray[np.int64]]:  # Return code from q65_decode(); Estimated Es/No (dB)
     rc, ydec, xdec = q65_decode(codec, s3_prob, APmask, APsymbols, max_iters)
-    x_dec[:13] = xdec[:13]
+
     # rc = -1:  Invalid params
     # rc = -2:  Decode failed
     # rc = -3:  CRC mismatch
@@ -687,7 +688,7 @@ def q65_dec(
     # if (rc<0)
     #     printf("error in q65_esnodb_fastfading()\n");
 
-    return rc, esnodb
+    return rc, esnodb, xdec[:13]
 
 
 # float q65_llh;

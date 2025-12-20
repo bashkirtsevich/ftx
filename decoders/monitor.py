@@ -1,3 +1,5 @@
+import numpy.typing as npt
+
 import typing
 from abc import ABC, abstractmethod
 from collections import namedtuple
@@ -37,7 +39,7 @@ class AbstractMonitor(ABC):
         return packed
 
     @abstractmethod
-    def monitor_process(self, frame: typing.List[float]):
+    def monitor_process(self, frame: npt.NDArray):
         ...
 
     @abstractmethod

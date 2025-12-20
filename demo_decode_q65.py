@@ -1,28 +1,34 @@
-import numpy as np
-import json
+import time
+from scipy.io.wavfile import read
 
-from decoders.qra import Q65
+from decoders import Q65Monitor
+from msg.message import MsgServer
 
 
 def main():
-    with open("examples/data3.json") as f:
-        data = json.load(f)
+    sample_rate, data = read("examples/signal.wav")
 
-    iwave = np.array(data["iwave"], dtype=np.float64)
+    msg_svr = MsgServer()
 
-    q65 = Q65()
-    q65.q65_dec0(
-        iavg=0,
-        iwave=iwave,
-        nfqso=1000,
-        lclearave=False,
-        emedelay=False,
-        nQSOp=0,
-        cont_id=0,
-        cont_type=0,
-        stageno=0,
-        fsdec=False,
-    )
+    mon = Q65Monitor(q65_type=2, period=15)
+    mon.monitor_process(data)
+
+    ts1 = time.monotonic()
+
+    for it in mon.decode(f0=1000, eme_delay=False):
+        msg = msg_svr.decode(it.payload)
+
+        print(
+            f"dB: {it.snr:.3f}\t"
+            f"T: {it.dT:.3f}\t"
+            f"DF: {it.dF:.3f}\t"
+            f"CRC: {it.crc}\t"
+            f"Message text: {msg}"
+        )
+
+    ts2 = time.monotonic()
+
+    print("-" * 20, "decoded @", ts2 - ts1, "sec")
 
 
 if __name__ == '__main__':

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from itertools import cycle
 
 import numpy as np
+from utils.common import dB
 import numpy.typing as npt
 
 import multiprocessing as mp
@@ -97,7 +98,7 @@ class FTXMonitor(AbstractMonitor):
 
         self.symbol_period = symbol_period
 
-    def monitor_process(self, frame: typing.List[float]):
+    def monitor_process(self, frame: npt.NDArray):
         # Check if we can still store more waterfall data
         if self.num_blocks >= self.max_blocks:
             return False
@@ -124,7 +125,7 @@ class FTXMonitor(AbstractMonitor):
                     src_bin = (bin * self.freq_osr) + freq_sub
 
                     mag2 = freq_data[src_bin].imag ** 2 + freq_data[src_bin].real ** 2
-                    db = 10.0 * np.log10(1E-12 + mag2)
+                    db = dB(1E-12 + mag2)
 
                     # Scale decibels to unsigned 8-bit range and clamp the value
                     # Range 0-240 covers -120..0 dB in 0.5 dB steps

@@ -29,6 +29,8 @@ class MSK144Monitor(AbstractMonitor):
     MAX_LDPC_ERRORS = 18
     LDPC_ITERATIONS = 10
 
+    __slots__ = ["sample_rate", "signal"]
+
     @staticmethod
     @cache
     @jit(nopython=True)
