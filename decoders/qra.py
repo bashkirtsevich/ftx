@@ -31,7 +31,7 @@ class Q65Monitor(AbstractMonitor):
 
         self.smooth = max(1, int(0.5 * self.q65_type ** 2))
 
-        self.sym_steps = int(self.sym_samps / NSTEP)
+        self.sym_steps = self.sym_samps // NSTEP
         self.dt_step = self.sym_samps / (NSTEP * 12000.0)
 
         self.lag1 = int(-1.0 / self.dt_step)
@@ -98,14 +98,14 @@ class Q65Monitor(AbstractMonitor):
 
         return sym_spec
 
-    def ccf_22(self, s1: npt.NDArray[np.float64], iz: int, jz: int, target_freq: float):
+    def ccf_22(self, s1: npt.NDArray[np.float64], iz: int, jz: int, f0: float):
         xdt2 = np.zeros(7000, dtype=np.float64)
         ccf3 = np.zeros(7000, dtype=np.float64)
         s1_avg = np.zeros(7000, dtype=np.float64)
 
         dec_df = 50
-        snfa = target_freq - dec_df
-        snfb = target_freq + dec_df
+        snfa = f0 - dec_df
+        snfb = f0 + dec_df
 
         self.max_drift = 0
 
@@ -166,10 +166,10 @@ class Q65Monitor(AbstractMonitor):
         # self.f0nd = target_freq + (corrp - self.i0) * self.df
 
         # ! Parameters for the top candidate:
-        ipk = best - self.i0
-        jpk = lag_best
-        f0 = target_freq + ipk * self.df
-        xdt = jpk * self.dt_step
+        i_peak = best - self.i0
+        j_peak = lag_best
+        f0 = f0 + i_peak * self.df
+        xdt = j_peak * self.dt_step
         self.drift = self.df * drift_best
 
         ccf3[0:ia] = 0.0
@@ -235,7 +235,7 @@ class Q65Monitor(AbstractMonitor):
             self.candidates_[0, i] = tmp[0, indices[i]]
             self.candidates_[1, i] = tmp[1, indices[i]]
 
-        return ipk, jpk, f0, xdt
+        return i_peak, j_peak, f0, xdt
 
     def s1_to_s3(
             self,
@@ -332,16 +332,12 @@ class Q65Monitor(AbstractMonitor):
         # !             3  "MyCall HisCall ?"
 
         LL = 64 * (2 + self.q65_type)  # mode_q65 -- 1, 2, 3, 4
-        istep = self.sym_samps / NSTEP
+
         iz = int(5000.0 / self.df)  # !Uppermost frequency bin, at 5000 Hz
-        txt = 85.0 * self.sym_samps / 12000.0
-        jz = int((txt + 1.0) * 12000.0 / istep)  # !Number of symbol/NSTEP bins
-        if self.sym_samps >= 6912:
-            jz = int((txt + 2.0) * 12000.0 / istep)  # !For TR 60 s and higher
+        txt = 85.0 * self.sym_samps / 12000.0 + (2 if self.sym_samps >= 6912 else 1)  # !For TR 60 s and higher
+        jz = int(txt * 12000.0 / self.sym_steps)  # !Number of symbol/NSTEP bins
 
-        s3_1fa = np.zeros(63 * 640, dtype=np.float64)  # attention = 63*640=40320 q65d from q65_subs
-
-        t_s = np.zeros(700, dtype=np.float64)
+        s3 = np.zeros(63 * 640, dtype=np.float64)  # attention = 63*640=40320 q65d from q65_subs
 
         if LL != self.LL0 or iz != self.iz0 or jz != self.jz0:
             self.LL0 = LL
@@ -350,51 +346,42 @@ class Q65Monitor(AbstractMonitor):
 
         dt_step = self.sym_samps / (NSTEP * 12000.0)  # !Step size in seconds
         self.lag1 = int(-1.0 / dt_step)
-        self.lag2 = int(1.0 / dt_step + 0.9999)
+        # !Include EME
+        self.lag2 = int((5.5 if self.sym_samps >= 3600 and eme_delay else 1) / dt_step + 0.9999)
 
-        if self.sym_samps >= 3600 and eme_delay:
-            self.lag2 = int(5.5 / dt_step + 0.9999)  # !Include EME
-
-        self.j0 = int(0.5 / dt_step)
-        if self.sym_samps >= 7200:
-            self.j0 = int(1.0 / dt_step)  # !Nominal start-signal index if(nsps.ge.7200) j0=1.0/dt_step
+        # !Nominal start-signal index if(nsps.ge.7200) j0=1.0/dt_step
+        self.j0 = int((1 if self.sym_samps >= 7200 else 0.5) / dt_step)
 
         # ! Compute symbol spectra with NSTEP time bins per symbol
         sym_spec = self.symbol_spectra(iz, jz)
 
-        self.i0 = int(f0 / self.df)  # !Target QSO frequency
-        if self.i0 - 64 < 0:
-            self.i0 = 64
-
-        if self.i0 - 64 + LL > iz - 1:
-            self.i0 = iz + 64 - LL
+        self.i0 = min(max(int(f0 / self.df), 64), iz + 64 - LL)  # !Target QSO frequency
 
         for j in range(jz):
-            for z in range(LL):
-                t_s[z] = sym_spec[j, z + self.i0 - 64]
+            t_s = sym_spec[j, self.i0 - 64:self.i0 - 64 + LL]
 
-            base = shell_sort_percentile(t_s[:LL], 45)
+            base = shell_sort_percentile(t_s, 45)
             if base == 0.0:
                 base = 0.000001
 
-            for z in range(iz):
-                sym_spec[j, z] /= base
+            sym_spec[j, :iz] /= base
 
         for j in range(jz):
             # ! Apply fast AGC to the symbol spectra
-            s1max = 20.0  # !Empirical choice
-            smax = np.max(sym_spec[j, :iz])  # smax=maxval(s1(ii1:ii2,j))
-            if smax > s1max:
-                sym_spec[j, :iz] *= s1max / smax
+            s1_max = 20.0  # !Empirical choice
+            s_max = np.max(sym_spec[j, :iz])  # s_max=maxval(s1(ii1:ii2,j))
+
+            if s_max > s1_max:
+                sym_spec[j, :iz] *= s1_max / s_max
 
         # ! Get 2d CCF and ccf2 using sync symbols only
         i_peak, j_peak, ccf_freq, time_d = self.ccf_22(sym_spec, iz, jz, f0)  # maybe out of bandwidth df
 
         # ! The q3 decode attempt failed. Copy synchronized symbol energies from s1
         # ! into s3 and prepare to try a more general decode.
-        self.s1_to_s3(sym_spec, iz, jz, i_peak, j_peak, LL, s3_1fa)
+        self.s1_to_s3(sym_spec, iz, jz, i_peak, j_peak, LL, s3)
 
-        snr, data = self.decode_q012(s3_1fa)
+        snr, data = self.decode_q012(s3)
 
         return time_d, ccf_freq, data, snr
 
