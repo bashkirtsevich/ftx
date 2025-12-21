@@ -47,8 +47,8 @@ class Q65Monitor(AbstractMonitor):
         self.fft_size = self.sym_samps
         self.df = 12000.0 / self.fft_size  # !Freq resolution = baud
 
-        self.nfa = 214.333328
-        self.nfb = 2000.000000
+        self.nf_a = 214.333328
+        self.nf_b = 2000.000000
 
         self.bw_a = 1
         self.bw_b = 11
@@ -90,7 +90,6 @@ class Q65Monitor(AbstractMonitor):
     def ccf_22(self, s1: npt.NDArray[np.float64], iz: int, jz: int, f0: float):
         xdt2 = np.zeros(7000, dtype=np.float64)
         ccf3 = np.zeros(7000, dtype=np.float64)
-        s1_avg = np.zeros(7000, dtype=np.float64)
 
         dec_df = 50
         snf_a = f0 - dec_df
@@ -98,75 +97,80 @@ class Q65Monitor(AbstractMonitor):
 
         max_drift = min(100.0 / self.df, 60) if self.f_max_drift else 0
 
-        i_a = int(max(self.nfa, 100.0) / self.df)
-        i_b = int(min(self.nfb, 4900.0) / self.df)
+        i_a = int(max(self.nf_a, 100.0) / self.df)
+        i_b = int(min(self.nf_b, 4900.0) / self.df)
 
+        s1_avg = np.zeros(i_b - i_a, dtype=np.float64)
         for i in range(i_a, i_b):
-            s1_avg[i] = np.sum(s1[:jz, i])
+            s1_avg[i - i_a] = np.sum(s1[:jz, i])
 
         ccf_best = 0.0
         best = 0
         lag_best = 0
         drift_best = 0
         for i in range(i_a, i_b):
-            ccf_max_s = 0.0
-            ccf_max_m = 0.0
-            lagpk_s = 0
-            lagpk_m = 0
+            ccf_max_s = 0
+            ccf_max_m = 0
+            lag_peak_s = 0
+            lag_peak_m = 0
             drift_max_s = 0
+
             for lag in range(self.lag1, self.lag2 + 1):
-                for idrift in range(-max_drift, max_drift + 1):
-                    ccft = 0.0
-                    for kk in range(22):
+                for drift in range(-max_drift, max_drift + 1):
+                    ccf_t = 0.0
+                    for kk in range(Q65_SYNC_TONES_COUNT):
                         k = Q65_SYNC[kk] - 1
-                        zz = idrift * (k - 43)
-                        ii = i + (int)(zz / 85.0)
+                        zz = drift * (k - 43)
+                        ii = i + zz // 85
+
                         if ii < 0 or ii >= iz:
                             continue
+
                         n = NSTEP * k
                         j = n + lag + self.j0
                         if j > -1 and j < jz:
-                            ccft += s1[j, ii]
+                            ccf_t += s1[j, ii]
 
-                    ccft -= (22.0 / jz) * s1_avg[i]
-                    if ccft > ccf_max_s:
-                        ccf_max_s = ccft
-                        lagpk_s = lag
-                        drift_max_s = idrift
-                    if ccft > ccf_max_m and idrift == 0:
-                        ccf_max_m = ccft
-                        lagpk_m = lag
+                    ccf_t -= (22 / jz) * s1_avg[i - i_a]
+
+                    if ccf_t > ccf_max_s:
+                        ccf_max_s = ccf_t
+                        lag_peak_s = lag
+                        drift_max_s = drift
+
+                    if ccf_t > ccf_max_m and drift == 0:
+                        ccf_max_m = ccf_t
+                        lag_peak_m = lag
 
             ccf3[i] = ccf_max_m
-            xdt2[i] = lagpk_m * self.dt_step
+            xdt2[i] = lag_peak_m * self.dt_step
 
             f = i * self.df
-            if ccf_max_s > ccf_best and (f >= snf_a and f <= snf_b):
+            if ccf_max_s > ccf_best and snf_a <= f <= snf_b:
                 ccf_best = ccf_max_s
                 best = i
-                lag_best = lagpk_s
+                lag_best = lag_peak_s
                 drift_best = drift_max_s
 
         # ! Parameters for the top candidate:
         i_peak = best - self.i0
         j_peak = lag_best
-        f0 = f0 + i_peak * self.df
-        xdt = j_peak * self.dt_step
+
+        f0 += i_peak * self.df
+        dt = j_peak * self.dt_step
         self.drift = self.df * drift_best
 
-        ccf3[0:i_a] = 0.0
-        ccf3[i_b:iz] = 0.0
+        ccf3[0:i_a] = 0
+        ccf3[i_b:iz] = 0
 
         # ! Save parameters for best candidates
         jzz = min(i_b - i_a, 25)
+        t_s = ccf3[i_a:i_a + jzz]
 
-        t_s = np.zeros(7000, dtype=np.float64)
-        for z in range(jzz):
-            t_s[z] = ccf3[z + i_a]
+        indices = np.argsort(t_s)
 
-        indices = np.argsort(t_s[:jzz])
-        ave = shell_sort_percentile(t_s[:jzz], 50)
-        base = shell_sort_percentile(t_s[:jzz], 84)
+        ave = shell_sort_percentile(t_s, 50)
+        base = shell_sort_percentile(t_s, 84)
 
         if (rms := base - ave) == 0.0:
             rms = 0.000001
@@ -217,7 +221,7 @@ class Q65Monitor(AbstractMonitor):
             self.candidates_[0, i] = tmp[0, indices[i]]
             self.candidates_[1, i] = tmp[1, indices[i]]
 
-        return i_peak, j_peak, f0, xdt
+        return i_peak, j_peak, f0, dt
 
     def s1_to_s3(
             self,

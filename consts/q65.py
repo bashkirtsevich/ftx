@@ -5,6 +5,7 @@ import numpy.typing as npt
 
 Q65_SYNC = np.array([1, 9, 12, 13, 15, 22, 23, 26, 27, 33, 35, 38, 46, 50, 55, 60, 62, 66, 69, 74, 76, 85])
 
+Q65_SYNC_TONES_COUNT = 22
 Q65_TONES_COUNT = 85
 
 NSTEP = 8
