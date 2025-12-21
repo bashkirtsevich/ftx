@@ -56,8 +56,7 @@ def q65_6bit_decode(values: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
 
 
 # @njit
-def bzap(s3: npt.NDArray[np.float64], LL: int):
-    NBZAP = 15
+def bzap(s3: npt.NDArray[np.float64], LL: int, threshold: int = 15):
     hist = np.zeros(LL, dtype=np.int64)
 
     for j in range(63):
@@ -65,8 +64,8 @@ def bzap(s3: npt.NDArray[np.float64], LL: int):
         ipk1 = np.argmax(s3[beg:beg + LL])
         hist[ipk1] += 1
 
-    if np.max(hist) > NBZAP:
+    if np.max(hist) > threshold:
         for i in range(LL):
-            if hist[i] > NBZAP:
+            if hist[i] > threshold:
                 for j in range(63):
                     s3[j * LL + i] = 1.0

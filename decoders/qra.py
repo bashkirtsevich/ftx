@@ -101,11 +101,11 @@ class Q65Monitor(AbstractMonitor):
     def ccf_22(self, s1: npt.NDArray[np.float64], iz: int, jz: int, target_freq: float):
         xdt2 = np.zeros(7000, dtype=np.float64)
         ccf3 = np.zeros(7000, dtype=np.float64)
-        s1avg = np.zeros(7000, dtype=np.float64)
+        s1_avg = np.zeros(7000, dtype=np.float64)
 
-        mdec_df = 50
-        snfa = target_freq - mdec_df
-        snfb = target_freq + mdec_df
+        dec_df = 50
+        snfa = target_freq - dec_df
+        snfb = target_freq + dec_df
 
         self.max_drift = 0
 
@@ -116,18 +116,18 @@ class Q65Monitor(AbstractMonitor):
         ib = int(min(self.nfb, 4900.0) / self.df)
 
         for i in range(ia, ib):
-            s1avg[i] = np.sum(s1[:jz, i])
+            s1_avg[i] = np.sum(s1[:jz, i])
 
-        ccfbest = 0.0
-        ibest = 0
-        lagbest = 0
-        idrift_best = 0
+        ccf_best = 0.0
+        best = 0
+        lag_best = 0
+        drift_best = 0
         for i in range(ia, ib):
-            ccfmax_s = 0.0
-            ccfmax_m = 0.0
+            ccf_max_s = 0.0
+            ccf_max_m = 0.0
             lagpk_s = 0
             lagpk_m = 0
-            idrift_max_s = 0
+            drift_max_s = 0
             for lag in range(self.lag1, self.lag2 + 1):
                 for idrift in range(-self.max_drift, self.max_drift + 1):
                     ccft = 0.0
@@ -142,35 +142,35 @@ class Q65Monitor(AbstractMonitor):
                         if j > -1 and j < jz:
                             ccft += s1[j, ii]
 
-                    ccft -= (22.0 / jz) * s1avg[i]
-                    if ccft > ccfmax_s:
-                        ccfmax_s = ccft
+                    ccft -= (22.0 / jz) * s1_avg[i]
+                    if ccft > ccf_max_s:
+                        ccf_max_s = ccft
                         lagpk_s = lag
-                        idrift_max_s = idrift
-                    if ccft > ccfmax_m and idrift == 0:
-                        ccfmax_m = ccft
+                        drift_max_s = idrift
+                    if ccft > ccf_max_m and idrift == 0:
+                        ccf_max_m = ccft
                         lagpk_m = lag
 
-            ccf3[i] = ccfmax_m
+            ccf3[i] = ccf_max_m
             xdt2[i] = lagpk_m * self.dt_step
 
             f = i * self.df
-            if ccfmax_s > ccfbest and (f >= snfa and f <= snfb):
-                ccfbest = ccfmax_s
-                ibest = i
-                lagbest = lagpk_s
-                idrift_best = idrift_max_s
+            if ccf_max_s > ccf_best and (f >= snfa and f <= snfb):
+                ccf_best = ccf_max_s
+                best = i
+                lag_best = lagpk_s
+                drift_best = drift_max_s
 
         # corrp = np.argmax(ccf3[int(snfa / self.df):int(snfb / self.df)]) + int(snfa / self.df)
         # self.xdtnd = xdt2[corrp]
         # self.f0nd = target_freq + (corrp - self.i0) * self.df
 
         # ! Parameters for the top candidate:
-        ipk = ibest - self.i0
-        jpk = lagbest
+        ipk = best - self.i0
+        jpk = lag_best
         f0 = target_freq + ipk * self.df
         xdt = jpk * self.dt_step
-        self.drift = self.df * idrift_best
+        self.drift = self.df * drift_best
 
         ccf3[0:ia] = 0.0
         ccf3[ib:iz] = 0.0
@@ -189,15 +189,17 @@ class Q65Monitor(AbstractMonitor):
         if (rms := base - ave) == 0.0:
             rms = 0.000001
 
-        ncand = 0
-        maxcand = 20
+        cand_id = 0
+        cand_max = 20
 
-        for j in range(maxcand):
+        for j in range(cand_max):
             k = jzz - j - 1
             if k < 0 or k >= iz:
                 continue
+
             i = indices[k] + ia
             f = i * self.df
+
             i3 = int(max(0, i - self.q65_type))
             i4 = int(min(iz, i + self.q65_type))
 
@@ -209,16 +211,16 @@ class Q65Monitor(AbstractMonitor):
             if snr < 6.0:
                 break
 
-            self.candidates_[0, ncand] = xdt2[i]
-            self.candidates_[1, ncand] = f
+            self.candidates_[0, cand_id] = xdt2[i]
+            self.candidates_[1, cand_id] = f
 
-            ncand += 1
-            if ncand > maxcand - 1:
+            cand_id += 1
+            if cand_id > cand_max - 1:
                 break  # no needed
 
         # ! Resort the candidates back into frequency order
         tmp = np.zeros((2, 25), dtype=np.float64)
-        for j in range(ncand):
+        for j in range(cand_id):
             tmp[0, j] = self.candidates_[0, j]
             tmp[1, j] = self.candidates_[1, j]
 
@@ -226,10 +228,10 @@ class Q65Monitor(AbstractMonitor):
             self.candidates_[1, j] = 0.0
             indices[j] = 0
 
-        if ncand > 0:
-            indices = np.argsort(tmp[1, :ncand])
+        if cand_id > 0:
+            indices = np.argsort(tmp[1, :cand_id])
 
-        for i in range(ncand):
+        for i in range(cand_id):
             self.candidates_[0, i] = tmp[0, indices[i]]
             self.candidates_[1, i] = tmp[1, indices[i]]
 
@@ -336,8 +338,6 @@ class Q65Monitor(AbstractMonitor):
         jz = int((txt + 1.0) * 12000.0 / istep)  # !Number of symbol/NSTEP bins
         if self.sym_samps >= 6912:
             jz = int((txt + 2.0) * 12000.0 / istep)  # !For TR 60 s and higher
-
-
 
         s3_1fa = np.zeros(63 * 640, dtype=np.float64)  # attention = 63*640=40320 q65d from q65_subs
 
