@@ -1,4 +1,5 @@
 import typing
+
 import numpy as np
 import numpy.typing as npt
 from consts.q65 import *
@@ -53,8 +54,7 @@ class Q65Monitor(AbstractMonitor):
         self.bw_a = 1
         self.bw_b = 11
 
-        # self.navg = np.zeros(2, dtype=np.int64)
-        self.candidates_ = np.zeros((2, 20), dtype=np.float64)
+        self.candidates = np.zeros((2, 20), dtype=np.float64)
 
         self.f_max_drift = False
 
@@ -62,28 +62,28 @@ class Q65Monitor(AbstractMonitor):
 
         # !Generate the sync vector
         self.sync = np.full(Q65_TONES_COUNT, -22.0 / 63.0, dtype=np.float64)  # !Sync tone OFF
-        self.sync[Q65_SYNC - 1] = 1.0  # !Sync tone ON
+        self.sync[Q65_SYNC - 1] = 1  # !Sync tone ON
 
     # !Compute symbol spectra with NSTEP time-steps per symbol.
     def symbol_spectra(self, num_bins: int, num_times: int) -> npt.NDArray[np.float64]:
-        fac = (1.0 / np.iinfo(np.int16).max) * 0.01
+        fac = (1 / np.iinfo(np.int16).max) * 0.01
 
         sym_spec = np.zeros((800, 7000), dtype=np.float64)
-        for j in range(0, num_times, 2):  # !Compute symbol spectra at 2*step size
-            f_beg = j * self.sym_steps
+        for i in range(0, num_times, 2):  # !Compute symbol spectra at 2*step size
+            f_beg = i * self.sym_steps
             f_end = f_beg + self.sym_samps
 
             spec = np.fft.fft(self.signal[f_beg:f_end] * fac, n=self.fft_size)[:num_bins]  # iwave * fac ?
-            sym_spec[j, :num_bins] = np.abs(spec) ** 2
+            sym_spec[i, :num_bins] = np.abs(spec) ** 2
 
             # !For large Doppler spreads, should we smooth the spectra here?
             if self.smooth > 1:
                 for _ in range(self.smooth):
-                    sym_spec[j] = smooth_121(sym_spec[j])
+                    sym_spec[i] = smooth_121(sym_spec[i])
 
             # ! Interpolate to fill in the skipped-over spectra.
-            if j >= 2:
-                sym_spec[j - 1] = 0.5 * (sym_spec[j - 2] + sym_spec[j])
+            if i >= 2:
+                sym_spec[i - 1] = 0.5 * (sym_spec[i - 2] + sym_spec[i])
 
         return sym_spec
 
@@ -197,8 +197,8 @@ class Q65Monitor(AbstractMonitor):
             if snr < 6.0:
                 break
 
-            self.candidates_[0, cand_id] = xdt2[i]
-            self.candidates_[1, cand_id] = f
+            self.candidates[0, cand_id] = xdt2[i]
+            self.candidates[1, cand_id] = f
 
             cand_id += 1
             if cand_id > cand_max - 1:
@@ -207,19 +207,19 @@ class Q65Monitor(AbstractMonitor):
         # ! Resort the candidates back into frequency order
         tmp = np.zeros((2, 25), dtype=np.float64)
         for j in range(cand_id):
-            tmp[0, j] = self.candidates_[0, j]
-            tmp[1, j] = self.candidates_[1, j]
+            tmp[0, j] = self.candidates[0, j]
+            tmp[1, j] = self.candidates[1, j]
 
-            self.candidates_[0, j] = 0.0
-            self.candidates_[1, j] = 0.0
+            self.candidates[0, j] = 0.0
+            self.candidates[1, j] = 0.0
             indices[j] = 0
 
         if cand_id > 0:
             indices = np.argsort(tmp[1, :cand_id])
 
         for i in range(cand_id):
-            self.candidates_[0, i] = tmp[0, indices[i]]
-            self.candidates_[1, i] = tmp[1, indices[i]]
+            self.candidates[0, i] = tmp[0, indices[i]]
+            self.candidates[1, i] = tmp[1, indices[i]]
 
         return i_peak, j_peak, f0, dt
 
@@ -340,9 +340,7 @@ class Q65Monitor(AbstractMonitor):
 
         for j in range(jz):
             t_s = sym_spec[j, self.i0 - 64:self.i0 - 64 + LL]
-
-            base = shell_sort_percentile(t_s, 45)
-            if base == 0.0:
+            if (base := shell_sort_percentile(t_s, 45)) == 0:
                 base = 0.000001
 
             sym_spec[j, :iz] /= base
