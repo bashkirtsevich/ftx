@@ -40,22 +40,12 @@ class Q65Monitor(AbstractMonitor):
         self.i0 = 0
         self.j0 = 0
 
-        self.LL0 = 0
-        self.iz0 = 0
-        self.jz0 = 0
-
-        # LL = 64 * (2 + mode_q65) # 64 * 10
-        # self.LL = 64 * 10
         self.NN = 63
 
         self.max_iters = 100
 
         self.fft_size = self.sym_samps
         self.df = 12000.0 / self.fft_size  # !Freq resolution = baud
-
-        # self.iz = int(5000.0 / self.df)
-        # self.txt = 85.0 * self.samp_per_sym / 12000.0
-        # self.jz = int((self.txt + 1.0) * 12000.0 / self.istep)
 
         self.nfa = 214.333328
         self.nfb = 2000.000000
@@ -66,7 +56,6 @@ class Q65Monitor(AbstractMonitor):
         # self.navg = np.zeros(2, dtype=np.int64)
         self.candidates_ = np.zeros((2, 20), dtype=np.float64)
 
-        self.max_drift = 0
         self.f_max_drift = False
 
         self.q65_codec = q65_init()
@@ -104,32 +93,29 @@ class Q65Monitor(AbstractMonitor):
         s1_avg = np.zeros(7000, dtype=np.float64)
 
         dec_df = 50
-        snfa = f0 - dec_df
-        snfb = f0 + dec_df
+        snf_a = f0 - dec_df
+        snf_b = f0 + dec_df
 
-        self.max_drift = 0
+        max_drift = min(100.0 / self.df, 60) if self.f_max_drift else 0
 
-        if self.f_max_drift:
-            self.max_drift = min(100.0 / self.df, 60)
+        i_a = int(max(self.nfa, 100.0) / self.df)
+        i_b = int(min(self.nfb, 4900.0) / self.df)
 
-        ia = int(max(self.nfa, 100.0) / self.df)
-        ib = int(min(self.nfb, 4900.0) / self.df)
-
-        for i in range(ia, ib):
+        for i in range(i_a, i_b):
             s1_avg[i] = np.sum(s1[:jz, i])
 
         ccf_best = 0.0
         best = 0
         lag_best = 0
         drift_best = 0
-        for i in range(ia, ib):
+        for i in range(i_a, i_b):
             ccf_max_s = 0.0
             ccf_max_m = 0.0
             lagpk_s = 0
             lagpk_m = 0
             drift_max_s = 0
             for lag in range(self.lag1, self.lag2 + 1):
-                for idrift in range(-self.max_drift, self.max_drift + 1):
+                for idrift in range(-max_drift, max_drift + 1):
                     ccft = 0.0
                     for kk in range(22):
                         k = Q65_SYNC[kk] - 1
@@ -155,15 +141,11 @@ class Q65Monitor(AbstractMonitor):
             xdt2[i] = lagpk_m * self.dt_step
 
             f = i * self.df
-            if ccf_max_s > ccf_best and (f >= snfa and f <= snfb):
+            if ccf_max_s > ccf_best and (f >= snf_a and f <= snf_b):
                 ccf_best = ccf_max_s
                 best = i
                 lag_best = lagpk_s
                 drift_best = drift_max_s
-
-        # corrp = np.argmax(ccf3[int(snfa / self.df):int(snfb / self.df)]) + int(snfa / self.df)
-        # self.xdtnd = xdt2[corrp]
-        # self.f0nd = target_freq + (corrp - self.i0) * self.df
 
         # ! Parameters for the top candidate:
         i_peak = best - self.i0
@@ -172,15 +154,15 @@ class Q65Monitor(AbstractMonitor):
         xdt = j_peak * self.dt_step
         self.drift = self.df * drift_best
 
-        ccf3[0:ia] = 0.0
-        ccf3[ib:iz] = 0.0
+        ccf3[0:i_a] = 0.0
+        ccf3[i_b:iz] = 0.0
 
         # ! Save parameters for best candidates
-        jzz = min(ib - ia, 25)
+        jzz = min(i_b - i_a, 25)
 
         t_s = np.zeros(7000, dtype=np.float64)
         for z in range(jzz):
-            t_s[z] = ccf3[z + ia]
+            t_s[z] = ccf3[z + i_a]
 
         indices = np.argsort(t_s[:jzz])
         ave = shell_sort_percentile(t_s[:jzz], 50)
@@ -197,7 +179,7 @@ class Q65Monitor(AbstractMonitor):
             if k < 0 or k >= iz:
                 continue
 
-            i = indices[k] + ia
+            i = indices[k] + i_a
             f = i * self.df
 
             i3 = int(max(0, i - self.q65_type))
@@ -338,11 +320,6 @@ class Q65Monitor(AbstractMonitor):
         jz = int(txt * 12000.0 / self.sym_steps)  # !Number of symbol/NSTEP bins
 
         s3 = np.zeros(63 * 640, dtype=np.float64)  # attention = 63*640=40320 q65d from q65_subs
-
-        if LL != self.LL0 or iz != self.iz0 or jz != self.jz0:
-            self.LL0 = LL
-            self.iz0 = iz
-            self.jz0 = jz
 
         dt_step = self.sym_samps / (NSTEP * 12000.0)  # !Step size in seconds
         self.lag1 = int(-1.0 / dt_step)
