@@ -9,34 +9,34 @@ def smooth_121(a: np.ndarray):
     return np.concat([a[:1], convolved[1:-1], a[-1:]])
 
 
-@njit
-def shell(arr: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
-    n = len(arr)
-    inc = 1
-    while 3 * inc + 1 <= n:
-        inc = 3 * inc + 1
-
-    while inc > 1:
-        for i in range(inc, n):
-            v = arr[i]
-            j = i
-
-            while j >= inc and arr[j - inc] > v:
-                arr[j] = arr[j - inc]
-                j -= inc
-
-            arr[j] = v
-
-        inc //= 3
-
-    return arr
-
-
-def shell_sort_percentile(arr: npt.NDArray[np.float64], percentile: float) -> np.float64:
-    points = len(arr)
-    tmp = shell(arr.copy())
-    i = min(max(int(points * 0.01 * percentile), 0), points - 1)
-    return tmp[i]
+# @njit
+# def shell(arr: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+#     n = len(arr)
+#     inc = 1
+#     while 3 * inc + 1 <= n:
+#         inc = 3 * inc + 1
+#
+#     while inc > 1:
+#         for i in range(inc, n):
+#             v = arr[i]
+#             j = i
+#
+#             while j >= inc and arr[j - inc] > v:
+#                 arr[j] = arr[j - inc]
+#                 j -= inc
+#
+#             arr[j] = v
+#
+#         inc //= 3
+#
+#     return arr
+#
+#
+# def shell_sort_percentile(arr: npt.NDArray[np.float64], percentile: float) -> np.float64:
+#     points = len(arr)
+#     tmp = shell(arr.copy())
+#     i = min(max(int(points * 0.01 * percentile), 0), points - 1)
+#     return tmp[i]
 
 
 def q65_6bit_decode(values: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:

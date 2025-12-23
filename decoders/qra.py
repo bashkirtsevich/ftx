@@ -5,7 +5,7 @@ import numpy.typing as npt
 from consts.q65 import *
 from decoders.monitor import AbstractMonitor, LogItem
 from utils.common import dB
-from utils.q65 import smooth_121, shell_sort_percentile, bzap, q65_6bit_decode
+from utils.q65 import smooth_121, bzap, q65_6bit_decode
 from qra.q65 import q65_intrinsics_ff, q65_dec, q65_init
 
 
@@ -340,7 +340,7 @@ class Q65Monitor(AbstractMonitor):
 
         for j in range(jz):
             t_s = sym_spec[j, self.i0 - 64:self.i0 - 64 + LL]
-            if (base := shell_sort_percentile(t_s, 45)) == 0:
+            if (base := np.percentile(t_s, 45)) == 0:
                 base = 0.000001
 
             sym_spec[j, :iz] /= base
