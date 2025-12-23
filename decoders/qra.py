@@ -68,13 +68,13 @@ class Q65Monitor(AbstractMonitor):
     def symbol_spectra(self, num_bins: int, num_times: int) -> npt.NDArray[np.float64]:
         fac = (1 / np.iinfo(np.int16).max) * 0.01
 
-        sym_spec = np.zeros((800, 7000), dtype=np.float64)
+        sym_spec = np.zeros((num_times, num_bins), dtype=np.float64)
         for i in range(0, num_times, 2):  # !Compute symbol spectra at 2*step size
             f_beg = i * self.sym_steps
             f_end = f_beg + self.sym_samps
 
             spec = np.fft.fft(self.signal[f_beg:f_end] * fac, n=self.fft_size)[:num_bins]  # iwave * fac ?
-            sym_spec[i, :num_bins] = np.abs(spec) ** 2
+            sym_spec[i, :] = np.abs(spec) ** 2
 
             # !For large Doppler spreads, should we smooth the spectra here?
             if self.smooth > 1:
