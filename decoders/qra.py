@@ -343,15 +343,15 @@ class Q65Monitor(AbstractMonitor):
             if (base := np.percentile(t_s, 45)) == 0:
                 base = 0.000001
 
-            sym_spec[j, :iz] /= base
+            sym_spec[j, :] /= base
 
         for j in range(jz):
             # ! Apply fast AGC to the symbol spectra
             s1_max = 20.0  # !Empirical choice
-            s_max = np.max(sym_spec[j, :iz])  # s_max=maxval(s1(ii1:ii2,j))
+            s_max = np.max(sym_spec[j, :])  # s_max=maxval(s1(ii1:ii2,j))
 
             if s_max > s1_max:
-                sym_spec[j, :iz] *= s1_max / s_max
+                sym_spec[j, :] *= s1_max / s_max
 
         # ! Get 2d CCF and ccf2 using sync symbols only
         i_peak, j_peak, ccf_freq, time_d = self.ccf_22(sym_spec, iz, jz, f0)  # maybe out of bandwidth df
