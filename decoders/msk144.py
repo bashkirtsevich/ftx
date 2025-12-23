@@ -35,6 +35,7 @@ class MSK144Monitor(AbstractMonitor):
     @cache
     @jit(nopython=True)
     def filter_response(n_fft: int, sample_rate: int) -> npt.NDArray[np.float64]:
+        # https://en.wikipedia.org/wiki/Raised-cosine_filter
         t = 1 / 2000
         beta = 0.1
         df = sample_rate / n_fft
