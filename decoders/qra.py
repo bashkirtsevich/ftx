@@ -15,7 +15,7 @@ class Q65Monitor(AbstractMonitor):
     CCF_OFFSET_R = 70
     CCF_OFFSET_C = 7000
 
-    def __init__(self, q65_type: typing.Literal[1, 2, 3, 4],
+    def __init__(self, eme_delay: bool, q65_type: typing.Literal[1, 2, 3, 4],
                  period: typing.Optional[typing.Literal[15, 30, 60, 120, 300]] = None):
         self.signal = np.zeros(0, dtype=np.float64)
 
@@ -30,23 +30,30 @@ class Q65Monitor(AbstractMonitor):
         else:
             self.sym_samps = 3600
 
+        self.fft_size = self.sym_samps
+        self.df = 12000.0 / self.fft_size  # !Freq resolution = baud
+
         self.smooth = max(1, int(0.5 * self.q65_type ** 2))
 
         self.sym_steps = self.sym_samps // NSTEP
-        self.dt_step = self.sym_samps / (NSTEP * 12000.0)
+        self.dt_step = self.sym_samps / (NSTEP * 12000.0)  # !Step size in seconds
 
+        # dt_step = self.sym_samps / (NSTEP * 12000.0)
         self.lag1 = int(-1.0 / self.dt_step)
-        self.lag2 = int(1.0 / self.dt_step + 0.9999)
+        # !Include EME
+        self.lag2 = int((5.5 if self.sym_samps >= 3600 and eme_delay else 1) / self.dt_step + 0.9999)
 
         self.i0 = 0
-        self.j0 = 0
+
+        # !Nominal start-signal index if(nsps.ge.7200) j0=1.0/dt_step
+        self.j0 = int((1 if self.sym_samps >= 7200 else 0.5) / self.dt_step)
+
+        # self.i0 = 0
+        # self.j0 = 0
 
         self.NN = 63
 
         self.max_iters = 100
-
-        self.fft_size = self.sym_samps
-        self.df = 12000.0 / self.fft_size  # !Freq resolution = baud
 
         self.nf_a = 214.333328
         self.nf_b = 2000.000000
@@ -169,8 +176,8 @@ class Q65Monitor(AbstractMonitor):
 
         indices = np.argsort(t_s)
 
-        ave = shell_sort_percentile(t_s, 50)
-        base = shell_sort_percentile(t_s, 84)
+        ave = np.percentile(t_s, 50)
+        base = np.percentile(t_s, 84)
 
         if (rms := base - ave) == 0.0:
             rms = 0.000001
@@ -290,7 +297,7 @@ class Q65Monitor(AbstractMonitor):
                 snr = EsNo_dB - dB(2500.0 / baud) + 3.0  # !Empirical adjustment
                 return snr, payload
 
-    def decode_0(self, f0: float, eme_delay: bool) -> typing.Tuple[float, float, npt.NDArray[np.int64], float]:
+    def decode_0(self, f0: float) -> typing.Tuple[float, float, npt.NDArray[np.int64], float]:
         # Top-level routine in q65 module
         # !   - Compute symbol spectra
         # !   - Attempt sync and q3 decode using all 85 symbols
@@ -319,24 +326,15 @@ class Q65Monitor(AbstractMonitor):
 
         LL = 64 * (2 + self.q65_type)  # mode_q65 -- 1, 2, 3, 4
 
-        iz = int(5000.0 / self.df)  # !Uppermost frequency bin, at 5000 Hz
         txt = 85.0 * self.sym_samps / 12000.0 + (2 if self.sym_samps >= 6912 else 1)  # !For TR 60 s and higher
+
+        iz = int(5000.0 / self.df)  # !Uppermost frequency bin, at 5000 Hz
         jz = int(txt * 12000.0 / self.sym_steps)  # !Number of symbol/NSTEP bins
 
-        s3 = np.zeros(63 * 640, dtype=np.float64)  # attention = 63*640=40320 q65d from q65_subs
-
-        dt_step = self.sym_samps / (NSTEP * 12000.0)  # !Step size in seconds
-        self.lag1 = int(-1.0 / dt_step)
-        # !Include EME
-        self.lag2 = int((5.5 if self.sym_samps >= 3600 and eme_delay else 1) / dt_step + 0.9999)
-
-        # !Nominal start-signal index if(nsps.ge.7200) j0=1.0/dt_step
-        self.j0 = int((1 if self.sym_samps >= 7200 else 0.5) / dt_step)
+        self.i0 = min(max(int(f0 / self.df), 64), iz + 64 - LL)  # !Target QSO frequency
 
         # ! Compute symbol spectra with NSTEP time bins per symbol
         sym_spec = self.symbol_spectra(iz, jz)
-
-        self.i0 = min(max(int(f0 / self.df), 64), iz + 64 - LL)  # !Target QSO frequency
 
         for j in range(jz):
             t_s = sym_spec[j, self.i0 - 64:self.i0 - 64 + LL]
@@ -358,14 +356,15 @@ class Q65Monitor(AbstractMonitor):
 
         # ! The q3 decode attempt failed. Copy synchronized symbol energies from s1
         # ! into s3 and prepare to try a more general decode.
+        s3 = np.zeros(63 * 640, dtype=np.float64)  # attention = 63*640=40320 q65d from q65_subs
         self.s1_to_s3(sym_spec, iz, jz, i_peak, j_peak, LL, s3)
 
         snr, data = self.decode_q012(s3)
 
         return time_d, ccf_freq, data, snr
 
-    def decode(self, f0: int, eme_delay: bool, **kwargs) -> typing.Generator[LogItem, None, None]:
-        dT, ccf_freq, payload, snr = self.decode_0(f0=f0, eme_delay=eme_delay)
+    def decode(self, f0: int, **kwargs) -> typing.Generator[LogItem, None, None]:
+        dT, ccf_freq, payload, snr = self.decode_0(f0=f0)
 
         yield LogItem(snr, dT, ccf_freq - f0, payload.tobytes(), 0)
 

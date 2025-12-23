@@ -10,7 +10,7 @@ def main():
 
     msg_svr = MsgServer()
 
-    mon = Q65Monitor(q65_type=2, period=15)
+    mon = Q65Monitor(q65_type=2, period=15, eme_delay=False)
     mon.monitor_process(data)
 
     ts1 = time.monotonic()
