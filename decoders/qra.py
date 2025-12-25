@@ -95,9 +95,6 @@ class Q65Monitor(AbstractMonitor):
         return sym_spec
 
     def ccf_22(self, s1: npt.NDArray[np.float64], iz: int, jz: int, f0: float):
-        xdt2 = np.zeros(7000, dtype=np.float64)
-        ccf3 = np.zeros(7000, dtype=np.float64)
-
         dec_df = 50
         snf_a = f0 - dec_df
         snf_b = f0 + dec_df
@@ -106,16 +103,20 @@ class Q65Monitor(AbstractMonitor):
 
         i_a = int(max(self.nf_a, 100.0) / self.df)
         i_b = int(min(self.nf_b, 4900.0) / self.df)
+        i_range = range(i_a, i_b)
 
-        s1_avg = np.zeros(i_b - i_a, dtype=np.float64)
-        for i in range(i_a, i_b):
+        ccf3 = np.zeros(len(i_range), dtype=np.float64)
+        xdt2 = np.zeros(len(i_range), dtype=np.float64)
+        s1_avg = np.zeros(len(i_range), dtype=np.float64)
+
+        for i in i_range:
             s1_avg[i - i_a] = np.sum(s1[:jz, i])
 
         ccf_best = 0.0
         best = 0
         lag_best = 0
         drift_best = 0
-        for i in range(i_a, i_b):
+        for i in i_range:
             ccf_max_s = 0
             ccf_max_m = 0
             lag_peak_s = 0
@@ -149,8 +150,8 @@ class Q65Monitor(AbstractMonitor):
                         ccf_max_m = ccf_t
                         lag_peak_m = lag
 
-            ccf3[i] = ccf_max_m
-            xdt2[i] = lag_peak_m * self.dt_step
+            ccf3[i - i_a] = ccf_max_m
+            xdt2[i - i_a] = lag_peak_m * self.dt_step
 
             f = i * self.df
             if ccf_max_s > ccf_best and snf_a <= f <= snf_b:
@@ -167,12 +168,9 @@ class Q65Monitor(AbstractMonitor):
         dt = j_peak * self.dt_step
         self.drift = self.df * drift_best
 
-        ccf3[0:i_a] = 0
-        ccf3[i_b:iz] = 0
-
         # ! Save parameters for best candidates
         jzz = min(i_b - i_a, 25)
-        t_s = ccf3[i_a:i_a + jzz]
+        t_s = ccf3[:jzz]
 
         indices = np.argsort(t_s)
 
@@ -190,7 +188,7 @@ class Q65Monitor(AbstractMonitor):
             if k < 0 or k >= iz:
                 continue
 
-            i = indices[k] + i_a
+            i = indices[k]
             f = i * self.df
 
             i3 = int(max(0, i - self.q65_type))
