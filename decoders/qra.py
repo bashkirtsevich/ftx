@@ -103,20 +103,16 @@ class Q65Monitor(AbstractMonitor):
 
         i_a = int(max(self.nf_a, 100.0) / self.df)
         i_b = int(min(self.nf_b, 4900.0) / self.df)
-        i_range = range(i_a, i_b)
 
-        ccf3 = np.zeros(len(i_range), dtype=np.float64)
-        xdt2 = np.zeros(len(i_range), dtype=np.float64)
-        s1_avg = np.zeros(len(i_range), dtype=np.float64)
-
-        for i in i_range:
-            s1_avg[i - i_a] = np.sum(s1[:jz, i])
+        ccf3 = np.zeros(i_b - i_a, dtype=np.float64)
+        xdt2 = np.zeros(i_b - i_a, dtype=np.float64)
+        s1_avg = np.sum(s1[:jz, i_a:i_b], axis=0)
 
         ccf_best = 0.0
         best = 0
         lag_best = 0
         drift_best = 0
-        for i in i_range:
+        for i in range(i_a, i_b):
             ccf_max_s = 0
             ccf_max_m = 0
             lag_peak_s = 0
