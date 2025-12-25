@@ -94,25 +94,25 @@ class Q65Monitor(AbstractMonitor):
 
         return sym_spec
 
-    def ccf_22(self, s1: npt.NDArray[np.float64], iz: int, jz: int, f0: float):
+    def ccf_22(self, sym_spec: npt.NDArray[np.float64], iz: int, jz: int, f0: float):
         dec_df = 50
         snf_a = f0 - dec_df
         snf_b = f0 + dec_df
 
         max_drift = min(100.0 / self.df, 60) if self.f_max_drift else 0
 
-        i_a = int(max(self.nf_a, 100.0) / self.df)
-        i_b = int(min(self.nf_b, 4900.0) / self.df)
+        bin_start = int(max(self.nf_a, 100.0) / self.df)
+        bin_end = int(min(self.nf_b, 4900.0) / self.df)
 
-        ccf3 = np.zeros(i_b - i_a, dtype=np.float64)
-        xdt2 = np.zeros(i_b - i_a, dtype=np.float64)
-        s1_avg = np.sum(s1[:jz, i_a:i_b], axis=0)
+        ccf_sync = np.zeros(bin_end - bin_start, dtype=np.float64)
+        time_offsets = np.zeros(bin_end - bin_start, dtype=np.float64)
+        sym_spec_avg = np.sum(sym_spec[:jz, bin_start:bin_end], axis=0)
 
         ccf_best = 0.0
         best = 0
         lag_best = 0
         drift_best = 0
-        for i in range(i_a, i_b):
+        for i in range(bin_start, bin_end):
             ccf_max_s = 0
             ccf_max_m = 0
             lag_peak_s = 0
@@ -133,9 +133,9 @@ class Q65Monitor(AbstractMonitor):
                         n = NSTEP * k
                         j = n + lag + self.j0
                         if j > -1 and j < jz:
-                            ccf_t += s1[j, ii]
+                            ccf_t += sym_spec[j, ii]
 
-                    ccf_t -= (22 / jz) * s1_avg[i - i_a]
+                    ccf_t -= (22 / jz) * sym_spec_avg[i - bin_start]
 
                     if ccf_t > ccf_max_s:
                         ccf_max_s = ccf_t
@@ -146,8 +146,8 @@ class Q65Monitor(AbstractMonitor):
                         ccf_max_m = ccf_t
                         lag_peak_m = lag
 
-            ccf3[i - i_a] = ccf_max_m
-            xdt2[i - i_a] = lag_peak_m * self.dt_step
+            ccf_sync[i - bin_start] = ccf_max_m
+            time_offsets[i - bin_start] = lag_peak_m * self.dt_step
 
             f = i * self.df
             if ccf_max_s > ccf_best and snf_a <= f <= snf_b:
@@ -165,8 +165,8 @@ class Q65Monitor(AbstractMonitor):
         self.drift = self.df * drift_best
 
         # ! Save parameters for best candidates
-        jzz = min(i_b - i_a, 25)
-        t_s = ccf3[:jzz]
+        jzz = min(bin_end - bin_start, 25)
+        t_s = ccf_sync[:jzz]
 
         indices = np.argsort(t_s)
 
@@ -190,15 +190,15 @@ class Q65Monitor(AbstractMonitor):
             i3 = int(max(0, i - self.q65_type))
             i4 = int(min(iz, i + self.q65_type))
 
-            biggest = np.max(ccf3[i3:i4])
-            if ccf3[i] != biggest:
+            biggest = np.max(ccf_sync[i3:i4])
+            if ccf_sync[i] != biggest:
                 continue
 
-            snr = (ccf3[i] - ave) / rms
+            snr = (ccf_sync[i] - ave) / rms
             if snr < 6.0:
                 break
 
-            self.candidates[0, cand_id] = xdt2[i]
+            self.candidates[0, cand_id] = time_offsets[i]
             self.candidates[1, cand_id] = f
 
             cand_id += 1
