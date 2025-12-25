@@ -92,7 +92,9 @@ class Q65Monitor(AbstractMonitor):
 
         return sym_spec
 
-    def ccf_22(self, sym_spec: npt.NDArray[np.float64], iz: int, jz: int, f0: float):
+    def ccf_22(self, sym_spec: npt.NDArray[np.float64], f0: float):
+        jz, iz = sym_spec.shape
+
         dec_df = 50
         snf_a = f0 - dec_df
         snf_b = f0 + dec_df
@@ -104,7 +106,7 @@ class Q65Monitor(AbstractMonitor):
 
         ccf_sync = np.zeros(bin_end - bin_start, dtype=np.float64)
         time_offsets = np.zeros(bin_end - bin_start, dtype=np.float64)
-        sym_spec_avg = np.sum(sym_spec[:jz, bin_start:bin_end], axis=0)
+        sym_spec_avg = np.sum(sym_spec[:, bin_start:bin_end], axis=0)
 
         ccf_best = 0.0
         best = 0
@@ -281,7 +283,7 @@ class Q65Monitor(AbstractMonitor):
                 sym_spec[j, :] *= s1_max / s_max
 
         # ! Get 2d CCF and ccf2 using sync symbols only
-        i_peak, j_peak, ccf_freq, time_d = self.ccf_22(sym_spec, iz, jz, f0)  # maybe out of bandwidth df
+        i_peak, j_peak, ccf_freq, time_d = self.ccf_22(sym_spec, f0)  # maybe out of bandwidth df
 
         # ! The q3 decode attempt failed. Copy synchronized symbol energies from s1
         # ! into s3 and prepare to try a more general decode.
