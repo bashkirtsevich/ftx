@@ -206,21 +206,9 @@ class Q65Monitor(AbstractMonitor):
                 break  # no needed
 
         # ! Resort the candidates back into frequency order
-        tmp = np.zeros((2, 25), dtype=np.float64)
-        for j in range(cand_id):
-            tmp[0, j] = self.candidates[0, j]
-            tmp[1, j] = self.candidates[1, j]
-
-            self.candidates[0, j] = 0.0
-            self.candidates[1, j] = 0.0
-            indices[j] = 0
-
-        if cand_id > 0:
-            indices = np.argsort(tmp[1, :cand_id])
-
-        for i in range(cand_id):
-            self.candidates[0, i] = tmp[0, indices[i]]
-            self.candidates[1, i] = tmp[1, indices[i]]
+        tmp = self.candidates[:, :cand_id]
+        indices = np.argsort(tmp[1, :cand_id])
+        self.candidates[:, :cand_id] = tmp[:, indices]
 
         return i_peak, j_peak, f0, dt
 
