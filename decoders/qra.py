@@ -61,8 +61,6 @@ class Q65Monitor(AbstractMonitor):
         self.bw_a = 1
         self.bw_b = 11
 
-        self.candidates = np.zeros((2, 20), dtype=np.float64)
-
         self.f_max_drift = False
 
         self.q65_codec = q65_init()
@@ -99,10 +97,10 @@ class Q65Monitor(AbstractMonitor):
         snf_a = f0 - dec_df
         snf_b = f0 + dec_df
 
-        max_drift = min(100.0 / self.df, 60) if self.f_max_drift else 0
+        max_drift = min(100 / self.df, 60) if self.f_max_drift else 0
 
-        bin_start = int(max(self.nf_a, 100.0) / self.df)
-        bin_end = int(min(self.nf_b, 4900.0) / self.df)
+        bin_start = int(max(self.nf_a, 100) / self.df)
+        bin_end = int(min(self.nf_b, 4900) / self.df)
 
         ccf_sync = np.zeros(bin_end - bin_start, dtype=np.float64)
         time_offsets = np.zeros(bin_end - bin_start, dtype=np.float64)
@@ -111,13 +109,11 @@ class Q65Monitor(AbstractMonitor):
         ccf_best = 0.0
         best = 0
         lag_best = 0
-        drift_best = 0
         for i in range(bin_start, bin_end):
             ccf_max_s = 0
             ccf_max_m = 0
             lag_peak_s = 0
             lag_peak_m = 0
-            drift_max_s = 0
 
             for lag in range(self.lag1, self.lag2 + 1):
                 for drift in range(-max_drift, max_drift + 1):
@@ -140,7 +136,6 @@ class Q65Monitor(AbstractMonitor):
                     if ccf_t > ccf_max_s:
                         ccf_max_s = ccf_t
                         lag_peak_s = lag
-                        drift_max_s = drift
 
                     if ccf_t > ccf_max_m and drift == 0:
                         ccf_max_m = ccf_t
@@ -154,7 +149,6 @@ class Q65Monitor(AbstractMonitor):
                 ccf_best = ccf_max_s
                 best = i
                 lag_best = lag_peak_s
-                drift_best = drift_max_s
 
         # ! Parameters for the top candidate:
         i_peak = best - self.i0
@@ -162,53 +156,6 @@ class Q65Monitor(AbstractMonitor):
 
         f0 += i_peak * self.df
         dt = j_peak * self.dt_step
-        self.drift = self.df * drift_best
-
-        # ! Save parameters for best candidates
-        jzz = min(bin_end - bin_start, 25)
-        t_s = ccf_sync[:jzz]
-
-        indices = np.argsort(t_s)
-
-        ave = np.percentile(t_s, 50)
-        base = np.percentile(t_s, 84)
-
-        if (rms := base - ave) == 0.0:
-            rms = 0.000001
-
-        cand_id = 0
-        cand_max = 20
-
-        for j in range(cand_max):
-            k = jzz - j - 1
-            if k < 0 or k >= iz:
-                continue
-
-            i = indices[k]
-            f = i * self.df
-
-            i3 = int(max(0, i - self.q65_type))
-            i4 = int(min(iz, i + self.q65_type))
-
-            biggest = np.max(ccf_sync[i3:i4])
-            if ccf_sync[i] != biggest:
-                continue
-
-            snr = (ccf_sync[i] - ave) / rms
-            if snr < 6.0:
-                break
-
-            self.candidates[0, cand_id] = time_offsets[i]
-            self.candidates[1, cand_id] = f
-
-            cand_id += 1
-            if cand_id > cand_max - 1:
-                break  # no needed
-
-        # ! Resort the candidates back into frequency order
-        tmp = self.candidates[:, :cand_id]
-        indices = np.argsort(tmp[1, :cand_id])
-        self.candidates[:, :cand_id] = tmp[:, indices]
 
         return i_peak, j_peak, f0, dt
 
