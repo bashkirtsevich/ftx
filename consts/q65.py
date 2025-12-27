@@ -7,6 +7,7 @@ Q65_SYNC = np.array([1, 9, 12, 13, 15, 22, 23, 26, 27, 33, 35, 38, 46, 50, 55, 6
 
 Q65_SYNC_TONES_COUNT = 22
 Q65_TONES_COUNT = 85
+Q65_TONES_CENTER = 43
 
 NSTEP = 8
 NMAX = (120 * 12000)  # !Max TRperiod is 300 s

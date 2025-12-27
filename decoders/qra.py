@@ -122,8 +122,8 @@ class Q65Monitor(AbstractMonitor):
                     ccf_t = 0.0
                     for kk in range(Q65_SYNC_TONES_COUNT):
                         k = Q65_SYNC[kk] - 1
-                        zz = drift * (k - 43)
-                        ii = i + zz // 85
+                        zz = drift * (k - Q65_TONES_CENTER)
+                        ii = i + zz // Q65_TONES_COUNT
 
                         if ii < 0 or ii >= iz:
                             continue
@@ -133,7 +133,7 @@ class Q65Monitor(AbstractMonitor):
                         if j > -1 and j < jz:
                             ccf_t += sym_spec[j, ii]
 
-                    ccf_t -= (22 / jz) * sym_spec_avg[i - bin_start]
+                    ccf_t -= (Q65_SYNC_TONES_COUNT / jz) * sym_spec_avg[i - bin_start]
 
                     if ccf_t > ccf_max_s:
                         ccf_max_s = ccf_t
