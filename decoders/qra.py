@@ -92,7 +92,7 @@ class Q65Monitor(AbstractMonitor):
 
         return sym_spec
 
-    def ccf_22(self, sym_spec: npt.NDArray[np.float64], f0: float):
+    def ccf_22(self, sym_spec: npt.NDArray[np.float64], f0: float) -> typing.Tuple[int, int, float, float]:
         jz, iz = sym_spec.shape
 
         dec_df = 50
@@ -108,7 +108,7 @@ class Q65Monitor(AbstractMonitor):
         time_offsets = np.zeros(bin_end - bin_start, dtype=np.float64)
         sym_spec_avg = np.sum(sym_spec[:, bin_start:bin_end], axis=0)
 
-        ccf_best = 0.0
+        ccf_best = 0
         best = 0
         lag_best = 0
         for i in range(bin_start, bin_end):
@@ -119,7 +119,7 @@ class Q65Monitor(AbstractMonitor):
 
             for lag in range(self.lag1, self.lag2 + 1):
                 for drift in range(-max_drift, max_drift + 1):
-                    ccf_t = 0.0
+                    ccf_t = 0
                     for kk in range(Q65_SYNC_TONES_COUNT):
                         k = Q65_SYNC[kk] - 1
                         zz = drift * (k - Q65_TONES_CENTER)
