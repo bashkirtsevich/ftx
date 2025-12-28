@@ -104,8 +104,8 @@ class Q65Monitor(AbstractMonitor):
         bin_start = int(max(self.nf_a, 100) / self.df)
         bin_end = int(min(self.nf_b, 4900) / self.df)
 
-        ccf_sync = np.zeros(bin_end - bin_start, dtype=np.float64)
-        time_offsets = np.zeros(bin_end - bin_start, dtype=np.float64)
+        # ccf_sync = np.zeros(bin_end - bin_start, dtype=np.float64)
+        # time_offsets = np.zeros(bin_end - bin_start, dtype=np.float64)
         sym_spec_avg = np.sum(sym_spec[:, bin_start:bin_end], axis=0)
 
         ccf_best = 0
@@ -115,7 +115,7 @@ class Q65Monitor(AbstractMonitor):
             ccf_max_s = 0
             ccf_max_m = 0
             lag_peak_s = 0
-            lag_peak_m = 0
+            # lag_peak_m = 0
 
             for lag in range(self.lag1, self.lag2 + 1):
                 for drift in range(-max_drift, max_drift + 1):
@@ -141,10 +141,10 @@ class Q65Monitor(AbstractMonitor):
 
                     if ccf_t > ccf_max_m and drift == 0:
                         ccf_max_m = ccf_t
-                        lag_peak_m = lag
+                        # lag_peak_m = lag
 
-            ccf_sync[i - bin_start] = ccf_max_m
-            time_offsets[i - bin_start] = lag_peak_m * self.dt_step
+            # ccf_sync[i - bin_start] = ccf_max_m
+            # time_offsets[i - bin_start] = lag_peak_m * self.dt_step
 
             f = i * self.df
             if ccf_max_s > ccf_best and snf_a <= f <= snf_b:
