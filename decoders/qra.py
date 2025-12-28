@@ -163,10 +163,12 @@ class Q65Monitor(AbstractMonitor):
 
     def s1_to_s3(
             self,
-            s1: npt.NDArray[np.float64],
-            iz: int, jz: int, i_peak: int, j_peak: int, LL: int,
+            sym_spec: npt.NDArray[np.float64],
+            i_peak: int, j_peak: int, LL: int,
             s3: npt.NDArray[np.float64]
     ):
+        jz, iz = sym_spec.shape
+
         # ! Copy synchronized symbol energies from s1 (or s1a) into s3.
         i1 = self.i0 + i_peak + self.q65_type - 64
         i2 = i1 + LL  # int LL=64*(2+mode_q65);
@@ -183,7 +185,7 @@ class Q65Monitor(AbstractMonitor):
 
                 if j > 0 and j < jz:
                     for i in range(i3):
-                        s3[n] = s1[j, i + i1]
+                        s3[n] = sym_spec[j, i + i1]
                         n += 1
 
         bzap(s3, LL)  # !Zap birdies
@@ -289,7 +291,7 @@ class Q65Monitor(AbstractMonitor):
         # ! into s3 and prepare to try a more general decode.
 
         s3 = np.zeros(Q65_DATA_TONES_COUNT * 640, dtype=np.float64)  # attention = 63*640=40320 q65d from q65_subs
-        self.s1_to_s3(sym_spec, iz, jz, i_peak, j_peak, LL, s3)
+        self.s1_to_s3(sym_spec, i_peak, j_peak, LL, s3)
 
         snr, data = self.decode_q012(s3)
 
