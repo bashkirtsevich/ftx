@@ -287,7 +287,8 @@ class Q65Monitor(AbstractMonitor):
 
         # ! The q3 decode attempt failed. Copy synchronized symbol energies from s1
         # ! into s3 and prepare to try a more general decode.
-        s3 = np.zeros(63 * 640, dtype=np.float64)  # attention = 63*640=40320 q65d from q65_subs
+
+        s3 = np.zeros(Q65_DATA_TONES_COUNT * 640, dtype=np.float64)  # attention = 63*640=40320 q65d from q65_subs
         self.s1_to_s3(sym_spec, iz, jz, i_peak, j_peak, LL, s3)
 
         snr, data = self.decode_q012(s3)
