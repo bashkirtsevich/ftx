@@ -92,7 +92,7 @@ class Q65Monitor(AbstractMonitor):
 
         return sym_spec
 
-    def ccf_22(self, sym_spec: npt.NDArray[np.float64], f0: float) -> typing.Tuple[int, int, float, float]:
+    def sync_ccf(self, sym_spec: npt.NDArray[np.float64], f0: float) -> typing.Tuple[int, int, float, float]:
         jz, iz = sym_spec.shape
 
         dec_df = 50
@@ -161,34 +161,37 @@ class Q65Monitor(AbstractMonitor):
 
         return i_peak, j_peak, f0, dt
 
-    def s1_to_s3(
-            self,
-            sym_spec: npt.NDArray[np.float64],
-            i_peak: int, j_peak: int, LL: int,
-            s3: npt.NDArray[np.float64]
-    ):
+    def get_data_sym(self, sym_spec: npt.NDArray[np.float64], i_peak: int, j_peak: int, LL: int) -> npt.NDArray[
+        np.float64]:
+        # data_sym = np.zeros(Q65_DATA_TONES_COUNT * 640, dtype=np.float64)  # attention = 63*640=40320 q65d from q65_subs
+
         jz, iz = sym_spec.shape
 
-        # ! Copy synchronized symbol energies from s1 (or s1a) into s3.
+        # ! Copy synchronized symbol energies from s1 (or s1a) into data_sym.
         i1 = self.i0 + i_peak + self.q65_type - 64
         i2 = i1 + LL  # int LL=64*(2+mode_q65);
         i3 = i2 - i1  # A=192 .... D=640
+
+        # attention = 63*640=40320 q65d from q65_subs
+        data_sym = np.zeros((Q65_DATA_TONES_COUNT, i3), dtype=np.float64)
 
         if i1 > 0 and i2 < iz:
             j = self.j0 + j_peak - 8
             n = 0
 
-            for k in range(85):
+            for k in range(Q65_TONES_COUNT):
                 j += 8
                 if self.sync[k] > 0.0:
                     continue
 
                 if j > 0 and j < jz:
-                    for i in range(i3):
-                        s3[n] = sym_spec[j, i + i1]
-                        n += 1
+                    data_sym[n, :i3] = sym_spec[j, i1:i2]
 
-        bzap(s3, LL)  # !Zap birdies
+                    n += 1
+
+        bzap(data_sym)  # !Zap birdies
+
+        return data_sym
 
     def decode_2(self, s3: npt.NDArray[np.float64], sub_mode: int, b90ts: float) -> typing.Optional[
         typing.Tuple[float, npt.NDArray]
@@ -285,15 +288,14 @@ class Q65Monitor(AbstractMonitor):
                 sym_spec[j, :] *= s1_max / s_max
 
         # ! Get 2d CCF and ccf2 using sync symbols only
-        i_peak, j_peak, ccf_freq, time_d = self.ccf_22(sym_spec, f0)  # maybe out of bandwidth df
+        i_peak, j_peak, ccf_freq, time_d = self.sync_ccf(sym_spec, f0)  # maybe out of bandwidth df
 
         # ! The q3 decode attempt failed. Copy synchronized symbol energies from s1
-        # ! into s3 and prepare to try a more general decode.
+        # ! into data_sym and prepare to try a more general decode.
 
-        s3 = np.zeros(Q65_DATA_TONES_COUNT * 640, dtype=np.float64)  # attention = 63*640=40320 q65d from q65_subs
-        self.s1_to_s3(sym_spec, i_peak, j_peak, LL, s3)
+        data_sym = self.get_data_sym(sym_spec, i_peak, j_peak, LL)
 
-        snr, data = self.decode_q012(s3)
+        snr, data = self.decode_q012(data_sym)
 
         return time_d, ccf_freq, data, snr
 

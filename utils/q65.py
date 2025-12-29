@@ -56,16 +56,28 @@ def q65_6bit_decode(values: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
 
 
 # @njit
-def bzap(s3: npt.NDArray[np.float64], LL: int, threshold: int = 15):
-    hist = np.zeros(LL, dtype=np.int64)
+# def bzap(s3: npt.NDArray[np.float64], LL: int, threshold: int = 15):
+#     s3 = s3.ravel()
+#     hist = np.zeros(LL, dtype=np.int64)
+#
+#     for j in range(63):
+#         beg = j * LL
+#         ipk1 = np.argmax(s3[beg:beg + LL])
+#         hist[ipk1] += 1
+#
+#     if np.max(hist) > threshold:
+#         for i in range(LL):
+#             if hist[i] > threshold:
+#                 for j in range(63):
+#                     s3[j * LL + i] = 1.0
 
-    for j in range(63):
-        beg = j * LL
-        ipk1 = np.argmax(s3[beg:beg + LL])
-        hist[ipk1] += 1
+# @njit
+def bzap(data_sym: npt.NDArray[np.float64], threshold: int = 15):
+    _, num_bins = data_sym.shape
+    hist = np.zeros(num_bins, dtype=np.int64)
 
-    if np.max(hist) > threshold:
-        for i in range(LL):
-            if hist[i] > threshold:
-                for j in range(63):
-                    s3[j * LL + i] = 1.0
+    peaks = np.argmax(data_sym, axis=1)
+    np.add.at(hist, peaks, 1)
+
+    zap_bins = np.where(hist > threshold)[0]
+    data_sym[:, zap_bins] = 1.0
