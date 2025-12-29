@@ -186,7 +186,7 @@ def q65_intrinsics_fastfading(
     #    by the sum of all of them
 
     # Evaluate the average noise spectral density
-    noise_var = np.mean(input_energies[:bins_per_symbol, :nM])
+    noise_var = np.mean(input_energies)
 
     # The noise spectral density so computed includes also the signal power.
     # Therefore we scale it accordingly to the Es/No assumed by the decoder

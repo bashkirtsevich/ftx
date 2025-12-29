@@ -197,12 +197,12 @@ class Q65Monitor(AbstractMonitor):
         typing.Tuple[float, npt.NDArray]
     ]:
         # ! Attempt a q0, q1, or q2 decode using spcified AP information.
-        s3 = s3.reshape((-1, self.NN))
         s3prob = q65_intrinsics_ff(self.q65_codec, s3, sub_mode, b90ts, fading_model=FadingModel.Lorentzian)
 
         ap_mask = np.zeros(13, dtype=np.int64)  # !Try first with no AP information
         ap_symbols = np.zeros(13, dtype=np.int64)
 
+        s3 = s3.reshape((-1, self.NN))
         status, EsNo_dB, decoded = q65_dec(self.q65_codec, s3, s3prob, ap_mask, ap_symbols, self.max_iters)
 
         if status < 0 or np.sum(decoded) <= 0:
