@@ -118,7 +118,6 @@ def pd_fwdperm(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], perm:
 
 def q65_intrinsics_fastfading(
         codec: Q65Codec,
-        # pIntrinsics: npt.NDArray[np.float64], # intrinsic symbol probabilities output
         input_energies: npt.NDArray[np.float64],  # received energies input
         sub_mode: int,  # submode idx (0=A ... 4=E)
         B90Ts: float,  # spread bandwidth (90% fractional energy)
@@ -129,26 +128,23 @@ def q65_intrinsics_fastfading(
     # is properly scaled to the QRA64 symbol interval
     # Compute index to most appropriate weighting function coefficients
     B90 = B90Ts / TS_QRA64
-    hidx = int(np.log(B90) / np.log(1.09) - 0.499)
 
     # Unlike in QRA64 we accept any B90, anyway limiting it to
     # the extreme cases (0.9 to 210 Hz approx.)
-    hidx = min(63, max(0, hidx))
+    h_idx = int(np.log(B90) / np.log(1.09) - 0.499)
+    h_idx = min(63, max(0, h_idx))
 
     # select the appropriate weighting fading coefficients array
     if fading_model == FadingModel.Gaussian:
         # gaussian fading model
-        # point to gaussian energy weighting taps
-        # hlen = glen_tab_gauss[hidx]  # hlen = (L+1)/2 (where L=(odd) number of taps of w fun)
-        hptr = gptr_tab_gauss[hidx]  # pointer to the first (L+1)/2 coefficients of w fun
-        hlen = len(hptr)  # hlen = (L+1)/2 (where L=(odd) number of taps of w fun)
+        # fm_tab_len = glen_tab_gauss[h_idx]  # fm_tab_len = (L+1)/2 (where L=(odd) number of taps of w fun)
+        weights = fm_tab_gauss[h_idx]  # pointer to the first (L+1)/2 coefficients of w fun
     elif fading_model == FadingModel.Lorentzian:
+        # lorentzian fading model
         # point to lorentzian energy weighting taps
-        # hlen = glen_tab_lorentz[hidx]  # hlen = (L+1)/2 (where L=(odd) number of taps of w fun)
-        hptr = gptr_tab_lorentz[hidx]  # pointer to the first (L+1)/2 coefficients of w fun
-        hlen = len(hptr)  # hlen = (L+1)/2 (where L=(odd) number of taps of w fun)
-    else:
-        raise InvalidFadingModel
+        weights = fm_tab_lorentz[h_idx]  # pointer to the first (L+1)/2 coefficients of w funfun)
+
+    weights_count = len(weights)  # weights_count = (L+1)/2 (where L=(odd) number of taps of w fun)
 
     # compute (heuristically) the optimal decoder metric accordingly the given spread amount
     # We assume that the decoder 50% decoding threshold is:
@@ -158,10 +154,11 @@ def q65_intrinsics_fastfading(
     fTemp = 8.0 * np.log(B90) / np.log(240.0)  # assumed Es/No degradation for the given fading bandwidth
     EsNo_metric = codec.decoderEsNoMetric * np.pow(10.0, fTemp / 10.0)
 
-    nM = codec.qra_code.alphabet_size
-    nN = codec.qra_code.codeword_length
-    bins_per_tone = 1 << sub_mode
-    bins_per_symbol = nM * (2 + bins_per_tone)
+    M = codec.qra_code.alphabet_size
+    N = codec.qra_code.codeword_length
+
+    tone_span = 1 << sub_mode
+    sym_span = M * (2 + tone_span)
 
     # In the fast fading case, the intrinsic probabilities can be computed only
     # if both the noise spectral density and the average Es/No ratio are known.
@@ -187,10 +184,9 @@ def q65_intrinsics_fastfading(
 
     # Evaluate the average noise spectral density
     noise_var = np.mean(input_energies)
-
     # The noise spectral density so computed includes also the signal power.
     # Therefore we scale it accordingly to the Es/No assumed by the decoder
-    noise_var = noise_var / (1.0 + EsNo_metric / bins_per_symbol)
+    noise_var = noise_var / (1.0 + EsNo_metric / sym_span)
     # The value so computed is an overestimate of the true noise spectral density
     # by the (unknown) factor (1+Es/No(true)/nBinsPerSymbol)/(1+EsNoMetric/nBinsPerSymbol)
     # We will take this factor in account when computing the true Es/No ratio
@@ -198,62 +194,57 @@ def q65_intrinsics_fastfading(
     # store in the pCodec structure for later use in the estimation of the Es/No ratio
     codec.NoiseVar = noise_var
     codec.EsNoMetric = EsNo_metric
-    codec.BinsPerTone = bins_per_tone
-    codec.BinsPerSymbol = bins_per_symbol
-    codec.WeightsCount = hlen
+    codec.BinsPerTone = tone_span
+    codec.BinsPerSymbol = sym_span
+    codec.WeightsCount = weights_count
 
     # compute the fast fading weights accordingly to the Es/No ratio
     # for which we compute the exact intrinsics probabilities
-    EsNo_gain = EsNo_metric * hptr
+    EsNo_gain = EsNo_metric * weights
     weight = EsNo_gain / (EsNo_gain + 1) / noise_var
     codec.FastFadingWeights = weight
 
     # Compute now the intrinsics as indicated above
-    cur_sym_id = nM  # point to the central bin of the first symbol tone
-    cur_ix_id = 0  # point to the first intrinsic
-    cur_ix = np.zeros((nN, nM), dtype=np.float64)
+    sym_probs = np.zeros((N, M), dtype=np.float64)
 
-    hhsz = hlen - 1  # number of symmetric taps
-    hlast = 2 * hhsz  # index of the central tap
+    tap_half = weights_count - 1  # number of symmetric taps
+    tap_center = 2 * tap_half  # index of the central tap
 
-    input_energies = input_energies.ravel()
-
-    for n in range(nN):  # for each symbol in the message
+    for n in range(N):  # for each symbol in the message
         # compute the logarithm of the tone probability
         # as a weighted sum of the pertaining energies
-        cur_bin_id = cur_sym_id - hlen + 1  # point to the first bin of the current symbol
+        # M - point to the central bin of the first symbol tone
+        sym_start = M - weights_count + 1  # point to the first bin of the current symbol
 
-        max_log_prob = 0.0
-        for k in range(nM):  # for each tone in the current symbol
+        for k in range(M):  # for each tone in the current symbol
             # do a symmetric weighted sum
-            log_prob = 0.0
-            for j in range(hhsz):
-                log_prob += weight[j] * (input_energies[cur_bin_id + j] + input_energies[cur_bin_id + hlast - j])
+            log_prob = 0
+            for j in range(tap_half):
+                log_prob += weight[j] * (
+                        input_energies[n, sym_start + j] + input_energies[n, sym_start + tap_center - j]
+                )
 
-            log_prob += weight[hhsz] * input_energies[cur_bin_id + hhsz]
+            log_prob += weight[tap_half] * input_energies[n, sym_start + tap_half]
+            sym_probs[n, k] = log_prob
 
-            max_log_prob = max(max_log_prob, log_prob)  # keep track of the max
-            cur_ix[n, k] = log_prob
+            sym_start += tone_span  # next tone
 
-            cur_bin_id += bins_per_tone  # next tone
+        log_prob_max = np.max(sym_probs[n])  # keep track of the max
 
         # exponentiate and accumulate the normalization constant
-        sum_prob = 0.0
-        for k in range(nM):
-            x = cur_ix[n, k] - max_log_prob
-            x = min(85.0, max(-85.0, x))
+        sum_prob = 0
+        for k in range(M):
+            rel_log = sym_probs[n, k] - log_prob_max
+            rel_log = min(85.0, max(-85.0, rel_log))
 
-            rel_prob = np.exp(x)
-            cur_ix[n, k] = rel_prob
+            rel_prob = np.exp(rel_log)
+            sym_probs[n, k] = rel_prob
             sum_prob += rel_prob
 
         # scale to a probability distribution
-        cur_ix[n, :] *= 1.0 / sum_prob
+        sym_probs[n, :] *= 1.0 / sum_prob
 
-        cur_sym_id += bins_per_symbol  # next symbol input energies
-        cur_ix_id += nM  # next symbol intrinsics
-
-    return cur_ix
+    return sym_probs
 
 
 def q65_esnodb_fastfading(
@@ -317,6 +308,9 @@ def q65_intrinsics_ff(
         B90Ts: float,  # Spread bandwidth, 90% fractional energy
         fading_model: FadingModel  # 0=Gaussian, 1=Lorentzian
 ) -> npt.NDArray[np.float64]:  # [LL,NN] Symbol-value intrinsic probabilities
+    if fading_model not in {FadingModel.Gaussian, FadingModel.Lorentzian}:
+        raise InvalidFadingModel
+
     s3prob = q65_intrinsics_fastfading(codec, s3, sub_mode, B90Ts, fading_model)
     return s3prob
 
