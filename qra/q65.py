@@ -151,8 +151,8 @@ def q65_intrinsics_fastfading(
     # Es/No(dB) = Es/No(AWGN)(dB) + 8*log(B90)/log(240)(dB)
     # that's to say, at the maximum Doppler spread bandwidth (240 Hz for QRA64)
     # there's a ~8 dB Es/No degradation over the AWGN case
-    fTemp = 8.0 * np.log(B90) / np.log(240.0)  # assumed Es/No degradation for the given fading bandwidth
-    EsNo_metric = codec.decoderEsNoMetric * np.pow(10.0, fTemp / 10.0)
+    EsNo_deg = 8.0 * np.log(B90) / np.log(240.0)  # assumed Es/No degradation for the given fading bandwidth
+    EsNo_metric = codec.decoderEsNoMetric * np.pow(10.0, EsNo_deg / 10.0)
 
     M = codec.qra_code.alphabet_size
     N = codec.qra_code.codeword_length
