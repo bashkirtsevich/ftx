@@ -263,7 +263,7 @@ class Q65Monitor(AbstractMonitor):
 
         LL = Q65_TONES * (2 + self.q65_type)  # mode_q65 -- 1, 2, 3, 4
 
-        txt = 85 * self.sym_samps / 12000 + (2 if self.sym_samps >= 6912 else 1)  # !For TR 60 s and higher
+        txt = Q65_TONES_COUNT * self.sym_samps / 12000 + (2 if self.sym_samps >= 6912 else 1)  # !For TR 60 s and higher
 
         iz = int(5000 / self.df)  # !Uppermost frequency bin, at 5000 Hz
         jz = int(txt * 12000 / self.sym_steps)  # !Number of symbol/NSTEP bins
