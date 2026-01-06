@@ -261,20 +261,20 @@ class Q65Monitor(AbstractMonitor):
         # !             2  "Mycall    ?    ?"
         # !             3  "MyCall HisCall ?"
 
-        LL = 64 * (2 + self.q65_type)  # mode_q65 -- 1, 2, 3, 4
+        LL = Q65_TONES * (2 + self.q65_type)  # mode_q65 -- 1, 2, 3, 4
 
-        txt = 85.0 * self.sym_samps / 12000.0 + (2 if self.sym_samps >= 6912 else 1)  # !For TR 60 s and higher
+        txt = 85 * self.sym_samps / 12000 + (2 if self.sym_samps >= 6912 else 1)  # !For TR 60 s and higher
 
-        iz = int(5000.0 / self.df)  # !Uppermost frequency bin, at 5000 Hz
-        jz = int(txt * 12000.0 / self.sym_steps)  # !Number of symbol/NSTEP bins
+        iz = int(5000 / self.df)  # !Uppermost frequency bin, at 5000 Hz
+        jz = int(txt * 12000 / self.sym_steps)  # !Number of symbol/NSTEP bins
 
-        self.i0 = min(max(int(f0 / self.df), 64), iz + 64 - LL)  # !Target QSO frequency
+        self.i0 = min(max(int(f0 / self.df), Q65_TONES), iz + Q65_TONES - LL)  # !Target QSO frequency
 
         # ! Compute symbol spectra with NSTEP time bins per symbol
         sym_spec = self.symbol_spectra(iz, jz)
 
         for j in range(jz):
-            t_s = sym_spec[j, self.i0 - 64:self.i0 - 64 + LL]
+            t_s = sym_spec[j, self.i0 - Q65_TONES:self.i0 - Q65_TONES + LL]
             if (base := np.percentile(t_s, 45)) == 0:
                 base = 0.000001
 
