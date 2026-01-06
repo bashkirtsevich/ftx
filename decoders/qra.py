@@ -202,7 +202,6 @@ class Q65Monitor(AbstractMonitor):
         ap_mask = np.zeros(13, dtype=np.int64)  # !Try first with no AP information
         ap_symbols = np.zeros(13, dtype=np.int64)
 
-        s3 = s3.reshape((-1, self.NN))
         status, EsNo_dB, decoded = q65_dec(self.q65_codec, s3, s3prob, ap_mask, ap_symbols, self.max_iters)
 
         if status < 0 or np.sum(decoded) <= 0:
@@ -223,8 +222,8 @@ class Q65Monitor(AbstractMonitor):
             sub_mode = 0
 
         baud = 12000.0 / self.sym_samps
-        for ibw in range(self.bw_a, self.bw_b + 1):
-            b90 = 1.72 ** ibw
+        for bw in range(self.bw_a, self.bw_b + 1):
+            b90 = 1.72 ** bw
             b90ts = b90 / baud
 
             if (decoded := self.decode_2(s3, sub_mode, b90ts)) is not None:
@@ -232,6 +231,8 @@ class Q65Monitor(AbstractMonitor):
 
                 snr = EsNo_dB - dB(2500.0 / baud) + 3.0  # !Empirical adjustment
                 return snr, payload
+
+        return None
 
     def decode_0(self, f0: float) -> typing.Tuple[float, float, npt.NDArray[np.int64], float]:
         # Top-level routine in q65 module
