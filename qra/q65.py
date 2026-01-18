@@ -17,7 +17,7 @@ qra15_65_64_irr_e23 = QRACodeParams(
     qra_m,
     qra_M,
     qra_a,
-    qra_NC,
+    # qra_NC, # FIXME: To be deleted
     qra_V,
     qra_C,
     qra_NMSG,
@@ -25,7 +25,7 @@ qra15_65_64_irr_e23 = QRACodeParams(
     qra_MAXCDEG,
     QRAType.CRC_PUNCTURED2,
     qra_R,
-    CODE_NAME,
+    # CODE_NAME, # FIXME: To be deleted
     qra_acc_input_idx,
     qra_acc_input_wlog,
     qra_log,
@@ -313,20 +313,6 @@ def q65_intrinsics_ff(
 
     s3prob = q65_intrinsics_fastfading(codec, s3, sub_mode, B90Ts, fading_model)
     return s3prob
-
-
-# Full AP decoding from a list of codewords
-# Compute and verify the loglikelihood of the decoded codeword
-def q65_check_llh(intrin: npt.NDArray[np.float64], ydec: npt.NDArray[np.int64], N: int, M: int) -> int:
-    t = 0
-    i = 0
-    for k in range(N):
-        x = intrin[i + ydec[k]]
-        x = max(x, 1.0e-36)
-        t += np.log(x)
-        i += M
-
-    return t  # (t, t >= Q65_LLH_THRESHOLD)
 
 
 def q65_mask(qra_code: QRACodeParams, ix: npt.NDArray[np.float64], mask: npt.NDArray[np.int64],
@@ -683,88 +669,3 @@ def q65_dec(
     #     printf("error in q65_esnodb_fastfading()\n");
 
     return rc, esnodb, xdec[:13]
-
-
-# float q65_llh;
-# #define Q65_DECODE_FAILED		 -2
-# int q65subs::q65_decode_fullaplist(
-# q65_codec_ds *codec,
-# int *ydec,
-# int *xdec,
-# const float *pIntrinsics,
-# const int *pCodewords,
-# const int nCodewords)
-def q65_decode_fullaplist(
-        codec: Q65Codec,
-        ydec: npt.NDArray[np.int64],
-        xdec: npt.NDArray[np.int64],
-        pIntrinsics: npt.NDArray[np.float64],
-        pCodewords: npt.NDArray[np.int64],
-        nCodewords: int,
-) -> typing.Tuple[float, int]:
-    maxcw = -1  # index of the most likely codeword
-
-    if nCodewords < 1 or nCodewords > Q65_FULLAPLIST_SIZE:
-        raise Exception("Q65_DECODE_INVPARAMS")  # return Q65_DECODE_INVPARAMS
-
-    nK = codec.qra_code.message_length
-    nN = codec.qra_code.codeword_length
-    nM = codec.qra_code.alphabet_size
-
-    # we adjust the llh threshold in order to mantain the
-    # same false decode rate independently from the size
-    # of the list
-    llh_threshold = Q65_LLH_THRESHOLD + np.log(1.0 * nCodewords / 3)
-    maxllh = llh_threshold  # at least one llh should be larger than the threshold
-
-    # compute codewords log likelihoods and find max
-    pCw = pCodewords  # start from the first codeword
-
-    for k in range(nCodewords):
-        # compute and check this codeword loglikelihood
-
-        llh = q65_check_llh(pCw, nN, nM, pIntrinsics)
-        if llh >= Q65_LLH_THRESHOLD:  # larger than threshold
-            # select the codeword with max logll
-            if llh > maxllh:
-                maxllh = llh
-                maxcw = k  # index of the most likely codeword
-        pCw += nN
-
-    if maxcw < 0:  # no llh larger than threshold found
-        raise Exception("Q65_DECODE_FAILED")  # return Q65_DECODE_FAILED
-
-    ydec[:nN] = pCodewords[nN * maxcw:nN * maxcw + nN]
-    xdec[:nK] = pCodewords[nN * maxcw:nN * maxcw + nK]
-
-    return (maxllh, maxcw)  # index to the decoded message (>=0)
-
-
-# void q65subs::q65_dec_fullaplist(float s3[], float s3prob[], int codewords[],
-#                                  int ncw, float &esnodb0, int xdec[], float &plog, int &rc0)
-def q65_dec_fullaplist(
-        codec: Q65Codec,
-        s3: npt.NDArray[np.float64],  # [LL,NN] Symbol spectra
-        s3prob: npt.NDArray[np.float64],  # [LL,NN] Symbol-value intrinsic probabilities
-        codewords: npt.NDArray[np.float64],  # [63,ncw] Full codewords to search for
-        ncw: int,  # Number of codewords
-):
-    # Input:   s3[LL,NN]         Symbol spectra
-    #          s3prob[LL,NN]     Symbol-value intrinsic probabilities
-    #          codewords[63,ncw] Full codewords to search for
-    #          ncw               Number of codewords
-    # Output:
-    #          esnodb0           Estimated Es/No (dB)
-    #          xdec[13]          Decoded 78-bit message as 13 six-bit integers
-    #          rc0               Return code from q65_decode()
-    #
-
-    q65_llh, rc = q65_decode_fullaplist(codec, ydec, xdec, s3prob, codewords, ncw)
-    plog = q65_llh
-    rc0 = rc
-
-    # rc = -1:  Invalid params
-    # rc = -2:  Decode failed
-    # rc = -3:  CRC mismatch
-
-    esnodb = q65_esnodb_fastfading(codec, ydec, s3)

@@ -22,4 +22,4 @@ class Q65Codec:
     NoiseVar: float
     EsNoMetric: float
     WeightsCount: int  # FIXME: To be deleted
-    FastFadingWeights: npt.NDArray[np.float64]
+    FastFadingWeights: npt.NDArray[np.float64]  # FIXME: To be deleted

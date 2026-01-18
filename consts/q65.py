@@ -43,7 +43,7 @@ qra_N = 65  # codeword length in symbols
 qra_m = 6  # bits/symbol
 qra_M = 64  # Symbol alphabet cardinality
 qra_a = 1  # grouping factor
-qra_NC = 50  # number of check symbols (N-K)
+# qra_NC = 50  # number of check symbols (N-K) # FIXME: To be deleted
 
 EbNodBMetric = 2.8
 EbNoMetric = 10.0 ** (EbNodBMetric / 10)
@@ -56,7 +56,7 @@ qra_NMSG = 216  # number of msgs in the code graph
 qra_MAXVDEG = 5  # maximum variable degree
 qra_MAXCDEG = 3  # maximum factor degree
 qra_R = 0.23077  # code rate (K/N)
-CODE_NAME = "qra15_65_64_irr_e23"  # code name
+# CODE_NAME = "qra15_65_64_irr_e23"  # code name # FIXME: To be deleted
 
 Q65_DECODE_INVPARAMS = -1
 Q65_FASTFADING_MAXWEIGTHS = 65
