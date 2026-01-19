@@ -43,7 +43,7 @@ qra_N = 65  # codeword length in symbols
 qra_m = 6  # bits/symbol
 qra_M = 64  # Symbol alphabet cardinality
 qra_a = 1  # grouping factor
-qra_NC = 50  # number of check symbols (N-K) # FIXME: To be deleted
+qra_NC = qra_N - qra_K  # number of check symbols (N-K)
 
 EbNodBMetric = 2.8
 EbNoMetric = 10.0 ** (EbNodBMetric / 10)
