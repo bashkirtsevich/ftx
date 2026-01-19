@@ -318,29 +318,28 @@ def q65_intrinsics_ff(
 def q65_mask(qra_code: QRACodeParams, ix: npt.NDArray[np.float64], mask: npt.NDArray[np.int64],
              x: npt.NDArray[np.int64]):
     # mask intrinsic information ix with available a priori knowledge
-    qra_M = qra_code.M
-    qra_m = qra_code.m
+    M = qra_code.M
+    m = qra_code.m
 
     # Exclude from masking the symbols which have been punctured.
-    # qra_K is the length of the mask and x arrays, which do
+    # K is the length of the mask and x arrays, which do
     # not include any punctured symbol
-    qra_K = qra_code.message_length
+    K = qra_code.message_length
 
     # for each symbol set to zero the probability
     # of the values which are not allowed by
     # the a priori information
-    for k in range(qra_K):
-        s_mask = mask[k]
-        if s_mask:
-            for kk in range(qra_M):
-                if ((kk ^ x[k]) & s_mask) != 0:
+    for k in range(K):
+        if s := mask[k]:
+            for kk in range(M):
+                if (kk ^ x[k]) & s != 0:
                     # This symbol value is not allowed
                     # by the AP information
                     # Set its probability to zero
                     ix[k, kk] = 0.0
 
             # normalize to a probability distribution
-            pd_norm(ix[k, :], qra_m)
+            pd_norm(ix[k, :], m)
 
 
 def qra_extrinsic(
