@@ -253,7 +253,6 @@ def q65_esnodb_fastfading(
         input_energies: npt.NDArray[np.float64],
 ) -> float:
     # Estimate the Es/No ratio of the decoded codeword
-    input_energies = input_energies.ravel()
 
     qra_N = codec.qra_code.codeword_length
     qra_M = codec.qra_code.alphabet_size
@@ -269,15 +268,12 @@ def q65_esnodb_fastfading(
     # energies pertaining to the decoded symbols in the codeword
 
     EsPlusWNo = 0.0
-    cur_sym_idx = qra_M  # pInputEnergies + qra_M	# point to first central bin of first symbol tone
     for n in range(qra_N):
-        cur_tone_idx = cur_sym_idx + y_dec[n] * bins_per_tone  # point to the central bin of the current decoded symbol
+        cur_tone_idx = qra_M + y_dec[n] * bins_per_tone  # point to the central bin of the current decoded symbol
         cur_bin_idx = cur_tone_idx - weights + 1  # point to first bin
 
         # sum over all the pertaining bins
-        EsPlusWNo += np.sum(input_energies[cur_bin_idx: cur_bin_idx + tot_weights])
-
-        cur_sym_idx += bins_per_symbol
+        EsPlusWNo += np.sum(input_energies[n, cur_bin_idx: cur_bin_idx + tot_weights])
 
     EsPlusWNo = EsPlusWNo / qra_N  # Es + nTotWeigths*No
 
@@ -295,7 +291,7 @@ def q65_esnodb_fastfading(
 
     u = EsPlusWNo / (noise_var * (1 + EsNo_metric / bins_per_symbol))
     u = max(u, tot_weights + 0.316)  # Limit the minimum Es/No to -5 dB approx.
-    u = (u - float(tot_weights)) / (1 - u / float(bins_per_symbol))  # linear scale Es/No
+    u = (u - tot_weights) / (1 - u / bins_per_symbol)  # linear scale Es/No
 
     EsNodB = dB(u)
     return EsNodB
