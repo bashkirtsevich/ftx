@@ -301,20 +301,6 @@ def q65_esnodb_fastfading(
     return EsNodB
 
 
-def q65_intrinsics_ff(
-        codec: Q65Codec,
-        s3: npt.NDArray[np.float64],  # [LL,NN] Received energies
-        sub_mode: int,  # 0=A, 4=E
-        B90Ts: float,  # Spread bandwidth, 90% fractional energy
-        fading_model: FadingModel  # 0=Gaussian, 1=Lorentzian
-) -> npt.NDArray[np.float64]:  # [LL,NN] Symbol-value intrinsic probabilities
-    if fading_model not in {FadingModel.Gaussian, FadingModel.Lorentzian}:
-        raise InvalidFadingModel
-
-    s3prob = q65_intrinsics_fastfading(codec, s3, sub_mode, B90Ts, fading_model)
-    return s3prob
-
-
 def q65_mask(qra_code: QRACodeParams, ix: npt.NDArray[np.float64], mask: npt.NDArray[np.int64],
              x: npt.NDArray[np.int64]):
     # mask intrinsic information ix with available a priori knowledge
