@@ -245,7 +245,7 @@ def q65_intrinsics_fastfading(
     return sym_probs
 
 
-def q65_esnodb_fastfading(
+def q65_get_fastfading_EsNodB(
         codec: Q65Codec,
         y_dec: npt.NDArray[np.int64],
         input_energies: npt.NDArray[np.float64],
@@ -643,7 +643,7 @@ def q65_dec(
     # rc = -3:  CRC mismatch
     # if (rc<0) return;
 
-    esnodb = q65_esnodb_fastfading(codec, ydec, s3)
+    esnodb = q65_get_fastfading_EsNodB(codec, ydec, s3)
     # if (rc<0)
     #     printf("error in q65_esnodb_fastfading()\n");
 
