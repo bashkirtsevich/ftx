@@ -295,31 +295,31 @@ def q65_get_fastfading_EsNodB(
     return EsNodB
 
 
-def q65_mask(qra_code: QRACodeParams, ix: npt.NDArray[np.float64], mask: npt.NDArray[np.int64],
-             x: npt.NDArray[np.int64]):
-    # mask intrinsic information ix with available a priori knowledge
-    M = qra_code.M
-    m = qra_code.m
-
-    # Exclude from masking the symbols which have been punctured.
-    # K is the length of the mask and x arrays, which do
-    # not include any punctured symbol
-    K = qra_code.message_length
-
-    # for each symbol set to zero the probability
-    # of the values which are not allowed by
-    # the a priori information
-    for k in range(K):
-        if s := mask[k]:
-            for kk in range(M):
-                if (kk ^ x[k]) & s != 0:
-                    # This symbol value is not allowed
-                    # by the AP information
-                    # Set its probability to zero
-                    ix[k, kk] = 0.0
-
-            # normalize to a probability distribution
-            pd_norm(ix[k, :], m)
+# def q65_mask(qra_code: QRACodeParams, ix: npt.NDArray[np.float64], mask: npt.NDArray[np.int64],
+#              x: npt.NDArray[np.int64]):
+#     # mask intrinsic information ix with available a priori knowledge
+#     M = qra_code.M
+#     m = qra_code.m
+#
+#     # Exclude from masking the symbols which have been punctured.
+#     # K is the length of the mask and x arrays, which do
+#     # not include any punctured symbol
+#     K = qra_code.message_length
+#
+#     # for each symbol set to zero the probability
+#     # of the values which are not allowed by
+#     # the a priori information
+#     for k in range(K):
+#         if s := mask[k]:
+#             for kk in range(M):
+#                 if (kk ^ x[k]) & s != 0:
+#                     # This symbol value is not allowed
+#                     # by the AP information
+#                     # Set its probability to zero
+#                     ix[k, kk] = 0.0
+#
+#             # normalize to a probability distribution
+#             pd_norm(ix[k, :], m)
 
 
 def qra_extrinsic(
@@ -528,8 +528,8 @@ def qra_mapdecode(pcode: QRACodeParams, xdec: npt.NDArray[np.int64], pex: npt.ND
 def q65_decode(
         codec: Q65Codec,
         intrinsics: npt.NDArray[np.float64],
-        APMask: npt.NDArray[np.int64],
-        APSymbols: npt.NDArray[np.int64],
+        # APMask: npt.NDArray[np.int64],
+        # APSymbols: npt.NDArray[np.int64],
         max_iters: int
 ):
     qra_code = codec.qra_code
@@ -567,7 +567,7 @@ def q65_decode(
         ix[:nK, :nM] = intrinsics[:nK, :nM]  # as they are
 
     # mask the intrinsics with the available a priori knowledge
-    q65_mask(qra_code, ix, APMask, APSymbols)
+    # q65_mask(qra_code, ix, APMask, APSymbols)
 
     # Compute the extrinsic symbols probabilities with the message-passing algorithm
     # Stop if the extrinsics information does not converges to unity
@@ -630,13 +630,14 @@ def q65_dec(
         codec: Q65Codec,
         s3: npt.NDArray[np.float64],  # [LL,NN] Symbol spectra
         s3_prob: npt.NDArray[np.float64],  # [LL,NN] Symbol-value intrinsic probabilities
-        APmask: npt.NDArray[np.int64],  # [13]  AP information to be used in decoding
-        APsymbols: npt.NDArray[np.int64],  # [13] Available AP informtion
+        # APmask: npt.NDArray[np.int64],  # [13]  AP information to be used in decoding
+        # APsymbols: npt.NDArray[np.int64],  # [13] Available AP informtion
 
         max_iters: int,
         # x_dec: npt.NDArray[np.int64],  # [13] Decoded 78-bit message as 13 six-bit integers
 ) -> typing.Tuple[int, float, npt.NDArray[np.int64]]:  # Return code from q65_decode(); Estimated Es/No (dB)
-    rc, ydec, xdec = q65_decode(codec, s3_prob, APmask, APsymbols, max_iters)
+    # rc, ydec, xdec = q65_decode(codec, s3_prob, APmask, APsymbols, max_iters)
+    rc, ydec, xdec = q65_decode(codec, s3_prob, max_iters)
 
     # rc = -1:  Invalid params
     # rc = -2:  Decode failed
