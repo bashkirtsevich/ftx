@@ -88,12 +88,11 @@ def pd_norm_tab(ppd: npt.NDArray[np.float64], c0: int) -> float:
         ppd[0] = 1.0
         return t
 
-    c1 = np.pow(2, c0)
+    c1 = 2 ** c0
     t = np.sum(ppd[:c1])
 
     if t <= 0:
-        dim = pd_log2dim[c0]
-        ppd[:dim] = pd_uniform(c0)[:dim]
+        ppd[:c1] = pd_uniform(c0)[:c1]
         return t
 
     ppd *= 1 / t

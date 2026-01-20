@@ -68,11 +68,6 @@ pd_uniform_tab = [
     for i in range(7)
 ]
 
-pd_log2dim = [
-    2 ** i
-    for i in range(7)
-]
-
 # table of the systematic symbols indexes in the accumulator chain
 qra_acc_input_idx = np.array([
     13, 1, 3, 4, 8, 12, 9, 14, 10, 5,
@@ -1166,5 +1161,3 @@ fm_tab_lorentz = [
     lorentz55, lorentz56, lorentz57, lorentz58, lorentz59, lorentz60, lorentz61, lorentz62, lorentz63,
     lorentz64
 ]
-
-
