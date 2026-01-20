@@ -2,6 +2,8 @@ import typing
 
 import numpy as np
 import numpy.typing as npt
+
+from fwht import fwht
 from utils.common import dB
 from crc.q65 import crc6, crc12
 
@@ -39,19 +41,6 @@ qra15_65_64_irr_e23 = QRACodeParams(
 )
 
 
-def np_fwht(log_dim: int, dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64]):
-    return np_fwht_tab[log_dim](dst, src)
-
-
-def pd_uniform(log_dim: int) -> npt.NDArray[np.float64]:
-    return pd_uniform_tab[log_dim]
-
-
-def pd_imul(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], log_dim: int):
-    idx = int(2 ** log_dim)
-    dst[:idx] *= src[:idx]
-
-
 def q65_init() -> Q65Codec:
     qra_code = qra15_65_64_irr_e23
     # Eb/No value for which we optimize the decoder metric (AWGN/Rayleigh cases)
@@ -81,6 +70,15 @@ def q65_init() -> Q65Codec:
         FastFadingWeights=np.zeros(Q65_FASTFADING_MAXWEIGTHS, dtype=np.float64)
     )
     return codec
+
+
+def pd_uniform(log_dim: int) -> npt.NDArray[np.float64]:
+    return pd_uniform_tab[log_dim]
+
+
+def pd_imul(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], log_dim: int):
+    idx = int(2 ** log_dim)
+    dst[:idx] *= src[:idx]
 
 
 def pd_norm_tab(ppd: npt.NDArray[np.float64], c0: int) -> float:
@@ -410,7 +408,7 @@ def qra_extrinsic(
             # v->c  -> fwht(v->c)
             for k in range(ndeg):
                 msg_idx = qra_c2vmidx[msgbase + k]  # msg index
-                np_fwht(qra_m, qra_v2cmsg[msg_idx, :], qra_v2cmsg[msg_idx, :])  # compute fwht
+                fwht(qra_m, qra_v2cmsg[msg_idx, :], qra_v2cmsg[msg_idx, :])  # compute fwht
 
             # compute products and transform them back in the WH "time" domain
             for k in range(ndeg):  # loop indexes
@@ -433,7 +431,7 @@ def qra_extrinsic(
                 # small fp numbers
                 msgout[0] += 1E-7  # TODO: define the bias accordingly to the field size
 
-                np_fwht(qra_m, msgout, msgout)
+                fwht(qra_m, msgout, msgout)
 
                 # inverse weight and output
                 msg_idx = qra_c2vmidx[msgbase + k]  # current output msg index
