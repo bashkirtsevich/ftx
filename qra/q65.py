@@ -103,12 +103,12 @@ def pd_norm(pd: npt.NDArray[np.float64], nlogdim: int) -> float:
     return pd_norm_tab(pd, nlogdim)
 
 
-def pd_bwdperm(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], perm: npt.NDArray[np.int64], ndim: int):
+def pd_backward_permutation(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], perm: npt.NDArray[np.int64], ndim: int):
     for i in range(ndim):
         dst[perm[i]] = src[i]
 
 
-def pd_fwdperm(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], perm: npt.NDArray[np.int64], ndim: int):
+def pd_forward_permutation(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], perm: npt.NDArray[np.int64], ndim: int):
     for i in range(ndim):
         dst[i] = src[perm[i]]
 
@@ -440,7 +440,7 @@ def qra_extrinsic(
                     qra_c2vmsg[msg_idx, :qra_M] = msgout[:qra_M]
                 else:
                     # output p(alfa^(-w)*x)
-                    pd_bwdperm(qra_c2vmsg[msg_idx, :], msgout, qra_pmat[wmsg, :], qra_M)
+                    pd_backward_permutation(qra_c2vmsg[msg_idx, :], msgout, qra_pmat[wmsg, :], qra_M)
 
         # v->c step -----------------------------------------------------
         for nv in range(qra_V):
@@ -468,7 +468,7 @@ def qra_extrinsic(
                     qra_v2cmsg[msg_idx, :qra_M] = msgout[:qra_M]
                 else:
                     # output p(alfa^w*x)
-                    pd_fwdperm(qra_v2cmsg[msg_idx, :qra_M], msgout, qra_pmat[wmsg, :], qra_M)
+                    pd_forward_permutation(qra_v2cmsg[msg_idx, :qra_M], msgout, qra_pmat[wmsg, :], qra_M)
 
         # check extrinsic information ------------------------------
         # We assume that decoding is successful if each of the extrinsic
