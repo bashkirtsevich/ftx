@@ -72,10 +72,6 @@ def q65_init() -> Q65Codec:
     return codec
 
 
-def pd_uniform(log_dim: int) -> npt.NDArray[np.float64]:
-    return pd_uniform_tab[log_dim]
-
-
 def pd_imul(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], log_dim: int):
     idx = int(2 ** log_dim)
     dst[:idx] *= src[:idx]
@@ -92,7 +88,7 @@ def pd_norm_tab(ppd: npt.NDArray[np.float64], c0: int) -> float:
     t = np.sum(ppd[:c1])
 
     if t <= 0:
-        ppd[:c1] = pd_uniform(c0)[:c1]
+        ppd[:c1] = pd_uniform_tab[c0][:c1]
         return t
 
     ppd *= 1 / t
@@ -103,12 +99,14 @@ def pd_norm(pd: npt.NDArray[np.float64], nlogdim: int) -> float:
     return pd_norm_tab(pd, nlogdim)
 
 
-def pd_backward_permutation(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], perm: npt.NDArray[np.int64], ndim: int):
+def pd_backward_permutation(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], perm: npt.NDArray[np.int64],
+                            ndim: int):
     for i in range(ndim):
         dst[perm[i]] = src[i]
 
 
-def pd_forward_permutation(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], perm: npt.NDArray[np.int64], ndim: int):
+def pd_forward_permutation(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], perm: npt.NDArray[np.int64],
+                           ndim: int):
     for i in range(ndim):
         dst[i] = src[perm[i]]
 
@@ -412,7 +410,7 @@ def qra_extrinsic(
             # compute products and transform them back in the WH "time" domain
             for k in range(ndeg):  # loop indexes
                 # init output message to uniform distribution
-                msgout[:qra_M] = pd_uniform(qra_m)[:qra_M]
+                msgout[:qra_M] = pd_uniform_tab[qra_m][:qra_M]
 
                 # c->v = prod(fwht(v->c))
                 # TODO: we assume that checks degrees are not larger than three but
@@ -449,7 +447,7 @@ def qra_extrinsic(
 
             for k in range(ndeg):
                 # init output message to uniform distribution
-                msgout[:qra_M] = pd_uniform(qra_m)[:qra_M]
+                msgout[:qra_M] = pd_uniform_tab[qra_m][:qra_M]
 
                 # v->c msg = prod(c->v)
                 # TODO: factor factors to reduce the number of computations for high degree nodes
@@ -538,7 +536,7 @@ def q65_decode(
     nK = qra_code.message_length
     nN = qra_code.codeword_length
     nM = qra_code.M
-    nBits = qra_code.m
+    bits = qra_code.m
 
     px = codec.x
     py = codec.y
@@ -547,7 +545,7 @@ def q65_decode(
     if qra_code.type == QRAType.CRC_PUNCTURED:
         ix[:nK, :nM] = intrinsics[:nK, :nM]
 
-        uniform = pd_uniform(nBits)
+        uniform = pd_uniform_tab[bits]
         ix[nK, :nM] = uniform[:nM]  # crc
 
         ix[nK + 1: nK + 1 + nN - nK, :nM] = intrinsics[nK:nK + nN - nK, :nM]  # parity checks
@@ -555,7 +553,7 @@ def q65_decode(
     elif qra_code.type == QRAType.CRC_PUNCTURED2:
         ix[:nK, :nM] = intrinsics[:nK, :nM]
 
-        uniform = pd_uniform(nBits)
+        uniform = pd_uniform_tab[bits]
         ix[nK, :nM] = uniform[:nM]  # crc
         ix[nK + 1, :nM] = uniform[:nM]  # crc
 
@@ -571,14 +569,7 @@ def q65_decode(
     # Compute the extrinsic symbols probabilities with the message-passing algorithm
     # Stop if the extrinsics information does not converges to unity
     # within the given number of iterations
-    rc = qra_extrinsic(
-        qra_code,
-        ex,
-        ix,
-        max_iters,
-        codec.qra_v2cmsg,
-        codec.qra_c2vmsg
-    )
+    rc = qra_extrinsic(qra_code, ex, ix, max_iters, codec.qra_v2cmsg, codec.qra_c2vmsg)
     if rc < 0:
         # failed to converge to a solution
         # return Q65_DECODE_FAILED
