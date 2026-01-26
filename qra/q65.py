@@ -72,42 +72,47 @@ def q65_init() -> Q65Codec:
     return codec
 
 
-def pd_imul(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], log_dim: int):
-    idx = int(2 ** log_dim)
+def pd_imul(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], dim: int):
+    idx = int(2 ** dim)
     dst[:idx] *= src[:idx]
 
 
-def pd_norm_tab(ppd: npt.NDArray[np.float64], c0: int) -> float:
-    c0 = min(c0, 6)  # FIXME: Use named const
-    if c0 == 0:
-        t = ppd[0]
-        ppd[0] = 1.0
+def pd_uniform(dim: int) -> npt.NDArray[np.float64]:
+    return pd_uniform_tab[dim]
+
+
+def pd_norm_tab(pd: npt.NDArray[np.float64], dim: int) -> float:
+    dim = min(dim, qra_m)
+
+    if dim == 0:
+        t = pd[0]
+        pd[0] = 1.0
         return t
 
-    c1 = 2 ** c0
-    t = np.sum(ppd[:c1])
+    c = 2 ** dim
+    t = np.sum(pd[:c])
 
     if t <= 0:
-        ppd[:c1] = pd_uniform_tab[c0][:c1]
+        pd[:c] = pd_uniform(dim)[:c]
         return t
 
-    ppd *= 1 / t
+    pd *= 1 / t
     return t
 
 
-def pd_norm(pd: npt.NDArray[np.float64], nlogdim: int) -> float:
-    return pd_norm_tab(pd, nlogdim)
+def pd_norm(pd: npt.NDArray[np.float64], dim: int) -> float:
+    return pd_norm_tab(pd, dim)
 
 
-def pd_backward_permutation(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], perm: npt.NDArray[np.int64],
-                            ndim: int):
-    for i in range(ndim):
+def pd_backward_permutation(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64],
+                            perm: npt.NDArray[np.int64], dim: int):
+    for i in range(dim):
         dst[perm[i]] = src[i]
 
 
-def pd_forward_permutation(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], perm: npt.NDArray[np.int64],
-                           ndim: int):
-    for i in range(ndim):
+def pd_forward_permutation(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64],
+                           perm: npt.NDArray[np.int64], dim: int):
+    for i in range(dim):
         dst[i] = src[perm[i]]
 
 
@@ -130,15 +135,12 @@ def q65_intrinsics_fastfading(
     h_idx = min(63, max(0, h_idx))
 
     # select the appropriate weighting fading coefficients array
-    if fading_model == FadingModel.Gaussian:
-        # gaussian fading model
-        # fm_tab_len = glen_tab_gauss[h_idx]  # fm_tab_len = (L+1)/2 (where L=(odd) number of taps of w fun)
-        weights = fm_tab_gauss[h_idx]  # pointer to the first (L+1)/2 coefficients of w fun
-    elif fading_model == FadingModel.Lorentzian:
-        # lorentzian fading model
-        # point to lorentzian energy weighting taps
-        weights = fm_tab_lorentz[h_idx]  # pointer to the first (L+1)/2 coefficients of w funfun)
+    model = {
+        FadingModel.Gaussian: fm_tab_gauss,  # gaussian fading model
+        FadingModel.Lorentzian: fm_tab_lorentz,  # lorentzian fading model
+    }[fading_model]
 
+    weights = model[h_idx]
     weights_count = len(weights)  # weights_count = (L+1)/2 (where L=(odd) number of taps of w fun)
 
     # compute (heuristically) the optimal decoder metric accordingly the given spread amount
@@ -242,7 +244,7 @@ def q65_intrinsics_fastfading(
     return sym_probs
 
 
-def q65_get_fastfading_EsNodB(
+def q65_fastfading_EsNodB(
         codec: Q65Codec,
         y_dec: npt.NDArray[np.int64],
         input_energies: npt.NDArray[np.float64],
@@ -410,7 +412,7 @@ def qra_extrinsic(
             # compute products and transform them back in the WH "time" domain
             for k in range(ndeg):  # loop indexes
                 # init output message to uniform distribution
-                msgout[:qra_M] = pd_uniform_tab[qra_m][:qra_M]
+                msgout[:qra_M] = pd_uniform(qra_m)[:qra_M]
 
                 # c->v = prod(fwht(v->c))
                 # TODO: we assume that checks degrees are not larger than three but
@@ -447,7 +449,7 @@ def qra_extrinsic(
 
             for k in range(ndeg):
                 # init output message to uniform distribution
-                msgout[:qra_M] = pd_uniform_tab[qra_m][:qra_M]
+                msgout[:qra_M] = pd_uniform(qra_m)[:qra_M]
 
                 # v->c msg = prod(c->v)
                 # TODO: factor factors to reduce the number of computations for high degree nodes
@@ -545,7 +547,7 @@ def q65_decode(
     if qra_code.type == QRAType.CRC_PUNCTURED:
         ix[:nK, :nM] = intrinsics[:nK, :nM]
 
-        uniform = pd_uniform_tab[bits]
+        uniform = pd_uniform(bits)
         ix[nK, :nM] = uniform[:nM]  # crc
 
         ix[nK + 1: nK + 1 + nN - nK, :nM] = intrinsics[nK:nK + nN - nK, :nM]  # parity checks
@@ -553,7 +555,7 @@ def q65_decode(
     elif qra_code.type == QRAType.CRC_PUNCTURED2:
         ix[:nK, :nM] = intrinsics[:nK, :nM]
 
-        uniform = pd_uniform_tab[bits]
+        uniform = pd_uniform(bits)
         ix[nK, :nM] = uniform[:nM]  # crc
         ix[nK + 1, :nM] = uniform[:nM]  # crc
 
@@ -613,7 +615,7 @@ def q65_decode(
         decoded_codeword = py[:nN].copy()  # no puncturing
 
     # return the number of iterations required to decode
-    return rc, decoded_codeword, decoded_msg
+    return decoded_codeword, decoded_msg
 
 
 def q65_dec(
@@ -625,17 +627,17 @@ def q65_dec(
 
         max_iters: int,
         # x_dec: npt.NDArray[np.int64],  # [13] Decoded 78-bit message as 13 six-bit integers
-) -> typing.Tuple[int, float, npt.NDArray[np.int64]]:  # Return code from q65_decode(); Estimated Es/No (dB)
+) -> typing.Tuple[float, npt.NDArray[np.int64]]:  # Return code from q65_decode(); Estimated Es/No (dB)
     # rc, ydec, xdec = q65_decode(codec, s3_prob, APmask, APsymbols, max_iters)
-    rc, ydec, xdec = q65_decode(codec, s3_prob, max_iters)
+    ydec, xdec = q65_decode(codec, s3_prob, max_iters)
 
     # rc = -1:  Invalid params
     # rc = -2:  Decode failed
     # rc = -3:  CRC mismatch
     # if (rc<0) return;
 
-    esnodb = q65_get_fastfading_EsNodB(codec, ydec, s3)
+    EsNodB = q65_fastfading_EsNodB(codec, ydec, s3)
     # if (rc<0)
     #     printf("error in q65_esnodb_fastfading()\n");
 
-    return rc, esnodb, xdec[:13]
+    return EsNodB, xdec

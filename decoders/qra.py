@@ -203,9 +203,9 @@ class Q65Monitor(AbstractMonitor):
         # ap_symbols = np.zeros(13, dtype=np.int64)
 
         # status, EsNo_dB, decoded = q65_dec(self.q65_codec, s3, s3prob, ap_mask, ap_symbols, self.max_iters)
-        status, EsNo_dB, decoded = q65_dec(self.q65_codec, s3, s3prob, self.max_iters)
+        EsNo_dB, decoded = q65_dec(self.q65_codec, s3, s3prob, self.max_iters)
 
-        if status < 0 or np.sum(decoded) <= 0:
+        if np.sum(decoded) <= 0:
             return None
 
         payload = q65_6bit_decode(decoded)
