@@ -16,3 +16,7 @@ class CRCMismatch(QRAException):
 
 class MExceeded(QRAException):
     ...
+
+
+class DecodeFailed(QRAException):
+    ...

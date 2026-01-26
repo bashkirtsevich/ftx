@@ -9,7 +9,7 @@ from crc.q65 import crc6, crc12
 
 from consts.q65 import *
 from encoders.qra import qra_encode
-from qra.exceptions import InvalidFadingModel, CRCMismatch, MExceeded
+from qra.exceptions import InvalidFadingModel, CRCMismatch, MExceeded, DecodeFailed
 from qra.q65_codec import Q65Codec
 from qra.qra_code_params import QRACodeParams
 
@@ -297,26 +297,26 @@ def qra_extrinsic(
     return rc
 
 
-def qra_map_decode(pcode: QRACodeParams, xdec: npt.NDArray[np.int64], pex: npt.NDArray[np.float64],
-                   pix: npt.NDArray[np.float64]):
+def qra_map_decode(code: QRACodeParams, x_dec: npt.NDArray[np.int64],
+                   ex: npt.NDArray[np.float64], ix: npt.NDArray[np.float64]):
     # Maximum a posteriori probability decoding.
     # Given the intrinsic information (pix) and extrinsic information (pex) (computed with qra_extrinsic(...))
     # compute pmap = pex*pix and decode each (information) symbol of the received codeword
     # as the symbol which maximizes pmap
 
     # Returns:
-    #	xdec[k] = decoded (information) symbols k=[0..qra_K-1]
+    #	xdec[k] = decoded (information) symbols k=[0..K-1]
 
     #  Note: pex is destroyed and overwritten with mapp
 
-    qra_M = pcode.M
-    qra_m = pcode.m
-    qra_K = pcode.K
+    M = code.M
+    m = code.m
+    K = code.K
 
-    for k in range(qra_K):
+    for k in range(K):
         # compute a posteriori prob
-        pd_imul(pex[k, :], pix[k, :], qra_m)
-        xdec[k] = np.argmax(pex[k, :qra_M])
+        pd_imul(ex[k, :], ix[k, :], m)
+        x_dec[k] = np.argmax(ex[k, :M])
 
 
 def q65_fastfading_intrinsics(
@@ -540,8 +540,8 @@ def q65_decode(
     nM = qra_code.M
     bits = qra_code.m
 
-    px = codec.x
-    py = codec.y
+    x = codec.x
+    y = codec.y
 
     # Depuncture intrinsics observations as required by the code type
     if qra_code.type == QRAType.CRC_PUNCTURED:
@@ -574,45 +574,44 @@ def q65_decode(
     rc = qra_extrinsic(qra_code, ex, ix, max_iters, codec.qra_v2cmsg, codec.qra_c2vmsg)
     if rc < 0:
         # failed to converge to a solution
-        # return Q65_DECODE_FAILED
-        raise Exception("Q65_DECODE_FAILED")
+        raise DecodeFailed
 
     # decode the information symbols (punctured information symbols included)
-    qra_map_decode(qra_code, px, ex, ix)
+    qra_map_decode(qra_code, x, ex, ix)
 
     # verify CRC match
     if qra_code.type in (QRAType.CRC, QRAType.CRC_PUNCTURED):
-        crc = crc6(px[:nK])  # compute crc-6
-        if crc != px[nK]:
+        crc = crc6(x[:nK])  # compute crc-6
+        if crc != x[nK]:
             raise CRCMismatch  # crc doesn't match
 
     elif qra_code.type == QRAType.CRC_PUNCTURED2:
-        crc = crc12(px[:nK])  # compute crc-12
-        if (crc & 0x3F) != px[nK] or (crc >> 6) != px[nK + 1]:
+        crc = crc12(x[:nK])  # compute crc-12
+        if (crc & 0x3F) != x[nK] or (crc >> 6) != x[nK + 1]:
             raise CRCMismatch  # crc doesn't match
 
     # copy the decoded msg to the user buffer (excluding punctured symbols)
-    # decoded_msg[:nK] = px[:nK]
-    decoded_msg = px[:nK].copy()
+    # decoded_msg[:nK] = x[:nK]
+    decoded_msg = x[:nK]
 
     # if (pDecodedCodeword==NULL)		# user is not interested in the decoded codeword
     #     return rc;					# return the number of iterations required to decode
 
     # crc matches therefore we can reconstruct the transmitted codeword
-    #  reencoding the information available in px...
+    #  reencoding the information available in x...
 
-    # qra_encode(qra_code, py, px)
-    py[:] = qra_encode(px, concat=True)
+    # qra_encode(qra_code, y, x)
+    y[:] = qra_encode(x, concat=True)
 
     # ...and strip the punctured symbols from the codeword
     if qra_code.type == QRAType.CRC_PUNCTURED:
         # puncture crc-6 symbol
-        decoded_codeword = np.concat([py[:nK], py[nK + 1:nK + (nN - nK) + 1]])
+        decoded_codeword = np.concat([y[:nK], y[nK + 1:nK + (nN - nK) + 1]])
     elif qra_code.type == QRAType.CRC_PUNCTURED2:
         # puncture crc-12 symbol
-        decoded_codeword = np.concat([py[:nK], py[nK + 2:nK + (nN - nK) + 2]])
+        decoded_codeword = np.concat([y[:nK], y[nK + 2:nK + (nN - nK) + 2]])
     else:
-        decoded_codeword = py[:nN].copy()  # no puncturing
+        decoded_codeword = y[:nN]  # no puncturing
 
     # return the number of iterations required to decode
     return decoded_codeword, decoded_msg
