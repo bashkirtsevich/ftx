@@ -120,25 +120,25 @@ def pd_forward_permutation(
 
 
 def qra_extrinsic(
-        qra_code: QRACodeParams,
+        code: QRACodeParams,
         ex: npt.NDArray[np.float64],
         ix: npt.NDArray[np.float64],
         max_iter: int,
         qra_v2cmsg: npt.NDArray[np.float64],
         qra_c2vmsg: npt.NDArray[np.float64],
 ):
-    qra_M = qra_code.M
-    qra_m = qra_code.m
-    qra_V = qra_code.V
-    qra_MAXVDEG = qra_code.MAX_V_DEG
-    qra_vdeg = qra_code.v_deg
-    qra_C = qra_code.C
-    qra_MAXCDEG = qra_code.MAX_C_DEG
-    qra_cdeg = qra_code.c_deg
-    qra_v2cmidx = qra_code.v2cm_idx
-    qra_c2vmidx = qra_code.c2vm_idx
-    qra_pmat = qra_code.gfp_mat.reshape((-1, qra_M))
-    qra_msgw = qra_code.msg_w
+    qra_M = code.M
+    qra_m = code.m
+    qra_V = code.V
+    qra_MAXVDEG = code.MAX_V_DEG
+    qra_vdeg = code.v_deg
+    qra_C = code.C
+    qra_MAXCDEG = code.MAX_C_DEG
+    qra_cdeg = code.c_deg
+    qra_v2cmidx = code.v2cm_idx
+    qra_c2vmidx = code.c2vm_idx
+    qra_pmat = code.gfp_mat.reshape((-1, qra_M))
+    qra_msgw = code.msg_w
 
     # float msg_out[QRACODE_MAX_M]; # we use a fixed size in order to avoid mallocs
     msg_out = np.zeros(QRACODE_MAX_M, dtype=np.float64)
