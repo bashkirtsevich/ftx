@@ -6,7 +6,7 @@ from consts.q65 import *
 from decoders.monitor import AbstractMonitor, LogItem
 from utils.common import dB
 from utils.q65 import smooth_121, bzap, q65_6bit_decode
-from qra.q65 import q65_intrinsics_fastfading, q65_dec, q65_init
+from qra.q65 import q65_fastfading_intrinsics, q65_dec, q65_init
 
 
 class Q65Monitor(AbstractMonitor):
@@ -197,7 +197,7 @@ class Q65Monitor(AbstractMonitor):
         typing.Tuple[float, npt.NDArray]
     ]:
         # ! Attempt a q0, q1, or q2 decode using spcified AP information.
-        s3prob = q65_intrinsics_fastfading(self.q65_codec, s3, sub_mode, b90ts, fading_model=FadingModel.Lorentzian)
+        s3prob = q65_fastfading_intrinsics(self.q65_codec, s3, sub_mode, b90ts, fading_model=FadingModel.Lorentzian)
 
         # ap_mask = np.zeros(13, dtype=np.int64)  # !Try first with no AP information
         # ap_symbols = np.zeros(13, dtype=np.int64)

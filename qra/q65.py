@@ -116,7 +116,210 @@ def pd_forward_permutation(dst: npt.NDArray[np.float64], src: npt.NDArray[np.flo
         dst[i] = src[perm[i]]
 
 
-def q65_intrinsics_fastfading(
+def qra_extrinsic(
+        qra_code: QRACodeParams,
+        ex: npt.NDArray[np.float64],
+        ix: npt.NDArray[np.float64],
+        max_iter: int,
+        qra_v2cmsg: npt.NDArray[np.float64],
+        qra_c2vmsg: npt.NDArray[np.float64],
+):
+    qra_M = qra_code.M
+    qra_m = qra_code.m
+    qra_V = qra_code.V
+    qra_MAXVDEG = qra_code.MAXVDEG
+    qra_vdeg = qra_code.vdeg
+    qra_C = qra_code.C
+    qra_MAXCDEG = qra_code.MAXCDEG
+    qra_cdeg = qra_code.cdeg
+    qra_v2cmidx = qra_code.v2cmidx
+    qra_c2vmidx = qra_code.c2vmidx
+    qra_pmat = qra_code.gfpmat.reshape((-1, qra_M))
+    qra_msgw = qra_code.msgw
+
+    # float msgout[QRACODE_MAX_M]; # we use a fixed size in order to avoid mallocs
+    msgout = np.zeros(QRACODE_MAX_M, dtype=np.float64)
+
+    rc = -1  # rc>=0  extrinsic converged to 1 at iteration rc (rc=0..maxiter-1)
+    # rc=-1  no convergence in the given number of iterations
+    # rc=-2  error in the code tables (code checks degrees must be >1)
+    # rc=-3  M is larger than QRACODE_MAX_M
+
+    if qra_M > QRACODE_MAX_M:
+        raise MExceeded
+
+    # message initialization -------------------------------------------------------
+
+    # init c->v variable intrinsic msgs
+    qra_c2vmsg[:qra_V, :qra_M] = ix[:qra_V, :qra_M]
+
+    # init the v->c messages directed to code factors (k=1..ndeg) with the intrinsic info
+    for nv in range(qra_V):  # current variable
+        ndeg = qra_vdeg[nv]  # degree of current node
+        msgbase = nv * qra_MAXVDEG  # base to msg index row for the current node
+
+        # copy intrinsics on v->c
+        for k in range(1, ndeg):
+            msg_idx = qra_v2cmidx[msgbase + k]  # current message index
+            qra_v2cmsg[msg_idx, :qra_M] = ix[nv, :qra_M]
+
+    # message passing algorithm iterations ------------------------------
+
+    for nit in range(max_iter):  # current iteration
+        # c->v step -----------------------------------------------------
+        # Computes messages from code checks to code variables.
+        # As the first qra_V checks are associated with intrinsic information
+        # (the code tables have been constructed in this way)
+        # we need to do this step only for code checks in the range [qra_V..qra_C)
+
+        # The convolutions of probability distributions over the alphabet of a finite field GF(qra_M)
+        # are performed with a fast convolution algorithm over the given field.
+        #
+        # I.e. given the code check x1+x2+x3 = 0 (with x1,x2,x3 in GF(2^m))
+        # and given Prob(x2) and Prob(x3), we have that:
+        # Prob(x1=X1) = Prob((x2+x3)=X1) = sum((Prob(x2=X2)*Prob(x3=(X1+X2))) for all the X2s in the field
+        # This translates to Prob(x1) = IWHT(WHT(Prob(x2))*WHT(Prob(x3)))
+        # where WHT and IWHT are the direct and inverse Walsh-Hadamard transforms of the argument.
+        # Note that the WHT and the IWHF differs only by a multiplicative coefficent and since in this step
+        # we don't need that the output distribution is normalized we use the relationship
+        # Prob(x1) =(proportional to) WH(WH(Prob(x2))*WH(Prob(x3)))
+
+        # In general given the check code x1+x2+x3+..+xm = 0
+        # the output distribution of a variable given the distributions of the other m-1 variables
+        # is the inverse WHT of the product of the WHTs of the distribution of the other m-1 variables
+        # The complexity of this algorithm scales with M*log2(M) instead of the M^2 complexity of
+        # the brute force approach (M=size of the alphabet)
+
+        for nc in range(qra_V, qra_C):  # current check
+            ndeg = qra_cdeg[nc]  # degree of current node
+
+            if ndeg == 1:  # this should never happen (code factors must have deg>1)
+                return -2  # bad code tables
+
+            msgbase = nc * qra_MAXCDEG  # base to msg index row for the current node
+
+            # transforms inputs in the Walsh-Hadamard "frequency" domain
+            # v->c  -> fwht(v->c)
+            for k in range(ndeg):
+                msg_idx = qra_c2vmidx[msgbase + k]  # msg index
+                fwht(qra_m, qra_v2cmsg[msg_idx, :], qra_v2cmsg[msg_idx, :])  # compute fwht
+
+            # compute products and transform them back in the WH "time" domain
+            for k in range(ndeg):  # loop indexes
+                # init output message to uniform distribution
+                msgout[:qra_M] = pd_uniform(qra_m)[:qra_M]
+
+                # c->v = prod(fwht(v->c))
+                # TODO: we assume that checks degrees are not larger than three but
+                # if they are larger the products can be computed more efficiently
+                for kk in range(ndeg):  # loop indexes
+                    if kk != k:
+                        msg_idx = qra_c2vmidx[msgbase + kk]
+                        pd_imul(msgout, qra_v2cmsg[msg_idx, :], qra_m)
+
+                # transform product back in the WH "time" domain
+
+                # Very important trick:
+                # we bias WHT[0] so that the sum of output pd components is always strictly positive
+                # this helps avoiding the effects of underflows in the v->c steps when multipling
+                # small fp numbers
+                msgout[0] += 1E-7  # TODO: define the bias accordingly to the field size
+
+                fwht(qra_m, msgout, msgout)
+
+                # inverse weight and output
+                msg_idx = qra_c2vmidx[msgbase + k]  # current output msg index
+                wmsg = qra_msgw[msg_idx]  # current msg weight
+
+                if wmsg == 0:
+                    qra_c2vmsg[msg_idx, :qra_M] = msgout[:qra_M]
+                else:
+                    # output p(alfa^(-w)*x)
+                    pd_backward_permutation(qra_c2vmsg[msg_idx, :], msgout, qra_pmat[wmsg, :], qra_M)
+
+        # v->c step -----------------------------------------------------
+        for nv in range(qra_V):
+            ndeg = qra_vdeg[nv]  # degree of current node
+            msgbase = nv * qra_MAXVDEG  # base to msg index row for the current node
+
+            for k in range(ndeg):
+                # init output message to uniform distribution
+                msgout[:qra_M] = pd_uniform(qra_m)[:qra_M]
+
+                # v->c msg = prod(c->v)
+                # TODO: factor factors to reduce the number of computations for high degree nodes
+                for kk in range(ndeg):
+                    if kk != k:
+                        msg_idx = qra_v2cmidx[msgbase + kk]
+                        pd_imul(msgout, qra_c2vmsg[msg_idx, :], qra_m)
+
+                # normalize the result to a probability distribution
+                pd_norm(msgout, qra_m)
+                # weight and output
+                msg_idx = qra_v2cmidx[msgbase + k]  # current output msg index
+                wmsg = qra_msgw[msg_idx]  # current msg weight
+
+                if wmsg == 0:
+                    qra_v2cmsg[msg_idx, :qra_M] = msgout[:qra_M]
+                else:
+                    # output p(alfa^w*x)
+                    pd_forward_permutation(qra_v2cmsg[msg_idx, :qra_M], msgout, qra_pmat[wmsg, :], qra_M)
+
+        # check extrinsic information ------------------------------
+        # We assume that decoding is successful if each of the extrinsic
+        # symbol probability is close to ej, where ej = [0 0 0 1(j-th position) 0 0 0 ]
+        # Therefore, for each symbol k in the codeword we compute max(prob(Xk))
+        # and we stop the iterations if sum(max(prob(xk)) is close to the codeword length
+        # Note: this is a more restrictive criterium than that of computing the a
+        # posteriori probability of each symbol, making a hard decision and then check
+        # if the codeword syndrome is null.
+        # WARNING: this is tricky and probably works only for the particular class of RA codes
+        # we are coping with (we designed the code weights so that for any input symbol the
+        # sum of its weigths is always 0, thus terminating the accumulator trellis to zero
+        # for every combination of the systematic symbols).
+        # More generally we should instead compute the max a posteriori probabilities
+        # (as a product of the intrinsic and extrinsic information), make a symbol by symbol hard
+        # decision and then check that the syndrome of the result is indeed null.
+
+        totex = 0  # total extrinsic information
+        for nv in range(qra_V):
+            totex += np.max(qra_v2cmsg[nv, :qra_M])
+
+        if totex > (1.0 * (qra_V) - 0.01):
+            # the total maximum extrinsic information of each symbol in the codeword
+            # is very close to one. This means that we have reached the (1,1) point in the
+            # code EXIT chart(s) and we have successfully decoded the input.
+            rc = nit
+            break  # remove the break to evaluate the decoder speed performance as a function of the max iterations number)
+
+    # copy extrinsic information to output to do the actual max a posteriori prob decoding
+    ex[:qra_V, :qra_M] = qra_v2cmsg[:qra_V, :qra_M]
+    return rc
+
+
+def qra_map_decode(pcode: QRACodeParams, xdec: npt.NDArray[np.int64], pex: npt.NDArray[np.float64],
+                   pix: npt.NDArray[np.float64]):
+    # Maximum a posteriori probability decoding.
+    # Given the intrinsic information (pix) and extrinsic information (pex) (computed with qra_extrinsic(...))
+    # compute pmap = pex*pix and decode each (information) symbol of the received codeword
+    # as the symbol which maximizes pmap
+
+    # Returns:
+    #	xdec[k] = decoded (information) symbols k=[0..qra_K-1]
+
+    #  Note: pex is destroyed and overwritten with mapp
+
+    qra_M = pcode.M
+    qra_m = pcode.m
+    qra_K = pcode.K
+
+    for k in range(qra_K):
+        # compute a posteriori prob
+        pd_imul(pex[k, :], pix[k, :], qra_m)
+        xdec[k] = np.argmax(pex[k, :qra_M])
+
+
+def q65_fastfading_intrinsics(
         codec: Q65Codec,
         input_energies: npt.NDArray[np.float64],  # received energies input
         sub_mode: int,  # submode idx (0=A ... 4=E)
@@ -321,209 +524,6 @@ def q65_fastfading_EsNodB(
 #             pd_norm(ix[k, :], m)
 
 
-def qra_extrinsic(
-        qra_code: QRACodeParams,
-        ex: npt.NDArray[np.float64],
-        ix: npt.NDArray[np.float64],
-        max_iter: int,
-        qra_v2cmsg: npt.NDArray[np.float64],
-        qra_c2vmsg: npt.NDArray[np.float64],
-):
-    qra_M = qra_code.M
-    qra_m = qra_code.m
-    qra_V = qra_code.V
-    qra_MAXVDEG = qra_code.MAXVDEG
-    qra_vdeg = qra_code.vdeg
-    qra_C = qra_code.C
-    qra_MAXCDEG = qra_code.MAXCDEG
-    qra_cdeg = qra_code.cdeg
-    qra_v2cmidx = qra_code.v2cmidx
-    qra_c2vmidx = qra_code.c2vmidx
-    qra_pmat = qra_code.gfpmat.reshape((-1, qra_M))
-    qra_msgw = qra_code.msgw
-
-    # float msgout[QRACODE_MAX_M]; # we use a fixed size in order to avoid mallocs
-    msgout = np.zeros(QRACODE_MAX_M, dtype=np.float64)
-
-    rc = -1  # rc>=0  extrinsic converged to 1 at iteration rc (rc=0..maxiter-1)
-    # rc=-1  no convergence in the given number of iterations
-    # rc=-2  error in the code tables (code checks degrees must be >1)
-    # rc=-3  M is larger than QRACODE_MAX_M
-
-    if qra_M > QRACODE_MAX_M:
-        raise MExceeded
-
-    # message initialization -------------------------------------------------------
-
-    # init c->v variable intrinsic msgs
-    qra_c2vmsg[:qra_V, :qra_M] = ix[:qra_V, :qra_M]
-
-    # init the v->c messages directed to code factors (k=1..ndeg) with the intrinsic info
-    for nv in range(qra_V):  # current variable
-        ndeg = qra_vdeg[nv]  # degree of current node
-        msgbase = nv * qra_MAXVDEG  # base to msg index row for the current node
-
-        # copy intrinsics on v->c
-        for k in range(1, ndeg):
-            msg_idx = qra_v2cmidx[msgbase + k]  # current message index
-            qra_v2cmsg[msg_idx, :qra_M] = ix[nv, :qra_M]
-
-    # message passing algorithm iterations ------------------------------
-
-    for nit in range(max_iter):  # current iteration
-        # c->v step -----------------------------------------------------
-        # Computes messages from code checks to code variables.
-        # As the first qra_V checks are associated with intrinsic information
-        # (the code tables have been constructed in this way)
-        # we need to do this step only for code checks in the range [qra_V..qra_C)
-
-        # The convolutions of probability distributions over the alphabet of a finite field GF(qra_M)
-        # are performed with a fast convolution algorithm over the given field.
-        #
-        # I.e. given the code check x1+x2+x3 = 0 (with x1,x2,x3 in GF(2^m))
-        # and given Prob(x2) and Prob(x3), we have that:
-        # Prob(x1=X1) = Prob((x2+x3)=X1) = sum((Prob(x2=X2)*Prob(x3=(X1+X2))) for all the X2s in the field
-        # This translates to Prob(x1) = IWHT(WHT(Prob(x2))*WHT(Prob(x3)))
-        # where WHT and IWHT are the direct and inverse Walsh-Hadamard transforms of the argument.
-        # Note that the WHT and the IWHF differs only by a multiplicative coefficent and since in this step
-        # we don't need that the output distribution is normalized we use the relationship
-        # Prob(x1) =(proportional to) WH(WH(Prob(x2))*WH(Prob(x3)))
-
-        # In general given the check code x1+x2+x3+..+xm = 0
-        # the output distribution of a variable given the distributions of the other m-1 variables
-        # is the inverse WHT of the product of the WHTs of the distribution of the other m-1 variables
-        # The complexity of this algorithm scales with M*log2(M) instead of the M^2 complexity of
-        # the brute force approach (M=size of the alphabet)
-
-        for nc in range(qra_V, qra_C):  # current check
-            ndeg = qra_cdeg[nc]  # degree of current node
-
-            if ndeg == 1:  # this should never happen (code factors must have deg>1)
-                return -2  # bad code tables
-
-            msgbase = nc * qra_MAXCDEG  # base to msg index row for the current node
-
-            # transforms inputs in the Walsh-Hadamard "frequency" domain
-            # v->c  -> fwht(v->c)
-            for k in range(ndeg):
-                msg_idx = qra_c2vmidx[msgbase + k]  # msg index
-                fwht(qra_m, qra_v2cmsg[msg_idx, :], qra_v2cmsg[msg_idx, :])  # compute fwht
-
-            # compute products and transform them back in the WH "time" domain
-            for k in range(ndeg):  # loop indexes
-                # init output message to uniform distribution
-                msgout[:qra_M] = pd_uniform(qra_m)[:qra_M]
-
-                # c->v = prod(fwht(v->c))
-                # TODO: we assume that checks degrees are not larger than three but
-                # if they are larger the products can be computed more efficiently
-                for kk in range(ndeg):  # loop indexes
-                    if kk != k:
-                        msg_idx = qra_c2vmidx[msgbase + kk]
-                        pd_imul(msgout, qra_v2cmsg[msg_idx, :], qra_m)
-
-                # transform product back in the WH "time" domain
-
-                # Very important trick:
-                # we bias WHT[0] so that the sum of output pd components is always strictly positive
-                # this helps avoiding the effects of underflows in the v->c steps when multipling
-                # small fp numbers
-                msgout[0] += 1E-7  # TODO: define the bias accordingly to the field size
-
-                fwht(qra_m, msgout, msgout)
-
-                # inverse weight and output
-                msg_idx = qra_c2vmidx[msgbase + k]  # current output msg index
-                wmsg = qra_msgw[msg_idx]  # current msg weight
-
-                if wmsg == 0:
-                    qra_c2vmsg[msg_idx, :qra_M] = msgout[:qra_M]
-                else:
-                    # output p(alfa^(-w)*x)
-                    pd_backward_permutation(qra_c2vmsg[msg_idx, :], msgout, qra_pmat[wmsg, :], qra_M)
-
-        # v->c step -----------------------------------------------------
-        for nv in range(qra_V):
-            ndeg = qra_vdeg[nv]  # degree of current node
-            msgbase = nv * qra_MAXVDEG  # base to msg index row for the current node
-
-            for k in range(ndeg):
-                # init output message to uniform distribution
-                msgout[:qra_M] = pd_uniform(qra_m)[:qra_M]
-
-                # v->c msg = prod(c->v)
-                # TODO: factor factors to reduce the number of computations for high degree nodes
-                for kk in range(ndeg):
-                    if kk != k:
-                        msg_idx = qra_v2cmidx[msgbase + kk]
-                        pd_imul(msgout, qra_c2vmsg[msg_idx, :], qra_m)
-
-                # normalize the result to a probability distribution
-                pd_norm(msgout, qra_m)
-                # weight and output
-                msg_idx = qra_v2cmidx[msgbase + k]  # current output msg index
-                wmsg = qra_msgw[msg_idx]  # current msg weight
-
-                if wmsg == 0:
-                    qra_v2cmsg[msg_idx, :qra_M] = msgout[:qra_M]
-                else:
-                    # output p(alfa^w*x)
-                    pd_forward_permutation(qra_v2cmsg[msg_idx, :qra_M], msgout, qra_pmat[wmsg, :], qra_M)
-
-        # check extrinsic information ------------------------------
-        # We assume that decoding is successful if each of the extrinsic
-        # symbol probability is close to ej, where ej = [0 0 0 1(j-th position) 0 0 0 ]
-        # Therefore, for each symbol k in the codeword we compute max(prob(Xk))
-        # and we stop the iterations if sum(max(prob(xk)) is close to the codeword length
-        # Note: this is a more restrictive criterium than that of computing the a
-        # posteriori probability of each symbol, making a hard decision and then check
-        # if the codeword syndrome is null.
-        # WARNING: this is tricky and probably works only for the particular class of RA codes
-        # we are coping with (we designed the code weights so that for any input symbol the
-        # sum of its weigths is always 0, thus terminating the accumulator trellis to zero
-        # for every combination of the systematic symbols).
-        # More generally we should instead compute the max a posteriori probabilities
-        # (as a product of the intrinsic and extrinsic information), make a symbol by symbol hard
-        # decision and then check that the syndrome of the result is indeed null.
-
-        totex = 0  # total extrinsic information
-        for nv in range(qra_V):
-            totex += np.max(qra_v2cmsg[nv, :qra_M])
-
-        if totex > (1.0 * (qra_V) - 0.01):
-            # the total maximum extrinsic information of each symbol in the codeword
-            # is very close to one. This means that we have reached the (1,1) point in the
-            # code EXIT chart(s) and we have successfully decoded the input.
-            rc = nit
-            break  # remove the break to evaluate the decoder speed performance as a function of the max iterations number)
-
-    # copy extrinsic information to output to do the actual max a posteriori prob decoding
-    ex[:qra_V, :qra_M] = qra_v2cmsg[:qra_V, :qra_M]
-    return rc
-
-
-def qra_mapdecode(pcode: QRACodeParams, xdec: npt.NDArray[np.int64], pex: npt.NDArray[np.float64],
-                  pix: npt.NDArray[np.float64]):
-    # Maximum a posteriori probability decoding.
-    # Given the intrinsic information (pix) and extrinsic information (pex) (computed with qra_extrinsic(...))
-    # compute pmap = pex*pix and decode each (information) symbol of the received codeword
-    # as the symbol which maximizes pmap
-
-    # Returns:
-    #	xdec[k] = decoded (information) symbols k=[0..qra_K-1]
-
-    #  Note: pex is destroyed and overwritten with mapp
-
-    qra_M = pcode.M
-    qra_m = pcode.m
-    qra_K = pcode.K
-
-    for k in range(qra_K):
-        # compute a posteriori prob
-        pd_imul(pex[k, :], pix[k, :], qra_m)
-        xdec[k] = np.argmax(pex[k, :qra_M])
-
-
 def q65_decode(
         codec: Q65Codec,
         intrinsics: npt.NDArray[np.float64],
@@ -578,7 +578,7 @@ def q65_decode(
         raise Exception("Q65_DECODE_FAILED")
 
     # decode the information symbols (punctured information symbols included)
-    qra_mapdecode(qra_code, px, ex, ix)
+    qra_map_decode(qra_code, px, ex, ix)
 
     # verify CRC match
     if qra_code.type in (QRAType.CRC, QRAType.CRC_PUNCTURED):
