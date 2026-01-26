@@ -62,12 +62,6 @@ Q65_DECODE_INVPARAMS = -1
 Q65_FASTFADING_MAXWEIGTHS = 65
 TS_QRA64 = 0.576
 
-# define uniform distributions of given size
-pd_uniform_tab = [
-    np.full(2 ** i, 1 / 2 ** i, dtype=np.float64)
-    for i in range(7)
-]
-
 # table of the systematic symbols indexes in the accumulator chain
 qra_acc_input_idx = np.array([
     13, 1, 3, 4, 8, 12, 9, 14, 10, 5,

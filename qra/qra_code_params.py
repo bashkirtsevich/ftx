@@ -18,9 +18,9 @@ class QRACodeParams:
     # NC: int  # number of check symbols (N-K) # FIXME: To be deleted
     V: int  # number of variables in the code graph (N)
     C: int  # number of factors in the code graph (N +(N-K)+1)
-    NMSG: int  # number of msgs in the code graph
-    MAXVDEG: int  # maximum variable degree
-    MAXCDEG: int  # maximum factor degree
+    N_MSG: int  # number of msgs in the code graph
+    MAX_V_DEG: int  # maximum variable degree
+    MAX_C_DEG: int  # maximum factor degree
     type: QRAType
     R: float  # code rate (K/N)
     # name: str  # code name # FIXME: To be deleted
@@ -30,12 +30,12 @@ class QRACodeParams:
     gflog: npt.NDArray[np.int64]  # FIXME: To be deleted
     gfexp: npt.NDArray[np.int64]  # FIXME: To be deleted
     # tables used by the decoder -------------------------
-    msgw: npt.NDArray[np.int64]
-    vdeg: npt.NDArray[np.int64]
-    cdeg: npt.NDArray[np.int64]
-    v2cmidx: npt.NDArray[np.int64]
-    c2vmidx: npt.NDArray[np.int64]
-    gfpmat: npt.NDArray[np.int64]  # Permutation matrix
+    msg_w: npt.NDArray[np.int64]
+    v_deg: npt.NDArray[np.int64]
+    c_deg: npt.NDArray[np.int64]
+    v2cm_idx: npt.NDArray[np.int64]
+    c2vm_idx: npt.NDArray[np.int64]
+    gfp_mat: npt.NDArray[np.int64]  # Permutation matrix
 
     @property
     def bits_per_symbol(self):

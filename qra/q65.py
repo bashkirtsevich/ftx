@@ -2,6 +2,7 @@ import typing
 
 import numpy as np
 import numpy.typing as npt
+from functools import cache
 
 from fwht import fwht
 from utils.common import dB
@@ -57,8 +58,8 @@ def q65_init() -> Q65Codec:
         decoderEsNoMetric=1.0 * nm * R * EbNoMetric,
         x=np.zeros(qra_code.K, dtype=np.uint8),
         y=np.zeros(qra_code.N, dtype=np.uint8),
-        qra_v2cmsg=np.zeros((qra_code.NMSG, qra_code.M), dtype=np.float64),
-        qra_c2vmsg=np.zeros((qra_code.NMSG, qra_code.M), dtype=np.float64),
+        qra_v2cmsg=np.zeros((qra_code.N_MSG, qra_code.M), dtype=np.float64),
+        qra_c2vmsg=np.zeros((qra_code.N_MSG, qra_code.M), dtype=np.float64),
         ix=np.zeros((qra_code.N, qra_code.M), dtype=np.float64),
         ex=np.zeros((qra_code.N, qra_code.M), dtype=np.float64),
 
@@ -77,43 +78,45 @@ def pd_imul(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], dim: int
     dst[:idx] *= src[:idx]
 
 
+@cache
 def pd_uniform(dim: int) -> npt.NDArray[np.float64]:
-    return pd_uniform_tab[dim]
+    # define uniform distributions of given size
+    return np.full(2 ** dim, 1 / 2 ** dim, dtype=np.float64)
 
 
-def pd_norm_tab(pd: npt.NDArray[np.float64], dim: int) -> float:
+def pd_norm_tab(data: npt.NDArray[np.float64], dim: int) -> float:
     dim = min(dim, qra_m)
 
     if dim == 0:
-        t = pd[0]
-        pd[0] = 1.0
+        t = data[0]
+        data[0] = 1.0
         return t
 
     c = 2 ** dim
-    t = np.sum(pd[:c])
+    t = np.sum(data[:c])
 
     if t <= 0:
-        pd[:c] = pd_uniform(dim)[:c]
+        data[:c] = pd_uniform(dim)[:c]
         return t
 
-    pd *= 1 / t
+    data *= 1 / t
     return t
 
 
-def pd_norm(pd: npt.NDArray[np.float64], dim: int) -> float:
-    return pd_norm_tab(pd, dim)
+def pd_norm(data: npt.NDArray[np.float64], dim: int) -> float:
+    return pd_norm_tab(data, dim)
 
 
-def pd_backward_permutation(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64],
-                            perm: npt.NDArray[np.int64], dim: int):
-    for i in range(dim):
-        dst[perm[i]] = src[i]
+def pd_backward_permutation(
+        dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64],
+        perm: npt.NDArray[np.int64], dim: int):
+    dst[perm[:dim]] = src[:dim]
 
 
-def pd_forward_permutation(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64],
-                           perm: npt.NDArray[np.int64], dim: int):
-    for i in range(dim):
-        dst[i] = src[perm[i]]
+def pd_forward_permutation(
+        dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64],
+        perm: npt.NDArray[np.int64], dim: int):
+    dst[:dim] = src[perm[:dim]]
 
 
 def qra_extrinsic(
@@ -127,18 +130,18 @@ def qra_extrinsic(
     qra_M = qra_code.M
     qra_m = qra_code.m
     qra_V = qra_code.V
-    qra_MAXVDEG = qra_code.MAXVDEG
-    qra_vdeg = qra_code.vdeg
+    qra_MAXVDEG = qra_code.MAX_V_DEG
+    qra_vdeg = qra_code.v_deg
     qra_C = qra_code.C
-    qra_MAXCDEG = qra_code.MAXCDEG
-    qra_cdeg = qra_code.cdeg
-    qra_v2cmidx = qra_code.v2cmidx
-    qra_c2vmidx = qra_code.c2vmidx
-    qra_pmat = qra_code.gfpmat.reshape((-1, qra_M))
-    qra_msgw = qra_code.msgw
+    qra_MAXCDEG = qra_code.MAX_C_DEG
+    qra_cdeg = qra_code.c_deg
+    qra_v2cmidx = qra_code.v2cm_idx
+    qra_c2vmidx = qra_code.c2vm_idx
+    qra_pmat = qra_code.gfp_mat.reshape((-1, qra_M))
+    qra_msgw = qra_code.msg_w
 
-    # float msgout[QRACODE_MAX_M]; # we use a fixed size in order to avoid mallocs
-    msgout = np.zeros(QRACODE_MAX_M, dtype=np.float64)
+    # float msg_out[QRACODE_MAX_M]; # we use a fixed size in order to avoid mallocs
+    msg_out = np.zeros(QRACODE_MAX_M, dtype=np.float64)
 
     rc = -1  # rc>=0  extrinsic converged to 1 at iteration rc (rc=0..maxiter-1)
     # rc=-1  no convergence in the given number of iterations
@@ -146,6 +149,7 @@ def qra_extrinsic(
     # rc=-3  M is larger than QRACODE_MAX_M
 
     if qra_M > QRACODE_MAX_M:
+        # return -3
         raise MExceeded
 
     # message initialization -------------------------------------------------------
@@ -153,19 +157,19 @@ def qra_extrinsic(
     # init c->v variable intrinsic msgs
     qra_c2vmsg[:qra_V, :qra_M] = ix[:qra_V, :qra_M]
 
-    # init the v->c messages directed to code factors (k=1..ndeg) with the intrinsic info
-    for nv in range(qra_V):  # current variable
-        ndeg = qra_vdeg[nv]  # degree of current node
-        msgbase = nv * qra_MAXVDEG  # base to msg index row for the current node
+    # init the v->c messages directed to code factors (k=1..deg) with the intrinsic info
+    for v in range(qra_V):  # current variable
+        v_deg = qra_vdeg[v]  # degree of current node
+        msg_base = v * qra_MAXVDEG  # base to msg index row for the current node
 
         # copy intrinsics on v->c
-        for k in range(1, ndeg):
-            msg_idx = qra_v2cmidx[msgbase + k]  # current message index
-            qra_v2cmsg[msg_idx, :qra_M] = ix[nv, :qra_M]
+        for k in range(1, v_deg):
+            idx_msg = qra_v2cmidx[msg_base + k]  # current message index
+            qra_v2cmsg[idx_msg, :qra_M] = ix[v, :qra_M]
 
     # message passing algorithm iterations ------------------------------
 
-    for nit in range(max_iter):  # current iteration
+    for iter in range(max_iter):  # current iteration
         # c->v step -----------------------------------------------------
         # Computes messages from code checks to code variables.
         # As the first qra_V checks are associated with intrinsic information
@@ -191,31 +195,31 @@ def qra_extrinsic(
         # the brute force approach (M=size of the alphabet)
 
         for nc in range(qra_V, qra_C):  # current check
-            ndeg = qra_cdeg[nc]  # degree of current node
+            deg = qra_cdeg[nc]  # degree of current node
 
-            if ndeg == 1:  # this should never happen (code factors must have deg>1)
+            if deg == 1:  # this should never happen (code factors must have deg>1)
                 return -2  # bad code tables
 
-            msgbase = nc * qra_MAXCDEG  # base to msg index row for the current node
+            msg_base = nc * qra_MAXCDEG  # base to msg index row for the current node
 
             # transforms inputs in the Walsh-Hadamard "frequency" domain
             # v->c  -> fwht(v->c)
-            for k in range(ndeg):
-                msg_idx = qra_c2vmidx[msgbase + k]  # msg index
-                fwht(qra_m, qra_v2cmsg[msg_idx, :], qra_v2cmsg[msg_idx, :])  # compute fwht
+            for k in range(deg):
+                idx_msg = qra_c2vmidx[msg_base + k]  # msg index
+                fwht(qra_m, qra_v2cmsg[idx_msg, :], qra_v2cmsg[idx_msg, :])  # compute fwht
 
             # compute products and transform them back in the WH "time" domain
-            for k in range(ndeg):  # loop indexes
+            for k in range(deg):  # loop indexes
                 # init output message to uniform distribution
-                msgout[:qra_M] = pd_uniform(qra_m)[:qra_M]
+                msg_out[:qra_M] = pd_uniform(qra_m)[:qra_M]
 
                 # c->v = prod(fwht(v->c))
                 # TODO: we assume that checks degrees are not larger than three but
                 # if they are larger the products can be computed more efficiently
-                for kk in range(ndeg):  # loop indexes
+                for kk in range(deg):  # loop indexes
                     if kk != k:
-                        msg_idx = qra_c2vmidx[msgbase + kk]
-                        pd_imul(msgout, qra_v2cmsg[msg_idx, :], qra_m)
+                        idx_msg = qra_c2vmidx[msg_base + kk]
+                        pd_imul(msg_out, qra_v2cmsg[idx_msg, :], qra_m)
 
                 # transform product back in the WH "time" domain
 
@@ -223,47 +227,47 @@ def qra_extrinsic(
                 # we bias WHT[0] so that the sum of output pd components is always strictly positive
                 # this helps avoiding the effects of underflows in the v->c steps when multipling
                 # small fp numbers
-                msgout[0] += 1E-7  # TODO: define the bias accordingly to the field size
+                msg_out[0] += 1E-7  # TODO: define the bias accordingly to the field size
 
-                fwht(qra_m, msgout, msgout)
+                fwht(qra_m, msg_out, msg_out)
 
                 # inverse weight and output
-                msg_idx = qra_c2vmidx[msgbase + k]  # current output msg index
-                wmsg = qra_msgw[msg_idx]  # current msg weight
+                idx_msg = qra_c2vmidx[msg_base + k]  # current output msg index
+                w_msg = qra_msgw[idx_msg]  # current msg weight
 
-                if wmsg == 0:
-                    qra_c2vmsg[msg_idx, :qra_M] = msgout[:qra_M]
+                if w_msg == 0:
+                    qra_c2vmsg[idx_msg, :qra_M] = msg_out[:qra_M]
                 else:
                     # output p(alfa^(-w)*x)
-                    pd_backward_permutation(qra_c2vmsg[msg_idx, :], msgout, qra_pmat[wmsg, :], qra_M)
+                    pd_backward_permutation(qra_c2vmsg[idx_msg, :], msg_out, qra_pmat[w_msg, :], qra_M)
 
         # v->c step -----------------------------------------------------
-        for nv in range(qra_V):
-            ndeg = qra_vdeg[nv]  # degree of current node
-            msgbase = nv * qra_MAXVDEG  # base to msg index row for the current node
+        for v in range(qra_V):
+            deg = qra_vdeg[v]  # degree of current node
+            msg_base = v * qra_MAXVDEG  # base to msg index row for the current node
 
-            for k in range(ndeg):
+            for k in range(deg):
                 # init output message to uniform distribution
-                msgout[:qra_M] = pd_uniform(qra_m)[:qra_M]
+                msg_out[:qra_M] = pd_uniform(qra_m)[:qra_M]
 
                 # v->c msg = prod(c->v)
                 # TODO: factor factors to reduce the number of computations for high degree nodes
-                for kk in range(ndeg):
+                for kk in range(deg):
                     if kk != k:
-                        msg_idx = qra_v2cmidx[msgbase + kk]
-                        pd_imul(msgout, qra_c2vmsg[msg_idx, :], qra_m)
+                        idx_msg = qra_v2cmidx[msg_base + kk]
+                        pd_imul(msg_out, qra_c2vmsg[idx_msg, :], qra_m)
 
                 # normalize the result to a probability distribution
-                pd_norm(msgout, qra_m)
+                pd_norm(msg_out, qra_m)
                 # weight and output
-                msg_idx = qra_v2cmidx[msgbase + k]  # current output msg index
-                wmsg = qra_msgw[msg_idx]  # current msg weight
+                idx_msg = qra_v2cmidx[msg_base + k]  # current output msg index
+                w_msg = qra_msgw[idx_msg]  # current msg weight
 
-                if wmsg == 0:
-                    qra_v2cmsg[msg_idx, :qra_M] = msgout[:qra_M]
+                if w_msg == 0:
+                    qra_v2cmsg[idx_msg, :qra_M] = msg_out[:qra_M]
                 else:
                     # output p(alfa^w*x)
-                    pd_forward_permutation(qra_v2cmsg[msg_idx, :qra_M], msgout, qra_pmat[wmsg, :], qra_M)
+                    pd_forward_permutation(qra_v2cmsg[idx_msg, :qra_M], msg_out, qra_pmat[w_msg, :], qra_M)
 
         # check extrinsic information ------------------------------
         # We assume that decoding is successful if each of the extrinsic
@@ -282,14 +286,14 @@ def qra_extrinsic(
         # decision and then check that the syndrome of the result is indeed null.
 
         totex = 0  # total extrinsic information
-        for nv in range(qra_V):
-            totex += np.max(qra_v2cmsg[nv, :qra_M])
+        for v in range(qra_V):
+            totex += np.max(qra_v2cmsg[v, :qra_M])
 
         if totex > (1.0 * (qra_V) - 0.01):
             # the total maximum extrinsic information of each symbol in the codeword
             # is very close to one. This means that we have reached the (1,1) point in the
             # code EXIT chart(s) and we have successfully decoded the input.
-            rc = nit
+            rc = iter
             break  # remove the break to evaluate the decoder speed performance as a function of the max iterations number)
 
     # copy extrinsic information to output to do the actual max a posteriori prob decoding
