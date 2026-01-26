@@ -10,8 +10,8 @@ from qra.qra_code_params import QRACodeParams
 class Q65Codec:
     qra_code: QRACodeParams  # qra code to be used by the codec
     decoderEsNoMetric: float  # value for which we optimize the decoder metric
-    x: npt.NDArray[np.int64]  # codec input
-    y: npt.NDArray[np.int64]  # codec output
+    x: npt.NDArray[np.uint8]  # codec input
+    y: npt.NDArray[np.uint8]  # codec output
     qra_v2cmsg: npt.NDArray[np.float64]  # decoder v->c messages
     qra_c2vmsg: npt.NDArray[np.float64]  # decoder c->v messages
     ix: npt.NDArray[np.float64]  # decoder intrinsic information

@@ -16,8 +16,8 @@ from consts.q65 import qra_exp
 
 
 @njit
-def qra_encode(x: npt.NDArray[np.uint8], concat: bool = False) -> npt.NDArray[np.int64]:
-    y = np.zeros(qra_NC, dtype=np.int64)
+def qra_encode(x: npt.NDArray[np.uint8], concat: bool = False) -> npt.NDArray[np.uint8]:
+    y = np.zeros(qra_NC, dtype=np.uint8)
 
     # compute the code check symbols as a weighted accumulation of a permutated
     # sequence of the (repeated) systematic input symbols:

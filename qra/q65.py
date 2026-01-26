@@ -55,8 +55,8 @@ def q65_init() -> Q65Codec:
     codec = Q65Codec(
         qra_code=qra_code,
         decoderEsNoMetric=1.0 * nm * R * EbNoMetric,
-        x=np.zeros(qra_code.K, dtype=np.int64),
-        y=np.zeros(qra_code.N, dtype=np.int64),
+        x=np.zeros(qra_code.K, dtype=np.uint8),
+        y=np.zeros(qra_code.N, dtype=np.uint8),
         qra_v2cmsg=np.zeros((qra_code.NMSG, qra_code.M), dtype=np.float64),
         qra_c2vmsg=np.zeros((qra_code.NMSG, qra_code.M), dtype=np.float64),
         ix=np.zeros((qra_code.N, qra_code.M), dtype=np.float64),
@@ -297,7 +297,7 @@ def qra_extrinsic(
     return rc
 
 
-def qra_map_decode(code: QRACodeParams, x_dec: npt.NDArray[np.int64],
+def qra_map_decode(code: QRACodeParams, x_dec: npt.NDArray[np.uint8],
                    ex: npt.NDArray[np.float64], ix: npt.NDArray[np.float64]):
     # Maximum a posteriori probability decoding.
     # Given the intrinsic information (pix) and extrinsic information (pex) (computed with qra_extrinsic(...))
