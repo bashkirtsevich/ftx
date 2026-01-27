@@ -6,17 +6,19 @@ import numpy.typing as npt
 from crc.q65 import crc12
 
 from consts.q65 import Q65_SYNC
-from consts.q65 import qra_NC
-from consts.q65 import qra_M
-from consts.q65 import qra_a
-from consts.q65 import qra_acc_input_idx
-from consts.q65 import qra_acc_input_wlog
-from consts.q65 import qra_log
-from consts.q65 import qra_exp
+from qra.qra_code_params import QRACodeParams, qra15_65_64_irr_e23
 
 
-@njit
-def qra_encode(x: npt.NDArray[np.uint8], concat: bool = False) -> npt.NDArray[np.uint8]:
+# @njit
+def qra_encode(code: QRACodeParams, x: npt.NDArray[np.uint8], concat: bool = False) -> npt.NDArray[np.uint8]:
+    qra_NC = code.NC
+    qra_M = code.M
+    qra_a = code.a
+    qra_acc_input_idx = code.acc_input_idx
+    qra_acc_input_wlog = code.acc_input_wlog
+    qra_log = code.gflog
+    qra_exp = code.gfexp
+
     y = np.zeros(qra_NC, dtype=np.uint8)
 
     # compute the code check symbols as a weighted accumulation of a permutated
@@ -53,7 +55,7 @@ def q65_encode_msg(msg: npt.NDArray[np.uint8]) -> npt.NDArray[np.int64]:
     crc = crc12(msg)
     data_in = np.concat((msg, (crc & 0x3F, crc >> 6),))
     # encode with the given qra code
-    data_out = qra_encode(data_in)
+    data_out = qra_encode(qra15_65_64_irr_e23, data_in)
     # exclude crc from result data array for this encoding type
     return np.concat((msg, data_out,))
 

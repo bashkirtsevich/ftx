@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy import typing as npt
 
-from consts.q65 import QRAType
+from consts.q65 import *
 from qra.exceptions import InvalidQRAType
 
 
@@ -15,7 +15,7 @@ class QRACodeParams:
     m: int  # bits/symbol
     M: int  # Symbol alphabet cardinality (2^m)
     a: int  # code grouping factor
-    # NC: int  # number of check symbols (N-K) # FIXME: To be deleted
+    NC: int  # number of check symbols (N-K) # FIXME: To be deleted
     V: int  # number of variables in the code graph (N)
     C: int  # number of factors in the code graph (N +(N-K)+1)
     N_MSG: int  # number of msgs in the code graph
@@ -76,3 +76,31 @@ class QRACodeParams:
     @property
     def alphabet_size(self):
         return self.M
+
+
+qra15_65_64_irr_e23 = QRACodeParams(
+    qra_K,
+    qra_N,
+    qra_m,
+    qra_M,
+    qra_a,
+    qra_NC,  # FIXME: To be deleted
+    qra_V,
+    qra_C,
+    qra_NMSG,
+    qra_MAXVDEG,
+    qra_MAXCDEG,
+    QRAType.CRC_PUNCTURED2,
+    qra_R,
+    # CODE_NAME, # FIXME: To be deleted
+    qra_acc_input_idx,
+    qra_acc_input_wlog,
+    qra_log,
+    qra_exp,
+    qra_msgw,
+    qra_vdeg,
+    qra_cdeg,
+    qra_v2cmidx,
+    qra_c2vmidx,
+    qra_pmat
+)

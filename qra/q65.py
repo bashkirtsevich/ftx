@@ -12,34 +12,7 @@ from consts.q65 import *
 from encoders.qra import qra_encode
 from qra.exceptions import InvalidFadingModel, CRCMismatch, MExceeded, DecodeFailed
 from qra.q65_codec import Q65Codec
-from qra.qra_code_params import QRACodeParams
-
-qra15_65_64_irr_e23 = QRACodeParams(
-    qra_K,
-    qra_N,
-    qra_m,
-    qra_M,
-    qra_a,
-    # qra_NC, # FIXME: To be deleted
-    qra_V,
-    qra_C,
-    qra_NMSG,
-    qra_MAXVDEG,
-    qra_MAXCDEG,
-    QRAType.CRC_PUNCTURED2,
-    qra_R,
-    # CODE_NAME, # FIXME: To be deleted
-    qra_acc_input_idx,
-    qra_acc_input_wlog,
-    qra_log,
-    qra_exp,
-    qra_msgw,
-    qra_vdeg,
-    qra_cdeg,
-    qra_v2cmidx,
-    qra_c2vmidx,
-    qra_pmat
-)
+from qra.qra_code_params import QRACodeParams, qra15_65_64_irr_e23
 
 
 def pd_imul(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], dim: int):
@@ -604,7 +577,7 @@ def q65_decode(
     #  reencoding the information available in x...
 
     # qra_encode(qra_code, y, x)
-    y[:] = qra_encode(x, concat=True)
+    y[:] = qra_encode(qra_code, x, concat=True)
 
     # ...and strip the punctured symbols from the codeword
     if qra_code.type == QRAType.CRC_PUNCTURED:
