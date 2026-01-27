@@ -15,7 +15,7 @@ class QRACodeParams:
     m: int  # bits/symbol
     M: int  # Symbol alphabet cardinality (2^m)
     a: int  # code grouping factor
-    NC: int  # number of check symbols (N-K) # FIXME: To be deleted
+    NC: int  # number of check symbols (N-K)
     V: int  # number of variables in the code graph (N)
     C: int  # number of factors in the code graph (N +(N-K)+1)
     N_MSG: int  # number of msgs in the code graph
@@ -25,10 +25,10 @@ class QRACodeParams:
     R: float  # code rate (K/N)
     # name: str  # code name # FIXME: To be deleted
     # tables used by the encoder
-    acc_input_idx: npt.NDArray[np.int64]  # FIXME: To be deleted
-    acc_input_wlog: npt.NDArray[np.int64]  # FIXME: To be deleted
-    gflog: npt.NDArray[np.int64]  # FIXME: To be deleted
-    gfexp: npt.NDArray[np.int64]  # FIXME: To be deleted
+    acc_input_idx: npt.NDArray[np.int64]
+    acc_input_wlog: npt.NDArray[np.int64]
+    gflog: npt.NDArray[np.int64]
+    gfexp: npt.NDArray[np.int64]
     # tables used by the decoder -------------------------
     msg_w: npt.NDArray[np.int64]
     v_deg: npt.NDArray[np.int64]

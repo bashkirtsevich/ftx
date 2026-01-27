@@ -10,7 +10,7 @@ from crc.q65 import crc6, crc12
 
 from consts.q65 import *
 from encoders.qra import qra_encode
-from qra.exceptions import InvalidFadingModel, CRCMismatch, MExceeded, DecodeFailed
+from qra.exceptions import CRCMismatch, MExceeded, DecodeFailed
 from qra.q65_codec import Q65Codec
 from qra.qra_code_params import QRACodeParams, qra15_65_64_irr_e23
 
