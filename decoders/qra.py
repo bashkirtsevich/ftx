@@ -194,7 +194,7 @@ class Q65Monitor(AbstractMonitor):
         return data_sym
 
     def decode_2(self, s3: npt.NDArray[np.float64], sub_mode: int, b90ts: float) -> typing.Optional[
-        typing.Tuple[float, npt.NDArray]
+        typing.Tuple[float, npt.NDArray[np.uint8]]
     ]:
         # ! Attempt a q0, q1, or q2 decode using spcified AP information.
         s3prob = q65_fastfading_intrinsics(self.q65_codec, s3, sub_mode, b90ts, fading_model=FadingModel.Lorentzian)
