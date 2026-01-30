@@ -55,7 +55,7 @@ qra_C = 116  # number of factors in the code graph (N +(N-K)+1)
 qra_NMSG = 216  # number of msgs in the code graph
 qra_MAXVDEG = 5  # maximum variable degree
 qra_MAXCDEG = 3  # maximum factor degree
-qra_R = 0.23077  # code rate (K/N)
+qra_R = qra_K / qra_N  # code rate (K/N) 0.23077
 # CODE_NAME = "qra15_65_64_irr_e23"  # code name # FIXME: To be deleted
 
 Q65_DECODE_INVPARAMS = -1

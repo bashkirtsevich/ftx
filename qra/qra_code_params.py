@@ -21,8 +21,8 @@ class QRACodeParams:
     N_MSG: int  # number of msgs in the code graph
     MAX_V_DEG: int  # maximum variable degree
     MAX_C_DEG: int  # maximum factor degree
-    type: QRAType
     R: float  # code rate (K/N)
+    type: QRAType
     # name: str  # code name # FIXME: To be deleted
     # tables used by the encoder
     acc_input_idx: npt.NDArray[np.int64]
@@ -90,8 +90,8 @@ qra15_65_64_irr_e23 = QRACodeParams(
     qra_NMSG,
     qra_MAXVDEG,
     qra_MAXCDEG,
-    QRAType.CRC_PUNCTURED2,
     qra_R,
+    QRAType.CRC_PUNCTURED2,
     # CODE_NAME, # FIXME: To be deleted
     qra_acc_input_idx,
     qra_acc_input_wlog,
