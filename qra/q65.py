@@ -79,7 +79,7 @@ def qra_extrinsic(
     cdeg = code.c_deg
     v2cmidx = code.v2cm_idx
     c2vmidx = code.c2vm_idx
-    pmat = code.gfp_mat.reshape((-1, M))
+    pmat = code.gf_perm_mat.reshape((-1, M))
     msgw = code.msg_w
 
     # float msg_out[QRACODE_MAX_M]; # we use a fixed size in order to avoid mallocs

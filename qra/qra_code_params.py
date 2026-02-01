@@ -27,15 +27,15 @@ class QRACodeParams:
     # tables used by the encoder
     acc_input_idx: npt.NDArray[np.int64]
     acc_input_wlog: npt.NDArray[np.int64]
-    gflog: npt.NDArray[np.int64]
-    gfexp: npt.NDArray[np.int64]
+    gf_log: npt.NDArray[np.int64]
+    gf_exp: npt.NDArray[np.int64]
     # tables used by the decoder -------------------------
     msg_w: npt.NDArray[np.int64]
     v_deg: npt.NDArray[np.int64]
     c_deg: npt.NDArray[np.int64]
     v2cm_idx: npt.NDArray[np.int64]
     c2vm_idx: npt.NDArray[np.int64]
-    gfp_mat: npt.NDArray[np.int64]  # Permutation matrix
+    gf_perm_mat: npt.NDArray[np.int64]  # Permutation matrix
 
     @property
     def bits_per_symbol(self):
@@ -95,12 +95,12 @@ qra15_65_64_irr_e23 = QRACodeParams(
     # CODE_NAME, # FIXME: To be deleted
     qra_acc_input_idx,
     qra_acc_input_wlog,
-    qra_log,
-    qra_exp,
+    qra_gf_log,
+    qra_gf_exp,
     qra_msgw,
     qra_vdeg,
     qra_cdeg,
     qra_v2cmidx,
     qra_c2vmidx,
-    qra_pmat
+    qra_perm_mat
 )

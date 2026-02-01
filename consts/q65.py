@@ -83,7 +83,7 @@ qra_acc_input_wlog = np.array([
 ])
 
 # table of the logarithms of the elements of GF(M) (log(0) never used)
-qra_log = np.array([
+qra_gf_log = np.array([
     -1, 0, 1, 6, 2, 12, 7, 26, 3, 32,
     13, 35, 8, 48, 27, 18, 4, 24, 33, 16,
     14, 52, 36, 54, 9, 45, 49, 38, 28, 41,
@@ -94,7 +94,7 @@ qra_log = np.array([
 ])
 
 # table of GF(M) elements given their logarithm
-qra_exp = np.array([
+qra_gf_exp = np.array([
     1, 2, 4, 8, 16, 32, 3, 6, 12, 24,
     48, 35, 5, 10, 20, 40, 19, 38, 15, 30,
     60, 59, 53, 41, 17, 34, 7, 14, 28, 56,
@@ -260,7 +260,7 @@ qra_c2vmidx = np.array([
 ])
 
 # permutation matrix to compute Prob(x*alfa^logw)
-qra_pmat = np.array([
+qra_perm_mat = np.array([
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
     16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
     32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,

@@ -16,8 +16,8 @@ def qra_encode(code: QRACodeParams, x: npt.NDArray[np.uint8], concat: bool = Fal
     qra_a = code.a
     qra_acc_input_idx = code.acc_input_idx
     qra_acc_input_wlog = code.acc_input_wlog
-    qra_log = code.gflog
-    qra_exp = code.gfexp
+    qra_log = code.gf_log
+    qra_exp = code.gf_exp
 
     y = np.zeros(qra_NC, dtype=np.uint8)
 
