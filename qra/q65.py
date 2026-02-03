@@ -227,11 +227,9 @@ def qra_extrinsic(
         # (as a product of the intrinsic and extrinsic information), make a symbol by symbol hard
         # decision and then check that the syndrome of the result is indeed null.
 
-        totex = 0  # total extrinsic information
-        for v in range(V):
-            totex += np.max(qra_v2c_msg[v, :M])
+        total_ex = np.max(qra_v2c_msg[:V, :M], axis=1).sum()  # total extrinsic information
 
-        if totex > (1.0 * (V) - 0.01):
+        if total_ex > (1.0 * (V) - 0.01):
             # the total maximum extrinsic information of each symbol in the codeword
             # is very close to one. This means that we have reached the (1,1) point in the
             # code EXIT chart(s) and we have successfully decoded the input.
