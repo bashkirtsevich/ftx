@@ -37,6 +37,10 @@ from .text import FTX_CHAR_TABLE_ALPHANUM_SPACE_SLASH
 from .text import FTX_GRID_CHAR_MAP
 from .text import FTX_CHAR_TABLE_LETTERS_SPACE
 from .text import FTX_BASECALL_CHAR_MAP
+from .text import WSPR_BASECALL_CHAR_MAP
+from .text import WSPR_GRID_CHAR_MAP
+from .text import WSPR_CHAR_TABLE_NUMERIC
+from .text import WSPR_CHAR_TABLE_LETTERS
 from .text import charn
 from .text import nchar
 
@@ -289,6 +293,30 @@ class CallsignExt(BaseCallsign):
         return val.strip()
 
 
+class WSPRCallsign(MsgItem):
+    @classmethod
+    def _validate_str(cls, val: str) -> bool:
+        return len(val) <= 6
+
+    @classmethod
+    def _validate_int(cls, val: int) -> bool:
+        return val < 262177560
+
+    def to_int(self) -> int:
+        return hash(self)
+
+    def to_str(self) -> str:
+        return ct_map_decode(WSPR_BASECALL_CHAR_MAP, self.val_int).strip()
+
+    @staticmethod
+    def _normalize_cs(cs: str) -> str:
+        return " " * (6 - len(cs)) + cs  # Normalize to 6 letters
+
+    def __hash__(self):
+        cs_norm = self._normalize_cs(self.val_str)
+        return ct_map_encode(WSPR_BASECALL_CHAR_MAP, cs_norm)
+
+
 class Grid(MsgItem):
     @classmethod
     def _validate_str(cls, val: str) -> bool:
@@ -303,6 +331,49 @@ class Grid(MsgItem):
 
     def to_str(self) -> str:
         return ct_map_decode(FTX_GRID_CHAR_MAP, self.val_int)
+
+
+class WSPRGrid(MsgItem):
+    @classmethod
+    def _validate_str(cls, val: str) -> bool:
+        return len(val) == 4 and ct_validate_map(WSPR_GRID_CHAR_MAP, val)
+
+    @classmethod
+    def _validate_int(cls, val: int) -> bool:
+        return val < 32400
+
+    def to_int(self) -> int:
+        loc = self.val_str
+
+        ct_num = WSPR_CHAR_TABLE_NUMERIC
+        ct_char = WSPR_CHAR_TABLE_LETTERS
+
+        val = (179 - 10 * nchar(loc[0], ct_char) - nchar(loc[2], ct_num)) * 180
+        val += nchar(loc[1], ct_char) * 10
+        val += nchar(loc[3], ct_num)
+        return val
+
+    def to_str(self) -> str:
+        loc = self.val_int
+
+        latitude = (loc % 180) - 90
+        longitude = (loc // 180) * 2 - 178
+        longitude = (longitude + 180) % 360 - 180
+
+        lat = int(24.0 * (latitude + 90))
+        lon = int(12.0 * (180.0 - longitude))
+
+        lo1, lo2 = divmod(lon, 240)
+        la1, la2 = divmod(lat, 240)
+
+        ct_num = WSPR_CHAR_TABLE_NUMERIC
+        ct_char = WSPR_CHAR_TABLE_LETTERS
+
+        val = charn(lo1, ct_char)
+        val += charn(la1, ct_char)
+        val += charn(lo2 // 24, ct_num)
+        val += charn(la2 // 24, ct_num)
+        return val
 
 
 class Report(MsgItem):
@@ -797,3 +868,185 @@ class MsgServer:
             return MSG_MESSAGE_TYPE_WWROF
         else:
             return MSG_MESSAGE_TYPE_UNKNOWN
+
+
+class WSPRMessage(AbstractMessage):
+    __slots__ = ("callsign", "loc", "dBm")
+
+    @staticmethod
+    def _normalize_dBm(dBm: int) -> int:
+        # EIRP in dBm={0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60}
+        corr = [0, -1, 1, 0, -1, 2, 1, 0, -1, 1]
+        if dBm < 0:
+            return 0
+        elif dBm > 60:
+            return 60
+
+        return dBm + corr[dBm % 10]
+
+    def __init__(self, callsign: WSPRCallsign, loc: WSPRGrid, dBm: int):
+        self.callsign = callsign
+        self.loc = loc
+        self.dBm = self._normalize_dBm(dBm)
+
+    def __str__(self):
+        return f"{self.callsign} {self.loc} {self.dBm}"
+
+    # @staticmethod
+    # def _decode_callsign(val: int, msg_server: typing.Optional["MsgServer"] = None):
+    #     if Token.validate(val):
+    #         return Token(val)
+    #
+    #     if val < MSG_NTOKENS + MSG_MAX_22:
+    #         if msg_server:
+    #             return msg_server._get_cs(val)
+    #         return _DummyCallsign
+    #
+    #     if Callsign.validate(val):
+    #         cs = Callsign(val)
+    #         if msg_server:
+    #             return msg_server._save_cs(cs)
+    #         return cs
+    #
+    #     raise MSGInvalidCallsign
+    #
+    # @staticmethod
+    # def _decode_extra(val: int):
+    #     if Grid.validate(val):
+    #         return Grid(val)
+    #
+    #     if ResponseExtra.validate(val):
+    #         return ResponseExtra(val)
+    #
+    #     if Report.validate(val):
+    #         return Report(val)
+    #
+    #     raise ValueError
+
+    def encode(self, **kwargs) -> typing.ByteString:
+        add = 0
+        pref = self.callsign.as_int
+        suff = (self.loc.as_int << 7) | (self.dBm + 64 + add)
+
+        items = [
+            byte(pref >> 20),
+            byte(pref >> 12),
+            byte(pref >> 4),
+            byte(((pref & 0x0f) << 4) | ((suff >> 18) & 0x0f)),
+            byte(suff >> 10),
+            byte(suff >> 2),
+            byte((suff & 0x03) << 6),
+            0,
+            0,
+            0,
+            0,
+        ]
+        return bytearray(b for b in items)
+
+    @classmethod
+    def decode(cls, payload: typing.ByteString, **kwargs) -> AbstractMessage:
+        b = payload[0]
+        pref = b << 20
+
+        b = payload[1]
+        pref += b << 12
+
+        b = payload[2]
+        pref += b << 4
+
+        b = payload[3]
+        pref += (b >> 4) & 15
+
+        suff = (b & 15) << 18
+
+        b = payload[4]
+        suff += b << 10
+
+        b = payload[5]
+        suff += b << 2
+
+        b = payload[6]
+        suff += (b >> 6) & 3
+
+        cs = WSPRCallsign(pref)
+        grid = WSPRGrid(suff >> 7)
+        dbm = (suff & 0x7f) - 64
+        #     ntype = (n2 & 127) - 64 # dbm
+        #
+        #     if ntype >= 0 and ntype <= 62:
+        #         nu = ntype % 10
+        #         if nu == 0 or nu == 3 or nu == 7:
+        #             ndbm = ntype
+        #             # memset(call_loc_pow,0,sizeof(char)*23);
+        #             # sprintf(cdbm,"%2d",ndbm);
+        #             # strncat(call_loc_pow,callsign,strlen(callsign));
+        #             # strncat(call_loc_pow," ",1);
+        #             # strncat(call_loc_pow,grid,4);
+        #             # strncat(call_loc_pow," ",1);
+        #             # strncat(call_loc_pow,cdbm,2);
+        #             # strncat(call_loc_pow,"\0",1);
+        #             # ihash=nhash(callsign,strlen(callsign),(uint32_t)146);
+        #             # strcpy(hashtab+ihash*13,callsign);
+        #             # strcpy(loctab+ihash*5,grid);
+        #         else:
+        #             nadd = nu
+        #             if nu > 3:
+        #                 nadd = nu - 3
+        #
+        #             if nu > 7:
+        #                 nadd = nu - 7
+        #
+        #             n3 = n2 / 128 + 32768 * (nadd - 1)
+        #
+        #             #     # if( !unpackpfx(n3,callsign) ) return 1;
+        #             ndbm = ntype - nadd
+        #         #     # memset(call_loc_pow,0,sizeof(char)*23);
+        #         #     # sprintf(cdbm,"%2d",ndbm);
+        #         #     # strncat(call_loc_pow,callsign,strlen(callsign));
+        #         #     # strncat(call_loc_pow," ",1);
+        #         #     # strncat(call_loc_pow,cdbm,2);
+        #         #     # strncat(call_loc_pow,"\0",1);
+        #         #     nu=ndbm%10
+        #         #     if nu == 0 or nu == 3 or nu == 7 or nu == 10 : #make sure power is OK
+        #         #         ihash=nhash(callsign,strlen(callsign),(uint32_t)146);
+        #         #         strcpy(hashtab+ihash*13,callsign);
+        #         #     else:
+        #         #         noprint=1
+        #     elif ntype < 0:
+        #         ndbm = -(ntype + 1)
+        #     #     memset(grid6,0,sizeof(char)*7);
+        #     #     size_t len=6;
+        #     #     strncat(grid6,callsign+len-1,1);
+        #     #     strncat(grid6,callsign,len-1);
+        #     #     int nu=ndbm%10;
+        #     #     if ((nu != 0 && nu != 3 && nu != 7 && nu != 10) ||
+        #     #         !isalpha(grid6[0]) || !isalpha(grid6[1]) ||
+        #     #         !isdigit(grid6[2]) || !isdigit(grid6[3]))
+        #     #            # not testing 4'th and 5'th chars because of this case: <PA0SKT/2> JO33 40
+        #     #            # grid is only 4 chars even though this is a hashed callsign...
+        #     #            #         isalpha(grid6[4]) && isalpha(grid6[5]) ) ) {
+        #     #         noprint=1;
+        #     #
+        #     #
+        #     #     ihash=(n2-ntype-64)/128
+        #     #     if strncmp(hashtab+ihash*13,"\0",1) != 0 :
+        #     #         sprintf(callsign,"<%s>",hashtab+ihash*13);
+        #     #     else:
+        #     #         sprintf(callsign,"%5s","<...>");
+        #     #
+        #     #
+        #     #     memset(call_loc_pow,0,sizeof(char)*23);
+        #     #     sprintf(cdbm,"%2d",ndbm);
+        #     #     strncat(call_loc_pow,callsign,strlen(callsign));
+        #     #     strncat(call_loc_pow," ",1);
+        #     #     strncat(call_loc_pow,grid6,strlen(grid6));
+        #     #     strncat(call_loc_pow," ",1);
+        #     #     strncat(call_loc_pow,cdbm,2);
+        #     #     strncat(call_loc_pow,"\0",1);
+        #     #
+        #     #
+        #     #     # I don't know what to do with these... They show up as "A000AA" grids.
+        #     #     if ntype == -64 :
+        #     #         noprint=1
+
+        return cls(cs, grid, dbm)
