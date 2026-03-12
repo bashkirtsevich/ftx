@@ -1,17 +1,18 @@
 import typing
 
 import numpy as np
+import numpy.typing as npt
 
 from consts.wspr import WSPR_PR3
 from consts.wspr import WSPR_CONV_POLY
+from consts.wspr import WSPR_CONV_SYMBOLS
 
 
-# Encode call, locator, and dBm into WSPR codeblock.
-def wspr_encode(payload: typing.ByteString) -> typing.Generator[int, None, None]:
+def convolutional_encode(payload: typing.ByteString) -> npt.NDArray:
     # convolutional encoding K=32, r=1/2, Layland-Lushbaugh polynomials
     k = 0
     state = 0
-    symbol = np.zeros(176, dtype=np.uint8)
+    symbols = np.zeros(WSPR_CONV_SYMBOLS, dtype=np.uint8)
 
     for p in payload:
         for i in range(7, -1, -1):
@@ -23,8 +24,15 @@ def wspr_encode(payload: typing.ByteString) -> typing.Generator[int, None, None]
                     even = 1 - even
                     n &= n - 1
 
-                symbol[k] = even
+                symbols[k] = even
                 k += 1
+
+    return symbols
+
+
+# Encode call, locator, and dBm into WSPR codeblock.
+def wspr_encode(payload: typing.ByteString) -> typing.Generator[int, None, None]:
+    symbols = convolutional_encode(payload)
 
     tones = np.zeros(162, dtype=np.uint8)
     for i in range(162):
@@ -40,7 +48,7 @@ def wspr_encode(payload: typing.ByteString) -> typing.Generator[int, None, None]
 
             k += 1
 
-        tones[j0] = WSPR_PR3[j0] | symbol[i] << 1  # interleave and add sync std::vector
+        tones[j0] = WSPR_PR3[j0] | symbols[i] << 1  # interleave and add sync std::vector
 
     for tone in tones:
         yield tone

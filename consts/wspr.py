@@ -1,5 +1,6 @@
 import numpy as np
 
+WSPR_CONV_SYMBOLS = 176
 WSPR_SYMBOL_PERIOD = 0.6827
 
 WSPR_PR3 = np.array([
