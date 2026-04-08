@@ -3,7 +3,6 @@ from copy import copy
 from dataclasses import dataclass
 from itertools import cycle
 
-import numpy as np
 from utils.common import dB
 import numpy.typing as npt
 
@@ -12,7 +11,7 @@ import multiprocessing as mp
 from consts.ftx import *
 from crc.ftx import ftx_extract_crc, ftx_check_crc
 from encoders import ft4_encode, ft8_encode
-from ldpc.ftx import bp_decode
+from fec.ldpc.ftx import bp_decode
 from .monitor import DecodeStatus, AbstractMonitor, LogItem
 
 from numba import jit
@@ -531,7 +530,7 @@ class FTXMonitor(AbstractMonitor):
 
         return snr_all / self.freq_osr / 2 - 22
 
-    def decode(self, **kwargs) -> typing.Generator[LogItem, None, None]:
+    def decode(self, **kwargs) -> typing.Iterator[LogItem]:
         # Find top candidates by Costas sync score and localize them in time and frequency
         items = set()
 

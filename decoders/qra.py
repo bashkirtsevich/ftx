@@ -1,12 +1,10 @@
 import typing
 
-import numpy as np
-import numpy.typing as npt
 from consts.q65 import *
 from decoders.monitor import AbstractMonitor, LogItem
 from utils.common import dB
 from utils.q65 import smooth_121, bzap, q65_6bit_decode
-from qra.q65 import q65_fastfading_intrinsics, q65_dec, q65_init
+from fec.qra.q65 import q65_fastfading_intrinsics, q65_dec, q65_init
 
 
 class Q65Monitor(AbstractMonitor):
@@ -301,7 +299,7 @@ class Q65Monitor(AbstractMonitor):
 
         return time_d, ccf_freq, data, snr
 
-    def decode(self, f0: int, **kwargs) -> typing.Generator[LogItem, None, None]:
+    def decode(self, f0: int, **kwargs) -> typing.Iterator[LogItem]:
         dT, ccf_freq, payload, snr = self.decode_0(f0=f0)
 
         yield LogItem(snr, dT, ccf_freq - f0, payload.tobytes(), 0)

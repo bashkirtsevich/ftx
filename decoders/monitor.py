@@ -43,5 +43,5 @@ class AbstractMonitor(ABC):
         ...
 
     @abstractmethod
-    def decode(self, **kwargs) -> typing.Generator[LogItem, None, None]:
+    def decode(self, **kwargs) -> typing.Iterator[LogItem]:
         ...

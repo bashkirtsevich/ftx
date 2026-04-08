@@ -118,7 +118,7 @@ def fwht_64(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64]):
         wh_bfy(dst, t1, i * 2, 0, 1)
 
 
-fwht_tab = [
+FWHT_TAB = [
     fwht_1,
     fwht_2,
     fwht_4,
@@ -131,4 +131,4 @@ fwht_tab = [
 
 # Fast Walsh-Hadamard direct transform
 def fwht(N: int, dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64]):
-    fwht_tab[N](dst, src)
+    FWHT_TAB[N](dst, src)

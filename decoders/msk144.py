@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from crc.mskx import mskx_check_crc, mskx_extract_crc
 from encoders import msk144_encode
-from ldpc.mskx import bp_decode
+from fec.ldpc.mskx import bp_decode
 from consts.mskx import *
 import typing
 
@@ -479,7 +479,7 @@ class MSK144Monitor(AbstractMonitor):
             if len(hashes) >= 3:
                 break
 
-    def decode(self, **kwargs) -> typing.Generator[LogItem, None, None]:
+    def decode(self, **kwargs) -> typing.Iterator[LogItem]:
         tm_slot_start = kwargs["tm_slot_start"]
 
         signal_len = min(len(self.signal), 30 * self.sample_rate)

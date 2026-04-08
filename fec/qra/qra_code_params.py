@@ -1,10 +1,7 @@
 from dataclasses import dataclass
 
-import numpy as np
-from numpy import typing as npt
-
 from consts.q65 import *
-from qra.exceptions import InvalidQRAType
+from fec.qra.exceptions import InvalidQRAType
 
 
 @dataclass(frozen=True)

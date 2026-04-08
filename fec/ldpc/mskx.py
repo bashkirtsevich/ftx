@@ -8,7 +8,7 @@ from consts.mskx import MSK144_LDPC_MN
 from consts.mskx import MSK144_LDPC_NM
 from consts.mskx import MSK144_LDPC_NUM_ROWS
 
-from ldpc.bp_decoder import belief_propagation
+from fec.ldpc.bp_decoder import belief_propagation
 
 
 def bp_decode(codeword: ntp.NDArray[np.float64], max_iters: int) -> typing.Tuple[int, ntp.NDArray[np.uint8]]:

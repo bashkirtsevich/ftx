@@ -795,18 +795,34 @@ class FreeText(Telemetry):
         return self._decode_str(data)
 
 
-class MsgServer:
+class AbstractMsgServer(metaclass=ABCMeta):
     __slots__ = ("callsigns",)
 
+    def __init__(self):
+        self.callsigns = dict()
+
+    @abstractmethod
+    def decode(self, payload: typing.ByteString) -> AbstractMessage:
+        ...
+
+    def save(self, path: str) -> None:
+        with open(path, "wb") as f:
+            pickle.dump(self.callsigns, f)
+
+    def load(self, path: str) -> None:
+        with open(path, "rb") as f:
+            data = pickle.load(f)
+
+        self.callsigns.update(data)
+
+
+class MsgServer(AbstractMsgServer):
     MSG_CLASSES = {
         MSG_MESSAGE_TYPE_STANDARD: StdMessage,
         MSG_MESSAGE_TYPE_NONSTD_CALL: NonStdMessage,
         MSG_MESSAGE_TYPE_FREE_TEXT: FreeText,
         MSG_MESSAGE_TYPE_TELEMETRY: Telemetry,
     }
-
-    def __init__(self):
-        self.callsigns = dict()
 
     def _get_cs(self, cs_hash: int) -> BaseCallsign:
         return self.callsigns.get(cs_hash, _DummyCallsign)
@@ -827,16 +843,6 @@ class MsgServer:
             return msg_class.decode(payload, msg_server=self)
 
         raise MSGNotImplemented(f"Unsupported msg type {msg_type}")
-
-    def save(self, path: str) -> None:
-        with open(path, "wb") as f:
-            pickle.dump(self.callsigns, f)
-
-    def load(self, path: str) -> None:
-        with open(path, "rb") as f:
-            data = pickle.load(f)
-
-        self.callsigns.update(data)
 
     @staticmethod
     def _msg_get_type(payload: typing.ByteString) -> int:
@@ -1050,3 +1056,8 @@ class WSPRMessage(AbstractMessage):
         #     #         noprint=1
 
         return cls(cs, grid, dbm)
+
+
+class WSPRMsgServer(AbstractMsgServer):
+    def decode(self, payload: typing.ByteString) -> AbstractMessage:
+        return WSPRMessage.decode(payload, msg_server=self)

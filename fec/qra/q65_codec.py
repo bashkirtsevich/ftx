@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy import typing as npt
 
-from qra.qra_code_params import QRACodeParams
+from fec.qra.qra_code_params import QRACodeParams
 
 
 @dataclass

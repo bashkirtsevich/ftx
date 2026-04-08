@@ -1,18 +1,16 @@
 import typing
 
-import numpy as np
-import numpy.typing as npt
 from functools import cache
 
-from fwht import fwht
+from fec.qra.fwht import fwht
 from utils.common import dB
 from crc.q65 import crc6, crc12
 
 from consts.q65 import *
 from encoders.qra import qra_encode
-from qra.exceptions import CRCMismatch, MExceeded, DecodeFailed
-from qra.q65_codec import Q65Codec
-from qra.qra_code_params import QRACodeParams, qra15_65_64_irr_e23
+from fec.qra.exceptions import CRCMismatch, MExceeded, DecodeFailed
+from fec.qra.q65_codec import Q65Codec
+from fec.qra.qra_code_params import QRACodeParams, qra15_65_64_irr_e23
 
 
 def pd_imul(dst: npt.NDArray[np.float64], src: npt.NDArray[np.float64], dim: int):

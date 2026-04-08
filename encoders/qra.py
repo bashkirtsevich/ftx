@@ -1,12 +1,11 @@
 import typing
 
 import numpy as np
-from numba import njit
 import numpy.typing as npt
 from crc.q65 import crc12
 
 from consts.q65 import Q65_SYNC
-from qra.qra_code_params import QRACodeParams, qra15_65_64_irr_e23
+from fec.qra.qra_code_params import QRACodeParams, qra15_65_64_irr_e23
 
 
 # @njit
