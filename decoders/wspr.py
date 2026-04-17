@@ -212,7 +212,7 @@ class WSPRMonitor(AbstractMonitor):
 
         ref_tones = np.zeros((WSPR_TONES_COUNT, WSPR_ND), dtype=np.complex128)
         phasor_ends = np.zeros((WSPR_TONES_COUNT, WSPR_ND), dtype=np.complex128)
-        fsymb = np.zeros(WSPR_ND, dtype=np.float64)
+        symb = np.zeros(WSPR_ND, dtype=np.float64)
 
         two_pi_dt = 2 * np.pi * self.dt
         f0 = f1
@@ -294,11 +294,11 @@ class WSPRMonitor(AbstractMonitor):
                 if bit_metric:
                     metric /= np.max(xm0, xm1)
 
-                fsymb[i + ib] = metric
+                symb[i + ib] = metric
 
-        std = np.std(fsymb)
-        fsymb *= sym_fac / std
-        symbols[:] = np.clip(fsymb, -128.0, 127.0) + 128
+        std = np.std(symb)
+        symb *= sym_fac / std
+        symbols[:] = np.clip(symb, -128.0, 127.0) + 128
 
     #  ******************************************************************************
     #   Subtract the coherent component of a signal
